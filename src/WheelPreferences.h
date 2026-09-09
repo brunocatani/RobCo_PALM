@@ -33,9 +33,9 @@ inline Model curatedInventory(const Model& inventory,const Preferences& prefs) {
   if(!prefs.enabled[c])continue;
   for(const auto& favorite:prefs.slots[c]) {
    const auto& items=inventory.items[c];
-   const auto found=std::find_if(items.begin(),items.end(),[&](const Item& i){return i.key==favorite.key;});
-   // Keep an unavailable favorite in its slot; never substitute another item.
-   result.items[c].push_back(found==items.end()?Item{0,favorite.name,0,false,favorite.key}:*found);
+   const auto found=std::find_if(items.begin(),items.end(),[&](const Item& i){return i.key==favorite.key && i.id!=0 && i.count>0;});
+   // Retain the preference for reacquisition, but never draw absent inventory.
+   if(found!=items.end())result.items[c].push_back(*found);
   }
  }
  if(!result.enabled[static_cast<unsigned>(result.category)])

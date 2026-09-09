@@ -31,8 +31,15 @@ int main(){try {
  check(equipmentKey("","Rifle",mod).empty());
  Model inventory;inventory.items[0]={{999,"Item 0",4,false,"plugin|0"},{888,"Not selected",3,false,"other"}};
  auto visible=curatedInventory(inventory,loaded);
- check(visible.items[0].size()==8 && visible.items[0][0].id==999);
- check(visible.items[0][1].id==0 && visible.items[0][1].count==0); // No silent replacement.
+ check(visible.items[0].size()==1 && visible.items[0][0].id==999);
+ inventory.items[0].push_back({0,"Unresolved",2,false,"plugin|1"});
+ inventory.items[0].push_back({777,"Empty stack",0,false,"plugin|2"});
+ check(curatedInventory(inventory,loaded).items[0].size()==1);
+ inventory.items[0].clear();check(curatedInventory(inventory,loaded).items[0].empty());
+ check(loaded.slots[0].size()==8); // Hiding is not deletion of a saved choice.
+ inventory.items[0]={{555,"Reacquired 2",1,false,"plugin|2"},{999,"Reacquired 0",1,false,"plugin|0"}};
+ visible=curatedInventory(inventory,loaded);
+ check(visible.items[0].size()==2 && visible.items[0][0].id==999 && visible.items[0][1].id==555);
  check(loaded.select(0,{"plugin|0","Item 0"},false));
  check(loaded.select(0,{"plugin|8","Ninth item"},true));
  std::istringstream invalid("WheelItems 1\ncategory 0 1\nitem 0 \"same\" \"A\"\nitem 0 \"same\" \"B\"\n");

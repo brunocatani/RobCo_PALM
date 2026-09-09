@@ -87,6 +87,10 @@ target_link_libraries(WheelConfigInteractionTests PRIVATE wheel_workshop_preview
 target_compile_definitions(WheelConfigInteractionTests PRIVATE WHEEL_DESKTOP_PREVIEW)
 add_test(NAME Wheel.ConfigInteraction COMMAND WheelConfigInteractionTests)
 
+add_executable(WheelSaveStateTests tests/WheelSaveStateTests.cpp preview/WorkshopAdapter.cpp)
+target_link_libraries(WheelSaveStateTests PRIVATE wheel_workshop_preview)
+add_test(NAME Wheel.SaveState COMMAND WheelSaveStateTests)
+
 add_executable(ROCKConfigCapture preview/Capture.cpp preview/WorkshopAdapter.cpp)
 target_link_libraries(ROCKConfigCapture PRIVATE wheel_workshop_preview windowscodecs ole32)
 target_compile_definitions(ROCKConfigCapture PRIVATE WHEEL_DESKTOP_PREVIEW)

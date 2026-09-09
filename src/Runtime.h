@@ -8,6 +8,8 @@ SharedModel& sharedModel();
 bool startRuntime();
 bool isOpen();
 void closeWheel();
+void beginGameLoad();
+void finishGameLoad(bool success);
 // Renderer publishes the live hover only after the B-release request.
 bool releasePending();
 void completeRelease(const Action& hover);

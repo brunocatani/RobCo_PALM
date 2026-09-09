@@ -1,15 +1,44 @@
 #include "PCH.h"
 #include "Runtime.h"
 #include "Fonts.h"
+#include "WheelConfig.h"
+#include "WheelSaveRecord.h"
 #include "tools/ConfiguratorRuntime.h"
 #include <spdlog/sinks/rotating_file_sink.h>
 
 namespace {
+void F4SEAPI onRevert(const F4SE::SerializationInterface*) noexcept {
+ try {wheel::beginGameLoad();}
+ catch(...){spdlog::error("Wheel save-state reset failed");}
+}
+void F4SEAPI onSave(const F4SE::SerializationInterface* stream) noexcept {
+ try {
+  if(!stream || !wheel::writeWheelSave(*stream,wheel::snapshotWheelPreferences()))
+   spdlog::error("Could not write wheel favorites to the F4SE co-save");
+ }catch(...){spdlog::error("Wheel favorites serialization failed");}
+}
+void F4SEAPI onLoad(const F4SE::SerializationInterface* stream) noexcept {
+ try {
+  wheel::Preferences prefs;
+  const auto result=stream?wheel::readWheelSave(*stream,prefs):wheel::SaveReadResult::Missing;
+  wheel::restoreWheelPreferences(std::move(prefs));
+  if(result==wheel::SaveReadResult::Invalid)spdlog::error("Invalid wheel favorites co-save record; favorites reset for this save");
+  else spdlog::info("Wheel favorites: {}",result==wheel::SaveReadResult::Loaded?"restored from co-save":"no saved selections");
+ }catch(...){spdlog::error("Wheel favorites restoration failed; session selections remain empty");}
+}
 void onMessage(F4SE::MessagingInterface::Message* message) noexcept {
  try {
   if(!message)return;
-  if(message->type==F4SE::MessagingInterface::kPostLoadGame || message->type==F4SE::MessagingInterface::kNewGame) {
-   rock_configurator::onGameSessionReady();return;
+  // PreLoad also runs when no co-save exists and F4SE never invokes onLoad.
+  if(message->type==F4SE::MessagingInterface::kPreLoadGame) {wheel::beginGameLoad();return;}
+  if(message->type==F4SE::MessagingInterface::kNewGame) {
+   wheel::beginGameLoad();rock_configurator::onGameSessionReady();wheel::finishGameLoad(true);return;
+  }
+  if(message->type==F4SE::MessagingInterface::kPostLoadGame) {
+   // F4SEVR sends the result as the pointer value, not a pointer to a bool.
+   const bool success=message->data!=nullptr;
+   if(success)rock_configurator::onGameSessionReady();
+   wheel::finishGameLoad(success);return;
   }
   if(message->type!=F4SE::MessagingInterface::kGameDataReady)return;
   static bool started=false;if(started)return;started=true;
@@ -36,7 +65,12 @@ extern "C" __declspec(dllexport) bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadIn
  try {
   if(!f4se)return false;F4SE::Init(f4se,false);
   const auto* messaging=F4SE::GetMessagingInterface();
-  if(!messaging || !messaging->RegisterListener(onMessage))return false;
+  const auto* serialization=F4SE::GetSerializationInterface();
+  if(!serialization || !messaging || !messaging->RegisterListener(onMessage))return false;
+  serialization->SetUniqueID(wheel::kWheelSaveID);
+  serialization->SetRevertCallback(onRevert);
+  serialization->SetSaveCallback(onSave);
+  serialization->SetLoadCallback(onLoad);
   spdlog::info("Load complete");return true;
  }catch(...){OutputDebugStringA("ROCKWheelMenu Load failed\n");return false;}
 }

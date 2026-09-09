@@ -1,11 +1,10 @@
 #pragma once
 #include "WheelPreferences.h"
-#include <filesystem>
 namespace wheel {
-// Persistence and inventory publication are game-thread operations. UI edits
-// only mutate the model and request a game-thread save/refresh.
-void loadWheelConfig(const std::filesystem::path& path);
-void flushWheelConfig();
+// Serialization snapshots UI edits under the same mutex. Restoring a game
+// clears its predecessor's inventory and pending refresh, including no-data saves.
+Preferences snapshotWheelPreferences();
+void restoreWheelPreferences(Preferences prefs);
 void publishWheelInventory(const Model& inventory);
 Model selectedWheelInventory(const Model& inventory);
 bool takeWheelConfigChange();

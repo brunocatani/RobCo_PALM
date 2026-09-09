@@ -1,8 +1,6 @@
 #include "WheelConfig.h"
 #include <imgui.h>
 #include "tools/render/ConfigUi.h"
-#include <Windows.h>
-#include <fstream>
 #include <mutex>
 #include <atomic>
 
@@ -10,7 +8,7 @@ namespace wheel {
 namespace {
 struct State {
  std::mutex mutex;Preferences prefs;Model inventory;
- std::filesystem::path path;bool writable=true;std::atomic_bool changed=false;
+ std::atomic_bool changed=false;
  std::string status="Preview — choices stay in memory";
  unsigned category{};char search[128]{};
 };
@@ -21,28 +19,13 @@ bool matches(std::string_view name,std::string_view needle) {
   [&](char a,char b){return lower(a)==lower(b);})!=name.end() || needle.empty();
 }
 }
-void loadWheelConfig(const std::filesystem::path& path) {
- auto& s=state();std::scoped_lock lock(s.mutex);s.path=path;
- std::error_code error;const bool exists=std::filesystem::exists(path,error);
- if(!error && !exists){s.status="Choose up to eight items per category";return;}
- std::ifstream file(path);Preferences prefs;
- if(error || std::filesystem::file_size(path,error)>65536 || error || !file || !readPreferences(file,prefs)) {
-  s.writable=false;s.status="Item configuration could not be read; existing file will not be overwritten";return;
- }
- s.prefs=std::move(prefs);s.status="Item choices loaded";
+Preferences snapshotWheelPreferences() {
+ auto& s=state();std::scoped_lock lock(s.mutex);return s.prefs;
 }
-void flushWheelConfig() {
- auto& s=state();Preferences prefs;std::filesystem::path path;
- {std::scoped_lock lock(s.mutex);if(s.path.empty() || !s.writable)return;prefs=s.prefs;path=s.path;}
- std::error_code error;std::filesystem::create_directories(path.parent_path(),error);
- auto temporary=path;temporary+=L".tmp";
- bool saved=false;
- if(!error) {
-  std::ofstream file(temporary,std::ios::trunc);writePreferences(file,prefs);file.flush();
-  const bool written=static_cast<bool>(file);file.close();
-  if(written)saved=MoveFileExW(temporary.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0;
- }
- {std::scoped_lock lock(s.mutex);s.status=saved?"Item choices saved":"Could not save item choices — check the configuration folder";}
+void restoreWheelPreferences(Preferences prefs) {
+ auto& s=state();std::scoped_lock lock(s.mutex);
+ s.prefs=std::move(prefs);s.inventory={};s.changed=false;s.category=0;s.search[0]='\0';
+ s.status="Saved with your game";
 }
 void publishWheelInventory(const Model& inventory){auto& s=state();std::scoped_lock lock(s.mutex);s.inventory=inventory;}
 Model selectedWheelInventory(const Model& inventory){auto& s=state();std::scoped_lock lock(s.mutex);return curatedInventory(inventory,s.prefs);}

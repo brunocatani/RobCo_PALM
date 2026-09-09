@@ -3,7 +3,6 @@
 #include "Inventory.h"
 #include "Equipment.h"
 #include "WheelConfig.h"
-#include <ShlObj.h>
 #include "Renderer.h"
 #include "ROCKProviderApi.h"
 #include "tools/ConfiguratorRuntime.h"
@@ -17,6 +16,7 @@ constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kItemChoice=std::uint64_
 struct RuntimeState {
  std::atomic_bool open{false},held{false},inputReady{false},releaseRequested{false};
  std::atomic_bool equipmentPending{false};
+ std::atomic_bool sessionReady{false},sessionResetPending{true};
  std::atomic_uint64_t generation{1},choice{0},choiceGeneration{0};
  rpsui::sdk::PanelPoseV1 wheelPose;
  std::uint64_t owner{},callback{},command{};
@@ -28,9 +28,10 @@ RuntimeState& state(){static RuntimeState s;return s;}
 void refreshWheelInventory() {
  const auto ticket=state().generation.load();
  if(const auto* tasks=F4SE::GetTaskInterface())tasks->AddTask([ticket] {
-  if((!state().open.load() && !rock_configurator::isOpen()) || state().generation.load()!=ticket)return;
+  if(!state().sessionReady.load() || (!state().open.load() && !rock_configurator::isOpen()) || state().generation.load()!=ticket)return;
   try {
    auto inventory=readInventory();auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
+   if(!state().sessionReady.load() || state().generation.load()!=ticket)return;
    inventory.category=shared.model.category;inventory.status=shared.lastAction;
    shared.model=std::move(inventory);shared.view={};
   }catch(...){spdlog::error("Wheel inventory refresh failed");}
@@ -105,7 +106,7 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
    try { tasks->AddTask([ticket,item=*equipment] {
     auto& runtime=state();
     struct Finish {RuntimeState& state;~Finish(){state.equipmentPending=false;}} finish{runtime};
-    if(!runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
+    if(!runtime.sessionReady.load() || !runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
     try { actionStatus(toggleEquipment(item,runtime.owner)); }
     catch(...){spdlog::error("Equipment result publication failed");}
    }); } catch(...) {s.equipmentPending=false;throw;}
@@ -137,10 +138,12 @@ void openHeldWheel(const RockProviderFrameSnapshot& frame) {
  s.wheelPose=*pose;const auto ticket=++s.generation;
  tasks->AddTask([p=*pose,ticket] {
   auto& s=state();
-  if(!s.inputReady.load() || !s.held.load() || s.generation.load()!=ticket)return;
+  if(!s.sessionReady.load() || !s.inputReady.load() || !s.held.load() || s.generation.load()!=ticket)return;
   try {
    auto inventory=readInventory();auto& shared=sharedModel();
-   {std::scoped_lock lock(shared.mutex);inventory.category=shared.model.category;
+   {std::scoped_lock lock(shared.mutex);
+    if(!s.sessionReady.load() || s.generation.load()!=ticket)return;
+    inventory.category=shared.model.category;
     if(!shared.lastAction.empty())inventory.status=shared.lastAction;
     shared.model=std::move(inventory);shared.view={};}
    if(!s.held.load() || s.generation.load()!=ticket)return;
@@ -153,10 +156,9 @@ void openHeldWheel(const RockProviderFrameSnapshot& frame) {
 void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) noexcept {
  try {
   if(!frame)return;auto& s=state();
-  if(takeWheelConfigChange())if(const auto* tasks=F4SE::GetTaskInterface())
-   tasks->AddTask([]{try{flushWheelConfig();refreshWheelInventory();}catch(...){spdlog::error("Wheel configuration save failed");}});
-  const bool usable=ready(*frame);s.inputReady=usable;rock_configurator::setAvailable(usable);
-  const bool changed=s.world!=frame->worldGeneration || s.skeleton!=frame->skeletonGeneration || s.provider!=frame->providerGeneration;
+  if(takeWheelConfigChange())refreshWheelInventory();
+  const bool usable=s.sessionReady.load() && ready(*frame);s.inputReady=usable;rock_configurator::setAvailable(usable);
+  const bool changed=s.sessionResetPending.exchange(false) || s.world!=frame->worldGeneration || s.skeleton!=frame->skeletonGeneration || s.provider!=frame->providerGeneration;
   if(!usable || changed) {
    closeWheel();cancelCommand();clearSuppression();s.gesture={};
    s.world=frame->worldGeneration;s.skeleton=frame->skeletonGeneration;s.provider=frame->providerGeneration;
@@ -199,6 +201,16 @@ void closeWheel(){
  auto& s=state();s.open=false;s.held=false;s.releaseRequested=false;s.choice=0;++s.generation;
  rock_configurator::close();(void)presentPanel(false);
 }
+void beginGameLoad() {
+ auto& s=state();s.sessionReady=false;s.inputReady=false;s.sessionResetPending=true;
+ rock_configurator::setAvailable(false);closeWheel();
+ restoreWheelPreferences({});
+ auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
+ shared.model={};shared.view={};shared.lastAction.clear();
+ // Provider commands and suppression are cancelled by its next unusable frame,
+ // on their owning callback thread. Queued game tasks fail the generation check.
+}
+void finishGameLoad(bool success){state().sessionReady=success;}
 void completeRelease(const Action& hover) {
  auto& s=state();
  if(!s.releaseRequested.exchange(false) || !s.open.exchange(false))return;
@@ -209,11 +221,6 @@ void completeRelease(const Action& hover) {
 }
 bool startRuntime() {
  if(!validateEquipmentRuntime())return false;
- PWSTR documents=nullptr;
- if(FAILED(SHGetKnownFolderPath(FOLDERID_Documents,KF_FLAG_DEFAULT,nullptr,&documents)) || !documents)return false;
- const auto configPath=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"ROCKWheelMenu"/"ROCKWheelMenu.ini";
- CoTaskMemFree(documents);
- loadWheelConfig(configPath);
  if(!installPanel())return false;
  struct RegistrationRollback {
   bool complete{};
