@@ -9,6 +9,7 @@
 #include "render/FrameworkPanelRenderer.h"
 #include "render/NativeRenderer.h"
 #include <imgui_internal.h>
+#include "render/ConfigUi.h"
 
 
 namespace rock_configurator
@@ -604,22 +605,17 @@ namespace rock_configurator
 
         [[nodiscard]] ImVec4 accentColor(float alpha = 1.0f) noexcept
         {
-            return { 0.408f, 0.886f, 0.757f, alpha };
+            return devui::visual::accent(alpha);
         }
 
         [[nodiscard]] ImVec4 textColor(float alpha = 1.0f) noexcept
         {
-            return { 0.914f, 0.949f, 0.937f, alpha };
+            return devui::visual::text(alpha);
         }
 
         [[nodiscard]] ImVec4 mutedColor(float alpha = 1.0f) noexcept
         {
-            return { 0.573f, 0.651f, 0.643f, alpha };
-        }
-
-        [[nodiscard]] ImVec4 surfaceColor(float alpha = 1.0f) noexcept
-        {
-            return { 0.051f, 0.098f, 0.114f, alpha };
+            return devui::visual::muted(alpha);
         }
 
         [[nodiscard]] ImU32 packed(const ImVec4& color) noexcept
@@ -671,80 +667,18 @@ namespace rock_configurator
             if (hovered) draw->AddRectFilled(minimum, maximum, packed(accentColor(0.06f)), 4);
             if (active) draw->AddRectFilled({minimum.x + 10, maximum.y - 3},
                 {maximum.x - 10, maximum.y}, packed(accentColor()), 2);
-            draw->AddText(fontFor(devui::render::FontRole::Medium), 19,
+            draw->AddText(fontFor(devui::render::FontRole::Medium), 26,
                 {minimum.x + 12, minimum.y + 16},
                 packed(active ? accentColor() : textColor(hovered ? 0.95f : 0.65f)), label);
             ImGui::PopID();
             return clicked;
         }
 
-        [[nodiscard]] bool navigationRow(
-            const char* label,
-            std::size_t count,
-            bool active,
-            float height = 40.0f)
+        [[nodiscard]] bool navigationRow(const char* label, std::size_t count, bool active, float = 48)
         {
-            ImGui::PushID(label);
-            const ImVec2 minimum = ImGui::GetCursorScreenPos();
-            const ImVec2 size{ ImGui::GetContentRegionAvail().x, height };
-            const bool clicked = ImGui::InvisibleButton("nav-row", size);
-            const bool hovered = ImGui::IsItemHovered();
-            const ImVec2 maximum{ minimum.x + size.x, minimum.y + size.y };
-            auto* draw = ImGui::GetWindowDrawList();
-            if (active || hovered) {
-                draw->AddRectFilled(
-                    minimum,
-                    maximum,
-                    packed(active ? accentColor(0.13f) : ImVec4(0.12f, 0.178f, 0.183f, 0.72f)),
-                    7.0f);
-            }
-            if (active) {
-                draw->AddRectFilled(
-                    minimum,
-                    { minimum.x + 4.0f, maximum.y },
-                    packed(accentColor()),
-                    3.0f);
-            }
-            draw->AddText(
-                fontFor(devui::render::FontRole::Medium),
-                18.0f,
-                { minimum.x + 14.0f, minimum.y + 12.0f },
-                packed(active ? textColor() : textColor(hovered ? 0.9f : 0.67f)),
-                label);
-            std::array<char, 24> countText{};
-            std::snprintf(countText.data(), countText.size(), "%zu", count);
-            const auto countSize = fontFor(devui::render::FontRole::Mono)->CalcTextSizeA(
-                15.0f, FLT_MAX, 0.0f, countText.data());
-            draw->AddText(
-                fontFor(devui::render::FontRole::Mono),
-                15.0f,
-                { maximum.x - countSize.x - 13.0f, minimum.y + 14.0f },
-                packed(active ? accentColor() : mutedColor(0.8f)),
-                countText.data());
-            ImGui::PopID();
-            return clicked;
-        }
-
-        [[nodiscard]] const char* tabSubtitle(ConfiguratorTab tab) noexcept
-        {
-            switch (tab) {
-            case ConfiguratorTab::Settings:
-                return "ROCK runtime configuration";
-            case ConfiguratorTab::Spawn:
-                return "Load-order item browser";
-            }
-            return "Choose wheel categories and items";
-        }
-
-        [[nodiscard]] const char* tabName(ConfiguratorTab tab) noexcept
-        {
-            switch (tab) {
-            case ConfiguratorTab::Settings:
-                return "ROCK settings";
-            case ConfiguratorTab::Spawn:
-                return "Spawn";
-            }
-            return "Wheel items";
+            std::array<char, 24> badge{};
+            std::snprintf(badge.data(), badge.size(), "%zu", count);
+            return devui::visual::navigation(label, active, badge.data());
         }
 
         void queueTab(ConfiguratorTab tab)
@@ -757,87 +691,36 @@ namespace rock_configurator
 
         void drawTopBar()
         {
-            constexpr std::array tabs{
-                ConfiguratorTab::Wheel,
-                ConfiguratorTab::Settings,
-                ConfiguratorTab::Spawn,
-            };
-            constexpr std::array labels{ "Wheel items", "ROCK settings", "Spawner" };
+            constexpr std::array tabs{ConfiguratorTab::Wheel, ConfiguratorTab::Settings, ConfiguratorTab::Spawn};
+            constexpr std::array labels{"Wheel items", "ROCK settings", "Spawner"};
             const auto active = s_activeTab.load(std::memory_order_acquire);
-
-            const ImVec2 windowPosition = ImGui::GetWindowPos();
-            const float windowWidth = ImGui::GetWindowWidth();
+            const auto p = ImGui::GetWindowPos();
+            const float width = ImGui::GetWindowWidth();
             auto* draw = ImGui::GetWindowDrawList();
-            draw->AddRectFilledMultiColor(
-                { windowPosition.x, windowPosition.y },
-                { windowPosition.x + windowWidth, windowPosition.y + 92.0f },
-                packed(ImVec4(0.055f, 0.086f, 0.091f, 1.0f)),
-                packed(ImVec4(0.043f, 0.071f, 0.076f, 1.0f)),
-                packed(ImVec4(0.035f, 0.063f, 0.068f, 1.0f)),
-                packed(ImVec4(0.043f, 0.071f, 0.076f, 1.0f)));
-            draw->AddRectFilled(
-                { windowPosition.x, windowPosition.y },
-                { windowPosition.x + 5.0f, windowPosition.y + 92.0f },
-                packed(accentColor()));
-            draw->AddLine(
-                { windowPosition.x + 20.0f, windowPosition.y + 92.0f },
-                { windowPosition.x + windowWidth - 20.0f, windowPosition.y + 92.0f },
-                packed(ImVec4(0.36f, 0.40f, 0.46f, 0.28f)));
-
-            ImGui::SetCursorPos({ 28.0f, 13.0f });
-            {
-                ScopedFont font(devui::render::FontRole::Medium, 14.0f);
-                ImGui::TextColored(accentColor(), "R O C K   /   F I E L D   K I T");
+            draw->AddLine({p.x, p.y + 94}, {p.x + width, p.y + 94}, packed(mutedColor(0.24f)));
+            draw->AddRectFilled(p, {p.x + 5, p.y + 94}, packed(accentColor(0.7f)));
+            ImGui::SetCursorPos({28, 15});
+            { ScopedFont font(devui::render::FontRole::Medium, 16); ImGui::TextColored(accentColor(), "R O C K  /  F I E L D  K I T"); }
+            ImGui::SetCursorPos({28, 43});
+            { ScopedFont font(devui::render::FontRole::Heading, 30); ImGui::TextUnformatted("Configuration"); }
+            const float start = devui::visual::railWidth(width) + 14;
+            for (std::size_t i = 0; i < tabs.size(); ++i) {
+                ImGui::SetCursorPos({start + static_cast<float>(i) * 194, 28});
+                if (tabChip(labels[i], tabs[i] == active, {184, 62})) queueTab(tabs[i]);
             }
-            ImGui::SetCursorPos({ 27.0f, 37.0f });
-            {
-                ScopedFont font(devui::render::FontRole::Display, 25.0f);
-                ImGui::TextUnformatted("Configuration");
-            }
-
-            for (std::size_t index = 0; index < tabs.size(); ++index) {
-                ImGui::SetCursorPos({ 240.0f + static_cast<float>(index) * 156.0f, 24.0f });
-                if (tabChip(labels[index], tabs[index] == active, { 146.0f, 54.0f })) {
-                    queueTab(tabs[index]);
-                }
-            }
-
-            const float sizePercent =
-                s_sessionPanelPhysicalWidth.load(std::memory_order_acquire) /
-                devui::render::kDefaultPanelPhysicalWidth * 100.0f;
-            std::array<char, 48> sizeLabel{};
-            std::snprintf(sizeLabel.data(), sizeLabel.size(), "SIZE  %.0f%%", sizePercent);
-            ImGui::SetCursorPos({ windowWidth - 310.0f, 24.0f });
-            {
-                ScopedFont font(devui::render::FontRole::Medium, 17.0f);
-                if (ImGui::Button("< Back", {76, 54})) {
-                    (void)queueUiAction({ .kind = RuntimeActionKind::UiBack });
-                }
-            }
-            ImGui::SetCursorPos({ windowWidth - 226.0f, 24.0f });
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.07f, 0.108f, 0.113f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accentColor(0.18f));
-            ImGui::PushStyleColor(ImGuiCol_Border, accentColor(0.45f));
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-            {
-                ScopedFont font(devui::render::FontRole::Mono, 16.0f);
-                if (ImGui::Button(sizeLabel.data(), { 142.0f, 54.0f })) {
-                    (void)queueUiAction({ .kind = RuntimeActionKind::UiResetPanelSize });
-                }
-            }
-            ImGui::PopStyleVar();
-            ImGui::PopStyleColor(3);
-
-            ImGui::SetCursorPos({ windowWidth - 74.0f, 24.0f });
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.075f, 0.075f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.18f, 0.16f, 0.72f));
-            {
-                ScopedFont font(devui::render::FontRole::Heading, 23.0f);
-                if (ImGui::Button("X##close", { 48.0f, 54.0f })) {
-                    (void)queueUiAction({ .kind = RuntimeActionKind::UiClose });
-                }
-            }
-            ImGui::PopStyleColor(2);
+            ImGui::SetCursorPos({width - 322, 20});
+            { ScopedFont font(devui::render::FontRole::Medium, 24);
+              if (ImGui::Button("< Back", {100, 54})) (void)queueUiAction({.kind = RuntimeActionKind::UiBack}); }
+            ImGui::SameLine(0, 10);
+            const float percent = s_sessionPanelPhysicalWidth.load(std::memory_order_acquire) / devui::render::kDefaultPanelPhysicalWidth * 100;
+            std::array<char, 32> sizeLabel{};
+            std::snprintf(sizeLabel.data(), sizeLabel.size(), "SIZE  %.0f%%", percent);
+            { ScopedFont font(devui::render::FontRole::Medium, 18);
+              if (ImGui::Button(sizeLabel.data(), {126, 54})) (void)queueUiAction({.kind = RuntimeActionKind::UiResetPanelSize}); }
+            ImGui::SameLine(0, 10);
+            ImGui::PushStyleColor(ImGuiCol_Button, {0.16f, 0.075f, 0.085f, 1});
+            if (ImGui::Button("X##close", {52, 54})) (void)queueUiAction({.kind = RuntimeActionKind::UiClose});
+            ImGui::PopStyleColor();
         }
 
         template <class Store>
@@ -848,30 +731,15 @@ namespace rock_configurator
             ConfiguratorTab tab,
             const std::string& status)
         {
+            devui::visual::caption("ROCK SETTINGS");
+            ImGui::Dummy({0, 12});
             {
-                ScopedFont font(devui::render::FontRole::Medium, 13.0f);
-                ImGui::TextColored(accentColor(), "NAVIGATION");
+                ScopedFont font(devui::render::FontRole::Body, 17);
+                if (ImGui::Button("Reload from disk", {-1, 40})) {
+                    (void)queueUiAction({.kind = RuntimeActionKind::UiReload, .tab = tab});
+                }
             }
-            {
-                ScopedFont font(devui::render::FontRole::Heading, 26.0f);
-                ImGui::TextUnformatted(tabName(tab));
-            }
-            {
-                ScopedFont font(devui::render::FontRole::Body, 15.0f);
-                ImGui::TextColored(mutedColor(), "%s", tabSubtitle(tab));
-            }
-            ImGui::Dummy({ 0.0f, 5.0f });
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.075f, 0.114f, 0.119f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.35f, 0.39f, 0.45f, 0.38f));
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-            if (ImGui::Button("Reload from disk", ImVec2(-1.0f, 44.0f))) {
-                (void)queueUiAction({ .kind = RuntimeActionKind::UiReload, .tab = tab });
-            }
-            ImGui::PopStyleVar();
-            ImGui::PopStyleColor(2);
-            ImGui::Dummy({ 0.0f, 8.0f });
-            ImGui::SeparatorText("GROUPS");
-
+            ImGui::Dummy({0, 12});
             const auto& settings = store.settings();
             if (!loaded || settings.empty()) {
                 ScopedFont font(devui::render::FontRole::Body, 17.0f);
@@ -907,16 +775,6 @@ namespace rock_configurator
                 ImGui::PopID();
                 ImGui::Dummy({ 0.0f, 2.0f });
             }
-            ImGui::Dummy({ 0.0f, 8.0f });
-            ImGui::SeparatorText("SOURCE");
-            {
-                ScopedFont font(devui::render::FontRole::Mono, 14.0f);
-                ImGui::TextColored(mutedColor(), "%zu SETTINGS", settings.size());
-                const auto path = store.path().string();
-                ImGui::PushTextWrapPos();
-                ImGui::TextColored(mutedColor(0.78f), "%s", path.c_str());
-                ImGui::PopTextWrapPos();
-            }
         }
 
         [[nodiscard]] const char* numericFormat(const SettingRecord& setting) noexcept
@@ -944,7 +802,7 @@ namespace rock_configurator
         {
             ImGui::PushID(static_cast<int>(index));
             const bool active = index == activeIndex;
-            constexpr float rowHeight = 58.0f;
+            constexpr float rowHeight = 66.0f;
             // A row is not a scroll owner: wheel input belongs to the enclosing column.
             ImGui::PushStyleColor(ImGuiCol_ChildBg, active ? accentColor(0.055f) : ImVec4(0, 0, 0, 0));
             ImGui::BeginChild("setting", {0, rowHeight}, ImGuiChildFlags_None,
@@ -961,8 +819,9 @@ namespace rock_configurator
                 {windowPosition.x + controlsStart - 14, windowPosition.y + rowHeight}, true);
             ImGui::SetCursorPos({14, 8});
             {
-                ScopedFont font(devui::render::FontRole::Medium, 19);
-                ImGui::TextUnformatted(setting.key.c_str());
+                ScopedFont font(devui::render::FontRole::Medium, 25);
+                const devui::visual::ReadableLabel label(setting.key, true);
+                ImGui::TextUnformatted(label.text.data());
             }
             draw->PopClipRect();
             if (ImGui::IsItemHovered()) {
@@ -974,12 +833,14 @@ namespace rock_configurator
                 ImGui::PopTextWrapPos();
                 ImGui::EndTooltip();
             }
-            ImGui::SetCursorPos({14, 33});
+            ImGui::SetCursorPos({14, 37});
+            draw->PushClipRect({windowPosition.x + 12, windowPosition.y}, {windowPosition.x + controlsStart - 14, windowPosition.y + rowHeight}, true);
             {
-                ScopedFont font(devui::render::FontRole::Mono, 12);
-                ImGui::TextColored(mutedColor(0.85f), "%s", setting.section.c_str());
+                ScopedFont font(devui::render::FontRole::Body, 18);
+                ImGui::TextColored(mutedColor(0.85f), "%s", setting.description.empty() ? setting.section.c_str() : setting.description.c_str());
             }
 
+            draw->PopClipRect();
             const auto settingTarget = settingTargetLocked(index);
             switch (setting.control.kind) {
             case setting_control::Kind::Checkbox: {
@@ -1112,7 +973,7 @@ namespace rock_configurator
                 draw->AddRectFilled(
                     valueMinimum,
                     valueMaximum,
-                    packed(ImVec4(0.035f, 0.063f, 0.068f, 1.0f)),
+                    packed(ImVec4(0.035f, 0.085f, 0.10f, 1.0f)),
                     7.0f);
                 draw->AddRect(
                     valueMinimum,
@@ -1161,39 +1022,18 @@ namespace rock_configurator
             }
             const std::string_view group =
                 activeIndex < settings.size() ? settings[activeIndex].category : std::string_view{};
-            std::size_t groupCount = 0;
-            for (const auto& setting : settings) {
-                if (std::string_view(setting.category) == group) {
-                    ++groupCount;
-                }
-            }
-
-            {
-                ScopedFont font(devui::render::FontRole::Medium, 13.0f);
-                ImGui::TextColored(
-                    accentColor(),
-                    "%s  /  ACTIVE GROUP",
-                    tabName(tab));
-            }
-            {
-                ScopedFont font(devui::render::FontRole::Heading, 28.0f);
-                ImGui::TextUnformatted(
-                    group.empty() ? "General" : settings[activeIndex].category.c_str());
-            }
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 150.0f);
-            {
-                ScopedFont font(devui::render::FontRole::Mono, 14.0f);
-                ImGui::TextColored(mutedColor(), "%zu CONTROLS", groupCount);
-            }
-            {
-                ScopedFont font(devui::render::FontRole::Body, 15.0f);
-                ImGui::TextColored(mutedColor(0.82f), "%s", status.c_str());
-            }
-            ImGui::Dummy({ 0.0f, 5.0f });
-            ImGui::Separator();
-            ImGui::Dummy({ 0.0f, 4.0f });
-
+            const devui::visual::ReadableLabel groupLabel(group.empty() ? "General" : settings[activeIndex].category.c_str());
+            devui::visual::heading(groupLabel.text.data(), status.c_str());
+            const auto header = ImGui::GetCursorScreenPos();
+            const float width = ImGui::GetContentRegionAvail().x;
+            ImGui::GetWindowDrawList()->AddRectFilled(header, {header.x + width, header.y + 36}, packed(ImVec4(0.045f,0.10f,0.12f,1)));
+            { ScopedFont font(devui::render::FontRole::Medium, 18);
+              ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 14);
+              ImGui::TextColored(mutedColor(), "SETTING");
+              ImGui::SameLine();
+              ImGui::SetCursorPosX(ImGui::GetWindowWidth() - (std::min)(420.0f, width * 0.48f) - 24);
+              ImGui::TextColored(mutedColor(), "VALUE"); }
+            ImGui::SetCursorScreenPos({header.x, header.y + 40});
             ImGui::BeginChild("settings-rows", { 0.0f, 0.0f }, ImGuiChildFlags_None);
             const auto groupId = ImGui::GetID(group.data(), group.data() + group.size());
             auto* storage = ImGui::GetStateStorage();
@@ -1214,252 +1054,99 @@ namespace rock_configurator
 
         void drawSpawnRail()
         {
-            {
-                ScopedFont font(devui::render::FontRole::Medium, 13.0f);
-                ImGui::TextColored(accentColor(), "LOAD ORDER");
-            }
-            {
-                ScopedFont font(devui::render::FontRole::Heading, 26.0f);
-                ImGui::TextUnformatted("Plugins");
-            }
-            {
-                ScopedFont font(devui::render::FontRole::Body, 15.0f);
-                ImGui::TextColored(mutedColor(), "Select an item source");
-            }
-            ImGui::Dummy({ 0.0f, 8.0f });
-            ImGui::SeparatorText("AVAILABLE");
+            devui::visual::caption("ITEM SOURCES");
+            ImGui::Dummy({0, 12});
             if (!s_spawnBrowser.indexBuilt()) {
-                ImGui::TextWrapped("%s", s_spawnBrowser.lastResult().c_str());
-                return;
+                ImGui::TextWrapped("%s", s_spawnBrowser.lastResult().c_str()); return;
             }
             ImGuiListClipper clipper;
             clipper.Begin(static_cast<int>(s_spawnBrowser.pluginCount()));
-            while (clipper.Step()) {
-                for (int rawIndex = clipper.DisplayStart; rawIndex < clipper.DisplayEnd; ++rawIndex) {
-                    const auto index = static_cast<std::size_t>(rawIndex);
-                    const auto* plugin = s_spawnBrowser.pluginAt(index);
-                    if (!plugin) {
-                        continue;
-                    }
-                    ImGui::PushID(rawIndex);
-                    if (navigationRow(
-                            plugin->name.c_str(),
-                            plugin->items.size(),
-                            index == s_spawnBrowser.pluginCursor(),
-                            46.0f)) {
-                        (void)queueUiAction({
-                            .kind = RuntimeActionKind::UiSpawnSelectPlugin,
-                            .tab = ConfiguratorTab::Spawn,
-                            .index = index,
-                        });
-                    }
-                    ImGui::PopID();
-                    ImGui::Dummy({ 0.0f, 3.0f });
-                }
-            }
-            ImGui::SeparatorText("INDEX");
-            {
-                ScopedFont font(devui::render::FontRole::Mono, 14.0f);
-                ImGui::TextColored(mutedColor(), "%zu PLUGINS", s_spawnBrowser.pluginCount());
+            while (clipper.Step()) for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                const auto* plugin = s_spawnBrowser.pluginAt(i);
+                if (!plugin) continue;
+                ImGui::PushID(i);
+                if (navigationRow(plugin->name.c_str(), plugin->items.size(), i == s_spawnBrowser.pluginCursor()))
+                    (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnSelectPlugin, .tab = ConfiguratorTab::Spawn, .index = static_cast<std::size_t>(i)});
+                ImGui::PopID();
             }
         }
 
         void drawSpawnBrowse()
         {
             const auto* plugin = s_spawnBrowser.pluginAt(s_spawnBrowser.pluginCursor());
-            {
-                ScopedFont font(devui::render::FontRole::Medium, 13.0f);
-                ImGui::TextColored(accentColor(), "SPAWN  /  BROWSE");
+            devui::visual::heading("Spawner", plugin ? plugin->name.c_str() : "No item source");
+            const float categoryWidth = (ImGui::GetContentRegionAvail().x - 7 * 6) / 8;
+            for (std::size_t i = 0; i < s_spawnBrowser.categoryCount(); ++i) {
+                if (i) ImGui::SameLine(0, 6);
+                ImGui::PushID(static_cast<int>(i));
+                const bool active = i == s_spawnBrowser.categoryCursor();
+                ImGui::PushStyleColor(ImGuiCol_Button, active ? accentColor(0.2f) : ImVec4(0,0,0,0));
+                ImGui::PushStyleColor(ImGuiCol_Text, active ? accentColor() : mutedColor());
+                { ScopedFont font(devui::render::FontRole::Medium, 18);
+                  if (ImGui::Button(s_spawnBrowser.categoryName(i).data(), {categoryWidth, 36}))
+                    (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnSelectCategory, .tab = ConfiguratorTab::Spawn, .index = i}); }
+                ImGui::PopStyleColor(2); ImGui::PopID();
             }
-            {
-                ScopedFont font(devui::render::FontRole::Heading, 28.0f);
-                ImGui::TextUnformatted(plugin ? plugin->name.c_str() : "No plugin");
-            }
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 140.0f);
-            {
-                ScopedFont font(devui::render::FontRole::Mono, 14.0f);
-                ImGui::TextColored(
-                    mutedColor(), "%zu ITEMS", s_spawnBrowser.filteredItemCount());
-            }
-            ImGui::Dummy({ 0.0f, 2.0f });
-
-            for (std::size_t index = 0; index < s_spawnBrowser.categoryCount(); ++index) {
-                if (index != 0) {
-                    ImGui::SameLine();
-                }
-                ImGui::PushID(static_cast<int>(index));
-                const bool active = index == s_spawnBrowser.categoryCursor();
-                if (active) {
-                    ImGui::PushStyleColor(ImGuiCol_Button, accentColor(0.72f));
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.055f, 0.045f, 0.035f, 1.0f));
-                }
-                const auto category = s_spawnBrowser.categoryName(index);
-                {
-                    ScopedFont font(devui::render::FontRole::Medium, 15.0f);
-                    if (ImGui::Button(category.data(), { 111.0f, 40.0f })) {
-                        (void)queueUiAction({
-                            .kind = RuntimeActionKind::UiSpawnSelectCategory,
-                            .tab = ConfiguratorTab::Spawn,
-                            .index = index,
-                        });
+            ImGui::Dummy({0, 16});
+            constexpr auto flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
+                ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInnerH;
+            if (ImGui::BeginTable("spawn-items", 3, flags, {0,0})) {
+                ImGui::TableSetupColumn("ITEM", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("TYPE", ImGuiTableColumnFlags_WidthFixed, 130);
+                ImGui::TableSetupColumn("FORM ID", ImGuiTableColumnFlags_WidthFixed, 120);
+                devui::visual::tableHeader("ITEM", "TYPE", "FORM ID");
+                ImGuiListClipper clipper;
+                clipper.Begin(static_cast<int>(s_spawnBrowser.filteredItemCount()));
+                while (clipper.Step()) for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                    const auto* item = s_spawnBrowser.filteredItemAt(i);
+                    if (!item) continue;
+                    ImGui::PushID(i);
+                    ImGui::TableNextRow(0, 46); ImGui::TableSetColumnIndex(0);
+                    if (ImGui::Selectable(item->name.c_str(), i == s_spawnBrowser.itemCursor(), ImGuiSelectableFlags_SpanAllColumns, {0,30})) {
+                        (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnOpenItem, .tab = ConfiguratorTab::Spawn, .formId = item->formId});
                     }
-                }
-                if (active) {
-                    ImGui::PopStyleColor(2);
-                }
-                ImGui::PopID();
-            }
-            ImGui::Dummy({ 0.0f, 6.0f });
-            ImGui::Separator();
-            ImGui::Dummy({ 0.0f, 5.0f });
-
-            ImGui::BeginChild("spawn-items", { 0.0f, 0.0f }, ImGuiChildFlags_None);
-            static std::size_t lastCursor = (std::numeric_limits<std::size_t>::max)();
-            const bool cursorChanged = lastCursor != s_spawnBrowser.itemCursor();
-            lastCursor = s_spawnBrowser.itemCursor();
-            ImGuiListClipper clipper;
-            clipper.Begin(static_cast<int>(s_spawnBrowser.filteredItemCount()));
-            while (clipper.Step()) {
-                for (int rawIndex = clipper.DisplayStart; rawIndex < clipper.DisplayEnd; ++rawIndex) {
-                    const auto index = static_cast<std::size_t>(rawIndex);
-                    const auto* item = s_spawnBrowser.filteredItemAt(index);
-                    if (!item) {
-                        continue;
-                    }
-                    ImGui::PushID(rawIndex);
-                    const ImVec2 minimum = ImGui::GetCursorScreenPos();
-                    const ImVec2 size{ ImGui::GetContentRegionAvail().x, 48.0f };
-                    const bool clicked = ImGui::InvisibleButton("spawn-item", size);
-                    const bool hovered = ImGui::IsItemHovered();
-                    const bool selected = index == s_spawnBrowser.itemCursor();
-                    const ImVec2 maximum{ minimum.x + size.x, minimum.y + size.y };
-                    auto* draw = ImGui::GetWindowDrawList();
-                    draw->AddRectFilled(
-                        minimum,
-                        maximum,
-                        packed(selected ? accentColor(0.12f) :
-                               hovered ? ImVec4(0.105f, 0.153f, 0.158f, 1.0f) : surfaceColor()),
-                        8.0f);
-                    draw->AddLine({minimum.x, maximum.y}, maximum, packed(mutedColor(0.15f)));
-                    if (selected) {
-                        draw->AddRectFilled(
-                            minimum,
-                            { minimum.x + 4.0f, maximum.y },
-                            packed(accentColor()),
-                            3.0f);
-                    }
-                    std::array<char, 48> metadata{};
-                    std::snprintf(
-                        metadata.data(),
-                        metadata.size(),
-                        "%s  /  %08X",
-                        s_spawnBrowser.categoryName(item->category).data(),
-                        item->formId);
-                    const auto metadataSize = fontFor(devui::render::FontRole::Mono)->CalcTextSizeA(
-                        14.0f, FLT_MAX, 0.0f, metadata.data());
-                    draw->PushClipRect(
-                        { minimum.x + 14.0f, minimum.y },
-                        { maximum.x - metadataSize.x - 32.0f, maximum.y },
-                        true);
-                    draw->AddText(
-                        fontFor(devui::render::FontRole::Medium),
-                        19.0f,
-                        { minimum.x + 16.0f, minimum.y + 12.0f },
-                        packed(selected ? textColor() : textColor(0.82f)),
-                        item->name.c_str());
-                    draw->PopClipRect();
-                    draw->AddText(
-                        fontFor(devui::render::FontRole::Mono),
-                        14.0f,
-                        { maximum.x - metadataSize.x - 15.0f, minimum.y + 15.0f },
-                        packed(selected ? accentColor() : mutedColor(0.82f)),
-                        metadata.data());
-                    if (clicked) {
-                        (void)queueUiAction({
-                            .kind = RuntimeActionKind::UiSpawnOpenItem,
-                            .tab = ConfiguratorTab::Spawn,
-                            .formId = item->formId,
-                        });
-                    }
-                    if (cursorChanged && index == s_spawnBrowser.itemCursor()) {
-                        ImGui::SetScrollHereY(0.5f);
-                    }
+                    ImGui::TableSetColumnIndex(1);
+                    { ScopedFont font(devui::render::FontRole::Body, 17); ImGui::TextColored(mutedColor(), "%s", s_spawnBrowser.categoryName(item->category).data()); }
+                    ImGui::TableSetColumnIndex(2);
+                    { ScopedFont font(devui::render::FontRole::Mono, 16); ImGui::TextColored(mutedColor(), "%08X", item->formId); }
                     ImGui::PopID();
-                    ImGui::Dummy({ 0.0f, 5.0f });
                 }
+                ImGui::EndTable();
             }
-            ImGui::EndChild();
         }
 
         void drawSpawnMenu()
         {
             const auto* item = s_spawnBrowser.currentItem();
-            {
-                ScopedFont font(devui::render::FontRole::Medium, 13.0f);
-                ImGui::TextColored(accentColor(), "SPAWN  /  ITEM ACTIONS");
-            }
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.075f, 0.113f, 0.118f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_Border, accentColor(0.38f));
-            ImGui::BeginChild("spawn-item-head", { 0.0f, 112.0f }, ImGuiChildFlags_Borders);
-            {
-                ScopedFont font(devui::render::FontRole::Heading, 29.0f);
-                ImGui::TextUnformatted(item ? item->name.c_str() : "Selected item");
-            }
-            {
-                ScopedFont font(devui::render::FontRole::Mono, 15.0f);
-                ImGui::TextColored(
-                    accentColor(),
-                    "%08X  /  %s",
-                    s_spawnBrowser.menuFormId(),
-                    item ? s_spawnBrowser.categoryName(item->category).data() : "");
-            }
-            {
-                ScopedFont font(devui::render::FontRole::Body, 15.0f);
-                ImGui::TextColored(mutedColor(), "%s", s_spawnBrowser.lastResult().c_str());
-            }
+            ImGui::BeginChild("spawn-item-head", {0,104}, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
+            devui::visual::heading(item ? item->name.c_str() : "Selected item", "Add this item to your inventory.");
+            { ScopedFont font(devui::render::FontRole::Mono, 15);
+              ImGui::TextColored(mutedColor(), "%08X  /  %s", s_spawnBrowser.menuFormId(), item ? s_spawnBrowser.categoryName(item->category).data() : ""); }
             ImGui::EndChild();
-            ImGui::PopStyleColor(2);
-            ImGui::Dummy({ 0.0f, 10.0f });
-            ImGui::SeparatorText("CHOOSE ACTION");
-            for (std::size_t index = 0; index < s_spawnBrowser.menuActionCount(); ++index) {
-                const auto* action = s_spawnBrowser.menuActionAt(index);
-                if (!action) {
-                    continue;
-                }
-                ImGui::PushID(static_cast<int>(index));
-                const bool selected = index == s_spawnBrowser.menuCursor();
-                if (selected) {
-                    ImGui::PushStyleColor(ImGuiCol_Header, accentColor(0.18f));
-                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, accentColor(0.25f));
-                }
-                {
-                    ScopedFont font(devui::render::FontRole::Medium, 19.0f);
-                    if (ImGui::Selectable(
-                            action->label.c_str(), selected, 0, { 0.0f, 44.0f })) {
-                        (void)queueUiAction({
-                            .kind = RuntimeActionKind::UiSpawnActivateAction,
-                            .tab = ConfiguratorTab::Spawn,
-                            .index = index,
-                            .formId = s_spawnBrowser.menuFormId(),
-                        });
-                    }
-                }
-                if (selected) {
-                    ImGui::PopStyleColor(2);
-                }
-                ImGui::PopID();
-                ImGui::Dummy({ 0.0f, 3.0f });
+            ImGui::Dummy({0, 18});
+            devui::visual::caption("QUANTITY & ACTIONS");
+            ImGui::Dummy({0, 12});
+            const float width = (std::min)(320.0f, (ImGui::GetContentRegionAvail().x - 16) / 2);
+            for (std::size_t i = 0; i < s_spawnBrowser.menuActionCount(); ++i) {
+                const auto* action = s_spawnBrowser.menuActionAt(i);
+                if (!action) continue;
+                if (i % 2) ImGui::SameLine(0, 16);
+                ImGui::PushID(static_cast<int>(i));
+                ImGui::PushStyleColor(ImGuiCol_Button, i == 0 ? accentColor(0.16f) : ImVec4(0.06f,0.11f,0.125f,1));
+                { ScopedFont font(devui::render::FontRole::Medium, 28);
+                  if (ImGui::Button(action->label.c_str(), {width,76})) {
+                    (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnActivateAction, .tab = ConfiguratorTab::Spawn, .index = i, .formId = s_spawnBrowser.menuFormId()});
+                  } }
+                ImGui::PopStyleColor(); ImGui::PopID();
+                if (i % 2) ImGui::Dummy({0, 8});
             }
-            ImGui::Dummy({ 0.0f, 8.0f });
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.075f, 0.114f, 0.119f, 1.0f));
-            if (ImGui::Button("Back to item list", { 230.0f, 46.0f })) {
-                (void)queueUiAction({
-                    .kind = RuntimeActionKind::UiSpawnBack,
-                    .tab = ConfiguratorTab::Spawn,
-                });
+            ImGui::Dummy({0, 20});
+            { ScopedFont font(devui::render::FontRole::Body, 16);
+              ImGui::TextColored(mutedColor(), "%s", s_spawnBrowser.lastResult().c_str()); }
+            ImGui::Dummy({0, 16});
+            if (ImGui::Button("< Item list", {160,44})) {
+                (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnBack, .tab = ConfiguratorTab::Spawn});
             }
-            ImGui::PopStyleColor();
         }
 
         void drawSpawnWorkspace()
@@ -1478,15 +1165,12 @@ namespace rock_configurator
         void drawCurrentTabBody()
         {
             if(s_activeTab.load(std::memory_order_acquire)==ConfiguratorTab::Wheel) {
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{18.0f,14.0f});
-                ImGui::BeginChild("wheel-config",{0,0},ImGuiChildFlags_AlwaysUseWindowPadding);
-                wheel::drawWheelConfig();
-                ImGui::EndChild();ImGui::PopStyleVar();return;
+                wheel::drawWheelConfig(); return;
             }
-            constexpr float railWidth = 240.0f;
+            const float railWidth = devui::visual::railWidth(ImGui::GetContentRegionAvail().x);
             const auto tab = s_activeTab.load(std::memory_order_acquire);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 16.0f, 15.0f });
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.045f, 0.076f, 0.081f, 1.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 18.0f, 24.0f });
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.03f, 0.08f, 0.09f, 0.7f));
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.31f, 0.35f, 0.41f, 0.30f));
             ImGui::BeginChild("rail", { railWidth, 0.0f }, ImGuiChildFlags_AlwaysUseWindowPadding);
             switch (tab) {
@@ -1499,8 +1183,8 @@ namespace rock_configurator
             }
             ImGui::EndChild();
             ImGui::PopStyleColor(2);
-            ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.040f, 0.068f, 0.073f, 1.0f));
+            ImGui::SameLine(0,0);
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0,0,0,0));
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.31f, 0.35f, 0.41f, 0.30f));
             ImGui::BeginChild("workspace", { 0.0f, 0.0f }, ImGuiChildFlags_AlwaysUseWindowPadding);
             switch (tab) {
@@ -1563,7 +1247,7 @@ namespace rock_configurator
                 if (handle == hovered) {
                     return packed(accentColor(0.92f));
                 }
-                return packed(accentColor(0.30f));
+                return packed(accentColor(0.10f));
             };
             const auto thickness = [&](panel_resize::Handle handle) {
                 return handle == active ? 5.0f : handle == hovered ? 4.0f : 2.0f;
@@ -1606,6 +1290,7 @@ namespace rock_configurator
         }
 
         try {
+            ScopedFont configFont(devui::render::FontRole::Body, 26);
             ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_Always);
             if (backRequested) {
                 auto& context = *ImGui::GetCurrentContext();
@@ -1643,15 +1328,15 @@ namespace rock_configurator
                 windowPosition,
                 { windowPosition.x + windowWidth, windowPosition.y + windowHeight },
                 packed(ImVec4(0.035f, 0.063f, 0.068f, 1.0f)),
-                packed(ImVec4(0.026f, 0.051f, 0.056f, 1.0f)),
-                packed(ImVec4(0.022f, 0.045f, 0.050f, 1.0f)),
-                packed(ImVec4(0.029f, 0.055f, 0.060f, 1.0f)));
+                packed(ImVec4(0.025f, 0.065f, 0.078f, 1.0f)),
+                packed(ImVec4(0.018f, 0.05f, 0.06f, 1.0f)),
+                packed(ImVec4(0.025f, 0.06f, 0.07f, 1.0f)));
             drawTopBar();
-            constexpr float bodyTop = 106.0f;
-            ImGui::SetCursorPos({ 22.0f, bodyTop });
+            constexpr float bodyTop = 94.0f;
+            ImGui::SetCursorPos({ 0.0f, bodyTop });
             ImGui::BeginChild(
                 "body",
-                { windowWidth - 44.0f, windowHeight - bodyTop - 22.0f },
+                { windowWidth, windowHeight - bodyTop },
                 ImGuiChildFlags_None);
             drawCurrentTabBody();
             ImGui::EndChild();

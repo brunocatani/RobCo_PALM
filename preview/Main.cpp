@@ -41,6 +41,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
  D3D_FEATURE_LEVEL level{};
  if(FAILED(D3D11CreateDeviceAndSwapChain(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&desc,&swap,&device,&level,&context)) || !createTarget())return 1;
  IMGUI_CHECKVERSION();ImGui::CreateContext();wheel::prepareFonts();wheel::installFonts();
+ devui::render::PrepareFonts();
  devui::visual::applyStyle();
  ImGui_ImplWin32_Init(hwnd);ImGui_ImplDX11_Init(device.Get(),context.Get());
  auto catalog=wheel::demoInventory();wheel::publishWheelInventory(catalog);

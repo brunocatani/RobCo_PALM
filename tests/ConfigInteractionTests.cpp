@@ -1,5 +1,6 @@
 #include "ConfiguratorRuntime.h"
 #include "render/UiVisualStyle.h"
+#include "render/ConfigUi.h"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <cstring>
@@ -58,7 +59,8 @@ int main() {
         rock_configurator::initializePreview(path);
         rock_configurator::setPreviewOpen(true);
         frame(); frame();
-        click(450, 50); // ROCK settings
+        const float railWidth = devui::visual::railWidth(1440);
+        click(railWidth + 250, 50); // ROCK settings
         require(window("settings-rows") != nullptr, "settings tab did not open");
         auto* rail = window("/rail_");
         auto* rows = window("settings-rows");
@@ -67,11 +69,11 @@ int main() {
         require(!rail || rail->Scroll.y == railBefore, "settings scroll moved the navigation column");
         frame(true); frame();
         require(rock_configurator::isOpen() && window("wheel-category-content"), "back did not return to Config home");
-        click(610, 50); // Spawner
+        click(railWidth + 440, 50); // Spawner
         require(window("spawn-items") != nullptr, "spawner tab did not open");
         scroll(window("spawn-items"));
         auto* items = window("spawn-items");
-        click(items->InnerRect.Min.x + 80, items->InnerRect.Min.y + 24);
+        click(items->InnerRect.Min.x + 80, items->InnerRect.Min.y + 80);
         require(window("spawn-item-head") != nullptr, "item selection did not open actions");
         frame(true); for (int i = 0; i < 5; ++i) frame();
         require(rock_configurator::isOpen() && window("spawn-items"), "back skipped the spawner item list");

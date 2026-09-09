@@ -1,5 +1,6 @@
 #include "WheelConfig.h"
 #include <imgui.h>
+#include "tools/render/ConfigUi.h"
 #include <Windows.h>
 #include <fstream>
 #include <mutex>
@@ -48,53 +49,76 @@ Model selectedWheelInventory(const Model& inventory){auto& s=state();std::scoped
 bool takeWheelConfigChange(){return state().changed.exchange(false);}
 void drawWheelConfig() {
  auto& s=state();std::unique_lock lock(s.mutex,std::try_to_lock);if(!lock.owns_lock())return;
- ImGui::BeginChild("wheel-categories",{190,0});
- ImGui::TextDisabled("QUICK ACCESS");
- ImGui::Spacing();
+ using namespace devui;
+ const float rail=visual::railWidth(ImGui::GetContentRegionAvail().x);
+ ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{20,24});
+ ImGui::BeginChild("wheel-categories",{rail,0},ImGuiChildFlags_AlwaysUseWindowPadding);
+ visual::caption("QUICK ACCESS");ImGui::Dummy({0,12});
  for(unsigned c=0;c<3;++c) {
   ImGui::PushID(static_cast<int>(c));
-  if(ImGui::Selectable(categoryName(static_cast<Category>(c)),s.category==c,0,{0,42}))s.category=c;
+  if(visual::navigation(categoryName(static_cast<Category>(c)),s.category==c))s.category=c;
   ImGui::PopID();
  }
- ImGui::EndChild();ImGui::SameLine(0,24);
- ImGui::BeginChild("wheel-category-content",{0,0});
- ImGui::TextUnformatted(categoryName(static_cast<Category>(s.category)));
- ImGui::SameLine();
- ImGui::SetCursorPosX(ImGui::GetWindowWidth()-270);
+ ImGui::EndChild();ImGui::SameLine(0,0);
+ ImGui::PopStyleVar();
+ ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{26,24});
+ ImGui::BeginChild("wheel-category-content",{0,0},ImGuiChildFlags_AlwaysUseWindowPadding);
+ const float top=ImGui::GetCursorPosY();
+ visual::heading(categoryName(static_cast<Category>(s.category)), "Choose up to eight items for this category.");
+ const float afterHeading=ImGui::GetCursorPosY();
+ ImGui::SetCursorPos({ImGui::GetWindowWidth()-230,top+6});
+ ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{3,3});
  if(ImGui::Checkbox("Show in wheel",&s.prefs.enabled[s.category]))s.changed=true;
- ImGui::TextDisabled("Choose up to eight items for this category.");
- ImGui::Spacing();
+ ImGui::PopStyleVar();ImGui::SetCursorPos({26,afterHeading});
  auto& favorites=s.prefs.slots[s.category];const auto& catalog=s.inventory.items[s.category];
+ const float searchWidth=(std::max)(220.0f,ImGui::GetContentRegionAvail().x-280);
+ ImGui::SetNextItemWidth(searchWidth);
+ ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{16,12});
+ ImGui::InputTextWithHint("##item-search","Search inventory...",s.search,sizeof(s.search));
+ ImGui::PopStyleVar();ImGui::SameLine(0,24);
+ ImGui::BeginGroup();
  ImGui::Text("%zu / 8 selected",favorites.size());
- ImGui::SameLine();ImGui::TextDisabled("%s",s.status.c_str());
- ImGui::SetNextItemWidth(-1);
- ImGui::InputTextWithHint("##item-search","Find an item in your inventory...",s.search,sizeof(s.search));
- ImGui::BeginChild("wheel-item-selection",{0,0});
- // Unavailable favorites remain removable and keep their original slot identity.
- for(std::size_t i=0;i<favorites.size();) {
-  const auto f=favorites[i];
-  const bool carried=std::any_of(catalog.begin(),catalog.end(),[&](const Item& item){return item.key==f.key;});
-  if(carried || !matches(f.name,s.search)){++i;continue;}
-  ImGui::PushID(f.key.c_str());bool selected=true;
-  if(ImGui::Checkbox(f.name.c_str(),&selected)){s.prefs.select(s.category,f,false);s.changed=true;}
-  else ++i;
-  ImGui::SameLine();ImGui::TextDisabled("not currently carried");ImGui::PopID();
- }
- std::array<std::size_t,kMaxItems> filtered{};int count=0;
- for(std::size_t i=0;i<catalog.size() && count<static_cast<int>(filtered.size());++i)
-  if(!catalog[i].key.empty() && matches(catalog[i].name,s.search))filtered[count++]=i;
- if(!count && favorites.empty())ImGui::TextDisabled("No matching items carried. The spawner can add items to your inventory.");
- ImGuiListClipper clipper;clipper.Begin(count);
- while(clipper.Step())for(int n=clipper.DisplayStart;n<clipper.DisplayEnd;++n) {
-  const auto& item=catalog[filtered[n]];
-  bool selected=std::any_of(favorites.begin(),favorites.end(),[&](const Favorite& f){return f.key==item.key;});
-  ImGui::PushID(item.key.c_str());ImGui::BeginDisabled(!selected && favorites.size()>=kSlots);
-  if(ImGui::Checkbox(item.name.c_str(),&selected)) {
-   if(s.prefs.select(s.category,{item.key,item.name},selected))s.changed=true;
+ { visual::Font font(render::FontRole::Body,14);ImGui::TextColored(visual::muted(),"%s",s.status.c_str()); }
+ ImGui::EndGroup();ImGui::Dummy({0,16});
+ constexpr auto flags=ImGuiTableFlags_ScrollY|ImGuiTableFlags_BordersOuter|ImGuiTableFlags_BordersInnerH|ImGuiTableFlags_RowBg|ImGuiTableFlags_SizingStretchProp;
+ if(ImGui::BeginTable("wheel-item-selection",2,flags,{0,0})) {
+  ImGui::TableSetupColumn("ITEM",ImGuiTableColumnFlags_WidthStretch);
+  ImGui::TableSetupColumn("CARRIED",ImGuiTableColumnFlags_WidthFixed,160);
+  visual::tableHeader("ITEM","CARRIED");
+  const auto row=[&](std::string_view key,std::string_view name,unsigned carried,bool available,bool selected) {
+   ImGui::PushID(key.data(),key.data()+key.size());
+   ImGui::TableNextRow(0,44);ImGui::TableSetColumnIndex(0);
+   if(selected)ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,visual::color(visual::accent(0.13f)));
+   ImGui::BeginDisabled(!selected && favorites.size()>=kSlots);
+   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{3,3});
+   const bool changed=ImGui::Checkbox("##selected",&selected);
+   ImGui::PopStyleVar();ImGui::SameLine(0,18);
+   ImGui::TextUnformatted(name.data(),name.data()+name.size());ImGui::EndDisabled();
+   ImGui::TableSetColumnIndex(1);
+   if(available)ImGui::TextColored(visual::muted(),"%u",carried);
+   else {visual::Font font(render::FontRole::Body,16);ImGui::TextDisabled("Not carried");}
+   if(changed && s.prefs.select(s.category,{std::string(key),std::string(name)},selected))s.changed=true;
+   ImGui::PopID();return changed;
+  };
+  // Unavailable favorites remain removable and retain their slot identity.
+  for(std::size_t i=0;i<favorites.size();) {
+   const auto& f=favorites[i];
+   const bool carried=std::any_of(catalog.begin(),catalog.end(),[&](const Item& item){return item.key==f.key;});
+   if(carried || !matches(f.name,s.search)){++i;continue;}
+   if(!row(f.key,f.name,0,false,true))++i;
   }
-  ImGui::EndDisabled();ImGui::SameLine();ImGui::TextDisabled("%u carried",item.count);ImGui::PopID();
+  std::array<std::size_t,kMaxItems> filtered{};int count=0;
+  for(std::size_t i=0;i<catalog.size() && count<static_cast<int>(filtered.size());++i)
+   if(!catalog[i].key.empty() && matches(catalog[i].name,s.search))filtered[count++]=i;
+  ImGuiListClipper clipper;clipper.Begin(count);
+  while(clipper.Step())for(int n=clipper.DisplayStart;n<clipper.DisplayEnd;++n) {
+   const auto& item=catalog[filtered[n]];
+   const bool selected=std::any_of(favorites.begin(),favorites.end(),[&](const Favorite& f){return f.key==item.key;});
+   row(item.key,item.name,item.count,true,selected);
+  }
+  if(!count && favorites.empty()){ImGui::TableNextRow();ImGui::TableSetColumnIndex(0);ImGui::TextDisabled("No matching inventory items.");}
+  ImGui::EndTable();
  }
- ImGui::EndChild();
- ImGui::EndChild();
+ ImGui::EndChild();ImGui::PopStyleVar();
 }
 }

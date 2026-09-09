@@ -6,7 +6,7 @@ namespace devui::visual
 {
     [[nodiscard]] inline ImVec4 accent(float alpha = 1.0f) noexcept
     {
-        return { 0.408f, 0.886f, 0.757f, alpha };
+        return { 0.25f, 0.91f, 0.86f, alpha };
     }
 
     [[nodiscard]] inline ImVec4 text(float alpha = 1.0f) noexcept
@@ -16,7 +16,7 @@ namespace devui::visual
 
     [[nodiscard]] inline ImVec4 muted(float alpha = 1.0f) noexcept
     {
-        return { 0.573f, 0.651f, 0.643f, alpha };
+        return { 0.60f, 0.74f, 0.77f, alpha };
     }
 
     [[nodiscard]] inline ImVec4 surface(float alpha = 1.0f) noexcept
@@ -29,7 +29,7 @@ namespace devui::visual
         auto& style = ImGui::GetStyle();
         style.WindowPadding = { 0.0f, 0.0f };
         style.FramePadding = { 10.0f, 6.0f };
-        style.CellPadding = { 10.0f, 6.0f };
+        style.CellPadding = { 18.0f, 8.0f };
         style.ItemSpacing = { 8.0f, 4.0f };
         style.ItemInnerSpacing = { 8.0f, 7.0f };
         style.TouchExtraPadding = { 2.0f, 2.0f };
@@ -44,7 +44,7 @@ namespace devui::visual
         style.TabRounding = 8.0f;
         style.WindowBorderSize = 0.0f;
         style.ChildBorderSize = 0.0f;
-        style.FrameBorderSize = 0.0f;
+        style.FrameBorderSize = 1.0f;
         style.PopupBorderSize = 1.0f;
         style.TabBorderSize = 0.0f;
         style.SeparatorTextBorderSize = 1.0f;
@@ -58,11 +58,11 @@ namespace devui::visual
         colors[ImGuiCol_Text] = text();
         colors[ImGuiCol_TextDisabled] = muted();
         colors[ImGuiCol_WindowBg] = ImVec4(0.035f, 0.063f, 0.068f, 1.0f);
-        colors[ImGuiCol_ChildBg] = ImVec4(0.055f, 0.090f, 0.095f, 1.0f);
+        colors[ImGuiCol_ChildBg] = ImVec4(0, 0, 0, 0);
         colors[ImGuiCol_PopupBg] = ImVec4(0.067f, 0.102f, 0.107f, 0.98f);
         colors[ImGuiCol_Border] = ImVec4(0.38f, 0.43f, 0.49f, 0.25f);
         colors[ImGuiCol_BorderShadow] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-        colors[ImGuiCol_FrameBg] = ImVec4(0.086f, 0.130f, 0.135f, 1.0f);
+        colors[ImGuiCol_FrameBg] = ImVec4(0.065f, 0.115f, 0.13f, 1.0f);
         colors[ImGuiCol_FrameBgHovered] = ImVec4(0.125f, 0.178f, 0.183f, 1.0f);
         colors[ImGuiCol_FrameBgActive] = accent(0.24f);
         colors[ImGuiCol_TitleBg] = ImVec4(0.047f, 0.075f, 0.080f, 1.0f);
@@ -73,7 +73,8 @@ namespace devui::visual
         colors[ImGuiCol_Header] = accent(0.13f);
         colors[ImGuiCol_HeaderHovered] = accent(0.22f);
         colors[ImGuiCol_HeaderActive] = accent(0.34f);
-        colors[ImGuiCol_CheckMark] = accent();
+        colors[ImGuiCol_CheckMark] = ImVec4(0.025f, 0.10f, 0.11f, 1);
+        colors[ImGuiCol_CheckboxSelectedBg] = accent();
         colors[ImGuiCol_SliderGrab] = accent(0.82f);
         colors[ImGuiCol_SliderGrabActive] = ImVec4(0.65f, 1.0f, 0.85f, 1.0f);
         colors[ImGuiCol_Separator] = ImVec4(0.38f, 0.43f, 0.49f, 0.22f);
@@ -87,5 +88,10 @@ namespace devui::visual
         colors[ImGuiCol_TabHovered] = accent(0.24f);
         colors[ImGuiCol_TabSelected] = accent(0.20f);
         colors[ImGuiCol_NavHighlight] = accent(0.82f);
+        colors[ImGuiCol_TableHeaderBg] = ImVec4(0.045f, 0.10f, 0.12f, 1);
+        colors[ImGuiCol_TableRowBg] = ImVec4(0.04f, 0.08f, 0.095f, 0.4f);
+        colors[ImGuiCol_TableRowBgAlt] = ImVec4(0.065f, 0.115f, 0.13f, 0.3f);
+        colors[ImGuiCol_TableBorderStrong] = ImVec4(0.18f, 0.29f, 0.32f, 0.8f);
+        colors[ImGuiCol_TableBorderLight] = ImVec4(0.16f, 0.27f, 0.30f, 0.55f);
     }
 }
