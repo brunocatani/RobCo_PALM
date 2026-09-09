@@ -10,12 +10,68 @@ using namespace rock::provider;
 struct RuntimeState {
  std::atomic_bool open{false}, inputReady{false};
  std::atomic_uint64_t generation{1};
+ std::atomic_uint32_t requestedItem{0};
+ std::atomic_uint64_t requestGeneration{0};
+ std::atomic_bool actionPending{false};
  std::uint64_t owner{}, callback{};
+ std::uint64_t command{}; // Owned by ROCK's frame callback only.
  ToggleGesture toggle;
  bool suppression{};
  std::uint32_t world{},skeleton{},provider{};
 };
 RuntimeState& state(){static RuntimeState s;return s;}
+void actionStatus(const char* message) {
+ auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
+ shared.lastAction=message;shared.model.status=message;
+}
+void cancelAction() {
+ auto& s=state();s.requestedItem.store(0);
+ if(s.command && RockProviderApi::inst)
+  (void)RockProviderApi::inst->cancelInteractionCommandV1(s.owner,s.command);
+ s.command=0;s.actionPending.store(false);
+}
+void serviceAction(const RockProviderFrameSnapshot& frame) {
+ auto& s=state();auto* api=RockProviderApi::inst;
+ if(!s.open.load()) {cancelAction();return;}
+ if(const auto id=s.requestedItem.exchange(0)) {
+  if(s.requestGeneration.load()!=s.generation.load()) {s.actionPending.store(false);return;}
+  RockProviderForceGrabRequestV1 request;
+  request.flags=static_cast<std::uint32_t>(RockProviderForceGrabFlagV1::FromPlayerInventory);
+  request.targetFormId=id;request.worldGeneration=frame.worldGeneration;
+  request.skeletonGeneration=frame.skeletonGeneration;request.providerGeneration=frame.providerGeneration;
+  const auto result=api->requestForceGrabV1(s.owner,&request,&s.command);
+  if(result!=RockProviderResultV1::RequestQueued) {
+   s.command=0;s.actionPending.store(false);
+   actionStatus(result==RockProviderResultV1::HandBusy?"Hands are busy — free a hand and try again":"Item handoff unavailable");
+   spdlog::warn("Wheel handoff {:08X} rejected at queue: {}",id,static_cast<unsigned>(result));
+  }
+ }
+ if(!s.command)return;
+ RockProviderInteractionCommandResultV1 result;
+ const auto query=api->getInteractionCommandResultV1(s.owner,s.command,&result);
+ if(query==RockProviderResultV1::Ok && result.state==RockProviderInteractionCommandStateV1::Queued)return;
+ const bool success=query==RockProviderResultV1::Ok && result.state==RockProviderInteractionCommandStateV1::Succeeded;
+ const char* message=success?(result.hand==RockProviderHand::Left?"Taken into left hand":"Taken into right hand"):
+  (result.failure==RockProviderInteractionFailureV1::HandBusy?"No free hand — put something down and try again":
+   result.failure==RockProviderInteractionFailureV1::TargetAlreadyOwned?"A throwable is already held or attaching":"Item handoff failed — try again");
+ actionStatus(message);
+ spdlog::info("Wheel handoff {}: {} (query {}, failure {})",s.command,message,static_cast<unsigned>(query),static_cast<unsigned>(result.failure));
+ if(query!=RockProviderResultV1::Ok)
+  (void)api->cancelInteractionCommandV1(s.owner,s.command);
+ s.command=0;s.actionPending.store(false);
+ if(success)closeWheel();
+ else if(const auto* tasks=F4SE::GetTaskInterface()) {
+  const auto ticket=s.generation.load();
+  tasks->AddTask([ticket] {
+   if(state().generation.load()!=ticket || !state().open.load())return;
+   try {
+    auto inventory=readInventory();auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
+    inventory.category=shared.model.category;inventory.status=shared.lastAction;
+    shared.model=std::move(inventory);shared.view={};
+   } catch(...) {spdlog::error("Wheel inventory refresh failed");}
+  });
+ }
+}
 bool ready(const RockProviderFrameSnapshot& f) {
  return f.providerReady && !f.menuBlocking && !f.configBlocking &&
  hasLifecycleFlag(f.lifecycleFlags,RockProviderLifecycleFlag::WorldAvailable) &&
@@ -44,11 +100,12 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
  try {
   if(!frame)return;
   auto& s=state(); const bool usable=ready(*frame);s.inputReady.store(usable);
-  if(!usable) {++s.generation;s.toggle={};clearSuppression();if(s.open.load())closeWheel();return;}
+  if(!usable) {++s.generation;s.toggle={};cancelAction();clearSuppression();if(s.open.load())closeWheel();return;}
   if(s.world!=frame->worldGeneration || s.skeleton!=frame->skeletonGeneration || s.provider!=frame->providerGeneration) {
-   ++s.generation;s.toggle={};if(s.open.load())closeWheel();
+   ++s.generation;s.toggle={};cancelAction();if(s.open.load())closeWheel();
    s.world=frame->worldGeneration;s.skeleton=frame->skeletonGeneration;s.provider=frame->providerGeneration;
   }
+  serviceAction(*frame);
   RockProviderRawWandButtonStateV1 button{};
   if(!RockProviderApi::inst->getRawWandButtonStateV1(RockProviderHand::Right,32,&button) || !button.available) {
    s.toggle={};clearSuppression();if(s.open.load())closeWheel();return;
@@ -75,7 +132,7 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
     auto& shared=sharedModel();
     {std::scoped_lock lock(shared.mutex);
      inventory.category=shared.model.category;
-     if(inventory.status=="Select something to use" && !shared.lastAction.empty())inventory.status=shared.lastAction;
+     if(inventory.status=="Select something to take" && !shared.lastAction.empty())inventory.status=shared.lastAction;
      shared.model=std::move(inventory);shared.view={};}
     s.open.store(true);
     if(!presentPanel(true,&p))s.open.store(false);
@@ -90,19 +147,10 @@ SharedModel& sharedModel(){static SharedModel s;return s;}
 bool isOpen(){return state().open.load();}
 void closeWheel(){auto& s=state();s.open.store(false);++s.generation;(void)presentPanel(false);}
 void activateItem(std::uint32_t id) {
- auto& s=state();if(!s.open.exchange(false))return;
- (void)presentPanel(false);
- const auto ticket=++s.generation;
- const auto* tasks=F4SE::GetTaskInterface();if(!tasks)return;
- tasks->AddTask([id,ticket] {
-  if(!state().inputReady.load() || state().generation.load()!=ticket)return;
-  try {
-   std::string message; const bool requested=useInventoryItem(id,message);
-   spdlog::info("Wheel action {:08X}: {} ({})",id,message,requested);
-   auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);shared.lastAction=message;shared.model.status=message;
-  } catch(const std::exception& e) {spdlog::error("Wheel action failed: {}",e.what());}
-  catch(...){spdlog::error("Wheel action failed");}
- });
+ auto& s=state();const auto ticket=s.generation.load();
+ if(!id || !s.open.load() || !s.inputReady.load() || s.actionPending.exchange(true))return;
+ actionStatus("Taking item into a free hand...");
+ s.requestGeneration.store(ticket);s.requestedItem.store(id);
 }
 bool startRuntime() {
  if(!installPanel())return false;
@@ -110,15 +158,20 @@ bool startRuntime() {
   bool complete{};
   ~RegistrationRollback(){if(!complete)unregisterPanel();}
  } rollback;
- const auto result=RockProviderApi::initialize(ROCK_PROVIDER_API_VERSION,ROCK_PROVIDER_API_V1_OWNER_FRAME_CALLBACKS_TABLE_BYTES);
+ const auto result=RockProviderApi::initialize(ROCK_PROVIDER_API_VERSION,ROCK_PROVIDER_API_V1_COMMAND_CANCELLATION_TABLE_BYTES);
  auto* api=RockProviderApi::inst;
  if(result || !api || !api->registerConsumerV1 || !api->unregisterConsumerV1 ||
   !api->registerFrameCallbackForOwnerV1 || !api->getRawWandButtonStateV1 ||
-  !api->setHandInputSuppressionV1 || !api->clearHandInputSuppressionV1)return false;
+  !api->setHandInputSuppressionV1 || !api->clearHandInputSuppressionV1 ||
+  !api->requestForceGrabV1 || !api->getInteractionCommandResultV1 || !api->cancelInteractionCommandV1)return false;
+ if(!hasFeatureBitV1(RockProviderApi::negotiatedFeatureBits,RockProviderFeatureBitV1::InventoryForceGrab)) {
+  spdlog::error("Wheel requires ROCK with inventory-to-hand support");return false;
+ }
  RockProviderConsumerRegistrationV1 registration;
  std::snprintf(registration.modName,sizeof(registration.modName),"ROCK Wheel Menu");
  registration.requestedCapabilities=static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::FrameSnapshots)|
-  static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::HandInputSuppression);
+  static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::HandInputSuppression)|
+  static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::InteractionCommands);
  RockProviderConsumerHandleV1 handle;
  if(api->registerConsumerV1(&registration,&handle)!=RockProviderResultV1::Ok || !handle.ownerToken)return false;
  if((handle.grantedCapabilities&registration.requestedCapabilities)!=registration.requestedCapabilities) {

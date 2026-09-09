@@ -94,7 +94,7 @@ Action drawWheel(Model& model, View& view) {
  draw->AddCircleFilled(center,inner-7*scale,IM_COL32(13,25,29,alpha*9/10),96);
  draw->AddCircle(center,inner-7*scale,IM_COL32(140,174,172,alpha/5),96,scale);
  icon(draw,point(512,437),22*scale,model.category,accent);
- centered(draw,point(512,482),18*scale,muted,hovered?(model.category==Category::Grenades?"EQUIP THROWABLE":"USE ONE ITEM"):"QUICK ACCESS");
+ centered(draw,point(512,482),18*scale,muted,hovered?"TAKE TO HAND":"QUICK ACCESS");
  const char* title=hovered?hovered->name.c_str():items.empty()?"Nothing carried":categoryName(model.category);
  const float titleSize=hovered?29*scale:37*scale;
  const float wrapWidth=280*scale;
@@ -102,7 +102,7 @@ Action drawWheel(Model& model, View& view) {
  draw->PushClipRect(point(360,501),point(664,595),true);
  draw->AddText(ImGui::GetFont(),titleSize,{center.x-textSize.x/2,origin.y+507*scale},white,title,nullptr,wrapWidth);
  draw->PopClipRect();
- centered(draw,point(512,611),17*scale,muted,hovered?(hovered->equipped?"CURRENTLY EQUIPPED":"CLICK TO SELECT"):"CLICK CENTER TO CLOSE");
+ centered(draw,point(512,611),17*scale,muted,hovered?"CLICK TO TAKE ONE":"CLICK CENTER TO CLOSE");
 
  centered(draw,point(512,75),20*scale,muted,"R O C K   /   F I E L D   K I T");
  for(unsigned cat=0;cat<3;++cat) {

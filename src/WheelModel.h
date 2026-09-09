@@ -16,7 +16,7 @@ struct Model {
  std::array<std::vector<Item>, 3> items;
  Category category{Category::Aid};
  std::size_t page{};
- std::string status{"Select something to use"};
+ std::string status{"Select something to take"};
 };
 inline const char* categoryName(Category c) {
  switch(c) {case Category::Aid: return "AID"; case Category::Food: return "FOOD"; case Category::Grenades: return "GRENADES";}

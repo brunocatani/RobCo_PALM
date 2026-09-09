@@ -51,9 +51,8 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   for(float y=0;y<size.y;y+=48)bg->AddLine({0,y},{size.x,y},IM_COL32(135,175,175,9));
   const auto action=wheel::drawWheel(model,view);
   if(action.useItem){for(auto& category:model.items)for(auto& item:category)if(item.id==action.useItem){
-   if(model.category==wheel::Category::Grenades){for(auto& grenade:model.items[2])grenade.equipped=false;item.equipped=true;}
-   else if(item.count)--item.count;
-   model.status="PREVIEW ONLY  /  "+item.name;
+   if(item.count)--item.count;
+   model.status="PREVIEW: TAKEN TO HAND  /  "+item.name;
   }}
   if(action.close || ImGui::IsKeyPressed(ImGuiKey_R)){model=wheel::demoInventory();view={};}
   if(ImGui::IsKeyPressed(ImGuiKey_Escape))done=true;
