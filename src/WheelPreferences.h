@@ -9,10 +9,10 @@
 namespace wheel {
 struct Favorite {std::string key,name;};
 struct Preferences {
- std::array<bool,3> enabled{true,true,true};
- std::array<std::vector<Favorite>,3> slots;
+ std::array<bool,kCategoryCount> enabled{true,true,true,true,true};
+ std::array<std::vector<Favorite>,kCategoryCount> slots;
  bool select(unsigned category,const Favorite& item,bool selected) {
-  if(category>=3 || item.key.empty() || item.key.size()>300 || item.name.empty() || item.name.size()>512 ||
+  if(category>=kCategoryCount || item.key.empty() || item.key.size()>300 || item.name.empty() || item.name.size()>512 ||
    item.key.find_first_of("\r\n")!=std::string::npos || item.name.find_first_of("\r\n")!=std::string::npos)return false;
   auto& list=slots[category];
   auto found=std::find_if(list.begin(),list.end(),[&](const auto& f){return f.key==item.key;});
@@ -29,7 +29,7 @@ inline std::string stableItemKey(std::string plugin,std::uint32_t form) {
 }
 inline Model curatedInventory(const Model& inventory,const Preferences& prefs) {
  Model result;result.category=inventory.category;result.status=inventory.status;result.enabled=prefs.enabled;
- for(unsigned c=0;c<3;++c) {
+ for(unsigned c=0;c<kCategoryCount;++c) {
   if(!prefs.enabled[c])continue;
   for(const auto& favorite:prefs.slots[c]) {
    const auto& items=inventory.items[c];
@@ -39,24 +39,27 @@ inline Model curatedInventory(const Model& inventory,const Preferences& prefs) {
   }
  }
  if(!result.enabled[static_cast<unsigned>(result.category)])
-  for(unsigned c=0;c<3;++c)if(result.enabled[c]){result.category=static_cast<Category>(c);break;}
+  for(unsigned c=0;c<kCategoryCount;++c)if(result.enabled[c]){result.category=static_cast<Category>(c);break;}
  return result;
 }
 inline void writePreferences(std::ostream& out,const Preferences& prefs) {
- out<<"WheelItems 1\n";
- for(unsigned c=0;c<3;++c) {
+ out<<"WheelItems 2\n";
+ for(unsigned c=0;c<kCategoryCount;++c) {
   out<<"category "<<c<<' '<<prefs.enabled[c]<<'\n';
   for(const auto& f:prefs.slots[c])out<<"item "<<c<<' '<<std::quoted(f.key)<<' '<<std::quoted(f.name)<<'\n';
  }
 }
 inline bool readPreferences(std::istream& in,Preferences& prefs) {
  Preferences parsed;std::string line;
- if(!std::getline(in,line) || (line!="WheelItems 1" && line!="WheelItems 1\r"))return false;
- std::array<bool,3> categories{};unsigned lines=0;
+ if(!std::getline(in,line))return false;
+ if(!line.empty() && line.back()=='\r')line.pop_back();
+ const unsigned categoryCount=line=="WheelItems 1"?3:line=="WheelItems 2"?kCategoryCount:0;
+ if(!categoryCount)return false;
+ std::array<bool,kCategoryCount> categories{};unsigned lines=0;
  while(std::getline(in,line)) {
-  if(++lines>32 || line.size()>2048)return false;
+  if(++lines>kCategoryCount*(kSlots+1) || line.size()>2048)return false;
   std::istringstream row(line);std::string kind;unsigned c;
-  if(!(row>>kind>>c) || c>=3)return false;
+  if(!(row>>kind>>c) || c>=categoryCount)return false;
   if(kind=="category") {int enabled;if(categories[c] || !(row>>enabled) || enabled<0 || enabled>1)return false;
    categories[c]=true;parsed.enabled[c]=enabled!=0;
   }else if(kind=="item") {Favorite f;if(!(row>>std::quoted(f.key)>>std::quoted(f.name)) ||
@@ -65,7 +68,7 @@ inline bool readPreferences(std::istream& in,Preferences& prefs) {
   }else return false;
   row>>std::ws;if(!row.eof())return false;
  }
- if(in.bad() || !std::all_of(categories.begin(),categories.end(),[](bool b){return b;}))return false;
+ if(in.bad() || !std::all_of(categories.begin(),categories.begin()+categoryCount,[](bool b){return b;}))return false;
  prefs=std::move(parsed);return true;
 }
 }

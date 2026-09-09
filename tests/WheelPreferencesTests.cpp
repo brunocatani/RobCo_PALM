@@ -1,4 +1,5 @@
 #include "WheelPreferences.h"
+#include "EquipmentIdentity.h"
 #include <iostream>
 #include <stdexcept>
 void check(bool value){if(!value)throw std::runtime_error("Wheel preferences assertion failed");}
@@ -15,6 +16,19 @@ int main(){try {
  std::ostringstream saved;writePreferences(saved,prefs);
  Preferences loaded;std::istringstream source(saved.str());check(readPreferences(source,loaded));
  check(loaded.slots[0].size()==8 && !loaded.enabled[1]);
+ for(unsigned c=1;c<kCategoryCount;++c)for(unsigned i=0;i<kSlots;++i)
+  check(prefs.select(c,{"variant|"+std::to_string(i),"Equipment "+std::to_string(i)},true));
+ std::ostringstream full;writePreferences(full,prefs);
+ Preferences forty;std::istringstream fullSource(full.str());check(readPreferences(fullSource,forty));
+ std::size_t total=0;for(const auto& list:forty.slots)total+=list.size();check(total==40);
+ check(!forty.select(4,{"ninth","Ninth armor"},true));
+ std::istringstream legacy("WheelItems 1\ncategory 0 1\nitem 0 \"fallout4.esm|023736\" \"Stimpak\"\ncategory 1 0\ncategory 2 1\n");
+ Preferences migrated;check(readPreferences(legacy,migrated));
+ check(migrated.slots[0].size()==1 && !migrated.enabled[1] && migrated.slots[3].empty() && migrated.enabled[4]);
+ const std::array<std::string,1> mod{"weapon-mod.esp|001234:0:1:0"};
+ check(equipmentKey("fallout4.esm|000001","Rifle",mod)!=equipmentKey("fallout4.esm|000001","Named Rifle",mod));
+ check(equipmentKey("fallout4.esm|000001","Rifle",mod)!=equipmentKey("fallout4.esm|000001","Rifle",{}));
+ check(equipmentKey("","Rifle",mod).empty());
  Model inventory;inventory.items[0]={{999,"Item 0",4,false,"plugin|0"},{888,"Not selected",3,false,"other"}};
  auto visible=curatedInventory(inventory,loaded);
  check(visible.items[0].size()==8 && visible.items[0][0].id==999);

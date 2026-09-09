@@ -6,10 +6,16 @@ int main(){try {
  using namespace wheel;
  check(hitSlot(0,-250,180,336)==0);check(hitSlot(250,0,180,336)==2);
  check(hitSlot(0,0,180,336)==-1);check(hitSlot(0,400,180,336)==-1);
- check(hitCenter(0,-120,1)==0);check(hitCenter(120,0,1)==1);
- check(hitCenter(0,120,1)==2);check(hitCenter(-120,0,1)==3);
- check(hitCenter(0,0,1)==4);check(hitCenter(0,190,1)==-1);
- check(hitCenter(60,0,.5f)==1);
+ for(unsigned c=0;c<kCategoryCount+1;++c) {
+  const float angle=-kPi/2+c*2*kPi/(kCategoryCount+1);
+  check(hitCenter(std::cos(angle)*120,std::sin(angle)*120,1)==static_cast<int>(c));
+  check(hitCenter(std::cos(angle)*60,std::sin(angle)*60,.5f)==static_cast<int>(c));
+ }
+ check(hitCenter(0,0,1)==kCancelNavigation);check(hitCenter(0,190,1)==-1);
+ check(isEquipment(Category::Weapons) && isEquipment(Category::Armor));
+ check(!isEquipment(Category::Aid) && !isEquipment(Category::Grenades));
+ Item first{0x1234,"Rifle",1,false,"variant1",0}, second{0x1234,"Rifle",1,false,"variant2",3};
+ check(selectionToken(first)!=selectionToken(second));
  HoldGesture gesture;
  check(gesture.update(true,true)==HoldEdge::None); // Held on load must release first.
  check(gesture.update(true,false)==HoldEdge::None);

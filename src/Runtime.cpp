@@ -1,6 +1,7 @@
 #include "PCH.h"
 #include "Runtime.h"
 #include "Inventory.h"
+#include "Equipment.h"
 #include "WheelConfig.h"
 #include <ShlObj.h>
 #include "Renderer.h"
@@ -12,9 +13,10 @@ namespace wheel {
 namespace {
 using namespace rock::provider;
 constexpr std::uint32_t kBButton=1;
-constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kItemChoice=std::uint64_t{1}<<32;
+constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kItemChoice=std::uint64_t{1}<<63;
 struct RuntimeState {
  std::atomic_bool open{false},held{false},inputReady{false},releaseRequested{false};
+ std::atomic_bool equipmentPending{false};
  std::atomic_uint64_t generation{1},choice{0},choiceGeneration{0};
  rpsui::sdk::PanelPoseV1 wheelPose;
  std::uint64_t owner{},callback{},command{};
@@ -89,6 +91,34 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
   rock_configurator::openAt(pose);
   spdlog::info("B release selected Config; replacing wheel at its anchor");
  }else if(choice&kItemChoice) {
+  const auto token=choice&~kItemChoice;
+  std::optional<Item> equipment;
+  {
+   auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
+   for(unsigned c=static_cast<unsigned>(Category::Weapons);c<kCategoryCount;++c)
+    for(const auto& item:shared.model.items[c])if(selectionToken(item)==token)equipment=item;
+  }
+  if(equipment) {
+   const auto* tasks=F4SE::GetTaskInterface();
+   if(!tasks){actionStatus("Equipment task queue unavailable");return;}
+   const auto ticket=s.generation.load();s.equipmentPending=true;
+   try { tasks->AddTask([ticket,item=*equipment] {
+    auto& runtime=state();
+    struct Finish {RuntimeState& state;~Finish(){state.equipmentPending=false;}} finish{runtime};
+    if(!runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
+    try { actionStatus(toggleEquipment(item,runtime.owner)); }
+    catch(...){spdlog::error("Equipment result publication failed");}
+   }); } catch(...) {s.equipmentPending=false;throw;}
+   return;
+  }
+  // Only an item in the current non-equipment snapshot may enter the handoff path.
+  bool takeToHand=false;
+  {
+   auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
+   for(unsigned c=0;c<static_cast<unsigned>(Category::Weapons);++c)
+    for(const auto& item:shared.model.items[c])takeToHand|=selectionToken(item)==token && item.count>0;
+  }
+  if(!takeToHand){actionStatus("Selection is no longer available");return;}
   RockProviderForceGrabRequestV1 request;
   request.flags=static_cast<std::uint32_t>(RockProviderForceGrabFlagV1::FromPlayerInventory);
   request.targetFormId=static_cast<std::uint32_t>(choice);
@@ -151,7 +181,7 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
    s.suppression=RockProviderApi::inst->setHandInputSuppressionV1(s.owner,&request)==RockProviderResultV1::Ok;
    if(!s.suppression){closeWheel();s.gesture={};return;}
   }else clearSuppression();
-  const bool eligible=!s.command && !rock_configurator::isOpen() && !rock_configurator::isOpening() && !s.releaseRequested.load();
+  const bool eligible=!s.command && !s.equipmentPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening() && !s.releaseRequested.load();
   const auto edge=s.gesture.update(eligible,button.held!=0);
   s.held=s.gesture.down;
   if(edge==HoldEdge::Open)openHeldWheel(*frame);
@@ -178,6 +208,7 @@ void completeRelease(const Action& hover) {
  s.choice=hover.configHovered?kConfigChoice:hover.hoveredItem?(kItemChoice|hover.hoveredItem):kCancelChoice;
 }
 bool startRuntime() {
+ if(!validateEquipmentRuntime())return false;
  PWSTR documents=nullptr;
  if(FAILED(SHGetKnownFolderPath(FOLDERID_Documents,KF_FLAG_DEFAULT,nullptr,&documents)) || !documents)return false;
  const auto configPath=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"ROCKWheelMenu"/"ROCKWheelMenu.ini";
@@ -195,7 +226,7 @@ bool startRuntime() {
  if(result || !api || !api->registerConsumerV1 || !api->unregisterConsumerV1 ||
   !api->registerFrameCallbackForOwnerV1 || !api->getRawWandButtonStateV1 ||
   !api->setHandInputSuppressionV1 || !api->clearHandInputSuppressionV1 ||
-  !api->requestForceGrabV1 || !api->getInteractionCommandResultV1 || !api->cancelInteractionCommandV1)return false;
+  !api->requestForceGrabV1 || !api->getInteractionCommandResultV1 || !api->cancelInteractionCommandV1 || !api->getHandInteractionStateV1)return false;
  if(!hasFeatureBitV1(RockProviderApi::negotiatedFeatureBits,RockProviderFeatureBitV1::InventoryForceGrab)) {
   spdlog::error("Wheel requires ROCK with inventory-to-hand support");return false;
  }
@@ -203,7 +234,8 @@ bool startRuntime() {
  std::snprintf(registration.modName,sizeof(registration.modName),"ROCK Wheel Menu");
  registration.requestedCapabilities=static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::FrameSnapshots)|
   static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::HandInputSuppression)|
-  static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::InteractionCommands);
+  static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::InteractionCommands)|
+  static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::HandInteractionState);
  RockProviderConsumerHandleV1 handle;
  if(api->registerConsumerV1(&registration,&handle)!=RockProviderResultV1::Ok || !handle.ownerToken)return false;
  if((handle.grantedCapabilities&registration.requestedCapabilities)!=registration.requestedCapabilities) {

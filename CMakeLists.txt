@@ -35,7 +35,7 @@ foreach(target wheel_workshop wheel_workshop_preview)
 endforeach()
 target_link_libraries(wheel_workshop PUBLIC CommonLibF4::CommonLibF4)
 target_compile_definitions(wheel_workshop_preview PUBLIC WHEEL_DESKTOP_PREVIEW)
-add_library(ROCKWheelMenu SHARED src/Plugin.cpp src/Runtime.cpp src/Inventory.cpp src/Renderer.cpp
+add_library(ROCKWheelMenu SHARED src/Plugin.cpp src/Runtime.cpp src/Inventory.cpp src/Equipment.cpp src/Renderer.cpp
  src/tools/render/FrameworkPanelRenderer.cpp src/exports.def)
 target_include_directories(ROCKWheelMenu PRIVATE src
  "${WORKSPACE}/main_projects/RPS_SDK/SDK/ROCK/include"

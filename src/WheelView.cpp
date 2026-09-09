@@ -9,6 +9,8 @@ ImU32 color(Category category, int alpha=255) {
  case Category::Aid:return IM_COL32(104,226,193,alpha);
  case Category::Food:return IM_COL32(244,197,114,alpha);
  case Category::Grenades:return IM_COL32(249,137,111,alpha);
+ case Category::Weapons:return IM_COL32(122,191,255,alpha);
+ case Category::Armor:return IM_COL32(192,165,255,alpha);
  }
  return 0;
 }
@@ -24,6 +26,13 @@ void icon(ImDrawList* draw, ImVec2 p, float r, Category category, ImU32 tint) {
  } else if(category==Category::Food) {
   draw->AddEllipseFilled({p.x,p.y-r*.15f},{r*.65f,r},tint,-.55f,24);
   draw->AddLine({p.x-r*.65f,p.y+r},{p.x+r*.5f,p.y-r*.9f},IM_COL32(19,33,33,255),r*.15f);
+ } else if(category==Category::Weapons) {
+  draw->AddRectFilled({p.x-r,p.y-r*.5f},{p.x+r,p.y+r*.05f},tint,r*.1f);
+  draw->AddQuadFilled({p.x-r*.55f,p.y},{p.x,p.y},{p.x-r*.2f,p.y+r},{p.x-r*.75f,p.y+r},tint);
+ } else if(category==Category::Armor) {
+  draw->AddQuadFilled({p.x-r*.7f,p.y-r},{p.x+r*.7f,p.y-r},{p.x+r*.55f,p.y+r*.4f},{p.x-r*.55f,p.y+r*.4f},tint);
+  draw->AddTriangleFilled({p.x-r*.55f,p.y+r*.4f},{p.x+r*.55f,p.y+r*.4f},{p.x,p.y+r},tint);
+  draw->AddLine({p.x,p.y-r*.75f},{p.x,p.y+r*.35f},IM_COL32(18,27,38,220),r*.15f);
  } else {
   draw->AddRectFilled({p.x-r*.7f,p.y-r*.55f},{p.x+r*.7f,p.y+r},tint,r*.45f);
   draw->AddRectFilled({p.x-r*.28f,p.y-r*.95f},{p.x+r*.28f,p.y-r*.5f},tint,r*.1f);
@@ -60,9 +69,9 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size) {
  const float inner=180*scale, outer=(326+10*view.animation)*scale;
  const float mx=io.MousePos.x-center.x, my=io.MousePos.y-center.y;
  const int navigation=hitCenter(mx,my,scale);
- if(navigation>=0 && navigation<3 && model.enabled[navigation])model.category=static_cast<Category>(navigation);
+ if(navigation>=0 && navigation<static_cast<int>(kCategoryCount) && model.enabled[navigation])model.category=static_cast<Category>(navigation);
  if(!model.enabled[static_cast<unsigned>(model.category)])
-  for(unsigned c=0;c<3;++c)if(model.enabled[c]){model.category=static_cast<Category>(c);break;}
+  for(unsigned c=0;c<kCategoryCount;++c)if(model.enabled[c]){model.category=static_cast<Category>(c);break;}
  const auto category=static_cast<unsigned>(model.category);
  const auto accent=color(model.category,alpha);
  auto& items=model.items[category];
@@ -85,7 +94,7 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size) {
   const auto& item=items[itemIndex];
   const auto ink=active?IM_COL32(12,28,29,alpha):accent;
   icon(draw,{slotCenter.x,slotCenter.y-30*scale},18*scale,model.category,ink);
-  char count[32]; std::snprintf(count,sizeof(count),"%u",item.count);
+  char count[32]; if(isEquipment(model.category))std::snprintf(count,sizeof(count),"%s",item.equipped?"EQUIPPED":"EQUIP");else std::snprintf(count,sizeof(count),"%u",item.count);
   centered(draw,{slotCenter.x,slotCenter.y+4*scale},22*scale,active?IM_COL32(10,27,28,alpha):white,count);
   const float labelSize=16*scale, labelWidth=140*scale;
   const auto labelExtent=ImGui::GetFont()->CalcTextSizeA(labelSize,labelWidth,labelWidth,item.name.c_str());
@@ -97,25 +106,25 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size) {
  }
  draw->AddCircleFilled(center,inner-7*scale,IM_COL32(13,25,29,alpha*9/10),96);
  draw->AddCircle(center,inner-7*scale,IM_COL32(140,174,172,alpha/5),96,scale);
- for(unsigned c=0;c<4;++c) {
-  if(c<3 && !model.enabled[c])continue;
-  const float mid=-kPi/2+c*kPi/2;
+ for(unsigned c=0;c<kCategoryCount+1;++c) {
+  if(c<kCategoryCount && !model.enabled[c])continue;
+  const float mid=-kPi/2+c*(2*kPi/(kCategoryCount+1));
   const bool over=navigation==static_cast<int>(c);
-  const auto tint=c<3?color(static_cast<Category>(c),alpha):IM_COL32(104,226,193,alpha);
-  sector(draw,center,70*scale,(inner-8*scale),mid-kPi/4+.035f,mid+kPi/4-.035f,
+  const auto tint=c<kCategoryCount?color(static_cast<Category>(c),alpha):IM_COL32(104,226,193,alpha);
+  sector(draw,center,70*scale,(inner-8*scale),mid-kPi/(kCategoryCount+1)+.035f,mid+kPi/(kCategoryCount+1)-.035f,
    over?IM_COL32(42,70,70,alpha):IM_COL32(17,31,35,alpha*9/10));
   if(c==category && model.enabled[c])
-   sector(draw,center,inner-12*scale,inner-8*scale,mid-kPi/4+.06f,mid+kPi/4-.06f,tint);
+   sector(draw,center,inner-12*scale,inner-8*scale,mid-kPi/(kCategoryCount+1)+.06f,mid+kPi/(kCategoryCount+1)-.06f,tint);
   centered(draw,{center.x+std::cos(mid)*119*scale,center.y+std::sin(mid)*119*scale},
-   18*scale,over || c==category?tint:muted,c<3?categoryName(static_cast<Category>(c)):"CONFIG");
+   18*scale,over || c==category?tint:muted,c<kCategoryCount?categoryName(static_cast<Category>(c)):"CONFIG");
  }
- draw->AddCircleFilled(center,54*scale,navigation==4?IM_COL32(37,58,61,alpha):IM_COL32(12,24,28,alpha),48);
+ draw->AddCircleFilled(center,54*scale,navigation==static_cast<int>(kCancelNavigation)?IM_COL32(37,58,61,alpha):IM_COL32(12,24,28,alpha),48);
  centered(draw,center,13*scale,muted,"CANCEL");
- action.hoveredItem=hovered && hovered->count>0?hovered->id:0;
- action.configHovered=navigation==3;
+ action.hoveredItem=hovered && hovered->count>0?selectionToken(*hovered):0;
+ action.configHovered=navigation==static_cast<int>(kConfigNavigation);
  if(hovered) {
   centered(draw,point(512,886),23*scale,white,hovered->name.c_str());
-  centered(draw,point(512,920),16*scale,muted,hovered->count?"RELEASE B TO TAKE ONE":"NOT CURRENTLY CARRIED");
+  centered(draw,point(512,920),16*scale,muted,!hovered->count?"NOT CURRENTLY CARRIED":isEquipment(model.category)?(hovered->equipped?"RELEASE B TO UNEQUIP":"RELEASE B TO EQUIP"):"RELEASE B TO TAKE ONE");
  }else if(items.empty())centered(draw,point(512,886),20*scale,muted,"Choose your items in Config");
  centered(draw,point(512,960),14*scale,muted,model.status.c_str());
  ImGui::End();
@@ -130,6 +139,10 @@ Model demoInventory() {
   model.items[1].push_back({id++,name,3+id,false});
  for(const char* name:{"Fragmentation Grenade","Molotov Cocktail","Plasma Grenade","Pulse Grenade","Cryogenic Grenade","Nuka Grenade"})
   model.items[2].push_back({id++,name,2+id%7,id==18});
+ for(const char* name:{"10mm Pistol","Suppressed Combat Rifle","Laser Rifle","Scoped Hunting Rifle"})
+  model.items[3].push_back({id++,name,1,id==24});
+ for(const char* name:{"Leather Chest Piece","Combat Armor Left Arm","Combat Armor Right Arm","Vault Suit"})
+  model.items[4].push_back({id++,name,1,id==28});
  for(auto& category:model.items)for(auto& item:category)item.key="preview|"+std::to_string(item.id);
  model.status="DESKTOP PREVIEW  /  SAMPLE INVENTORY";
  return model;

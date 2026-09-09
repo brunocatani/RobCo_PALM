@@ -33,8 +33,11 @@ int main(int argc, char** argv) {
   ImGui_ImplDX11_Init(device.Get(),context.Get());
   auto& io=ImGui::GetIO();io.DisplaySize={static_cast<float>(width),static_cast<float>(height)};io.DeltaTime=1.0f/90;
   wheel::publishWheelInventory(wheel::demoInventory());rock_configurator::initializePreview();rock_configurator::setPreviewOpen(true);
+  bool showWheel=false;wheel::Model wheelModel;wheel::View wheelView;
   const auto frame=[&] {
-   ImGui_ImplDX11_NewFrame();ImGui::NewFrame();(void)rock_configurator::drawImGui(0,0,static_cast<float>(width),static_cast<float>(height));
+   ImGui_ImplDX11_NewFrame();ImGui::NewFrame();
+   if(showWheel)(void)wheel::drawWheel(wheelModel,wheelView);
+   else (void)rock_configurator::drawImGui(0,0,static_cast<float>(width),static_cast<float>(height));
    ImGui::Render();rock_configurator::drainPreviewActions();
    auto* view=target.Get();context->OMSetRenderTargets(1,&view,nullptr);
    const float clear[4]{0,0,0,1};context->ClearRenderTargetView(view,clear);ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -58,6 +61,10 @@ int main(int argc, char** argv) {
   settle();
   click(rail+60,344);click(rail+60,392);click(rail+60,440);
   save(L"wheel-items.png");
+  click(100,367);click(rail+60,344);click(rail+60,392);save(L"weapon-favorites.png");
+  click(100,429);click(rail+60,344);save(L"armor-favorites.png");
+  wheelModel=wheel::selectedWheelInventory(wheel::demoInventory());wheelModel.category=wheel::Category::Weapons;
+  showWheel=true;save(L"equipment-wheel.png");showWheel=false;settle();
   click(rail+250,55);save(L"rock-settings.png");
   click(100,385);save(L"rock-settings-controls.png");
   click(rail+440,55);save(L"spawner.png");

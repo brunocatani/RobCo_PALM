@@ -65,7 +65,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   if(edge==wheel::HoldEdge::Open) {wheelOpen=true;view={};model=wheel::selectedWheelInventory(catalog);}
   wheel::Action hover;
   if(wheelOpen)hover=wheel::drawWheel(model,view);
-  std::uint32_t selectedItem=0;
+  std::uint64_t selectedItem=0;
   if(edge==wheel::HoldEdge::Release && wheelOpen) {
    wheelOpen=false;
    if(hover.configHovered)rock_configurator::setPreviewOpen(true);
@@ -74,10 +74,14 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   if(rock_configurator::isOpen())(void)rock_configurator::drawImGui(12,12,size.x-24,size.y-24);
   rock_configurator::drainPreviewActions();
   bool inventoryChanged=false;
-  if(selectedItem){for(auto& category:catalog.items)for(auto& item:category)if(item.id==selectedItem){
-   if(item.count)--item.count;inventoryChanged=true;
-   model.status="PREVIEW: TAKEN TO HAND  /  "+item.name;
-  }}
+  if(selectedItem)for(unsigned c=0;c<wheel::kCategoryCount;++c)for(auto& item:catalog.items[c])if(wheel::selectionToken(item)==selectedItem){
+   if(wheel::isEquipment(static_cast<wheel::Category>(c))) {
+    const bool equip=!item.equipped;
+    if(equip && c==static_cast<unsigned>(wheel::Category::Weapons))for(auto& other:catalog.items[c])other.equipped=false;
+    item.equipped=equip;model.status=std::string(equip?"PREVIEW: EQUIPPED  /  ":"PREVIEW: UNEQUIPPED  /  ")+item.name;
+   }else {if(item.count)--item.count;model.status="PREVIEW: TAKEN TO HAND  /  "+item.name;}
+   inventoryChanged=true;
+  }
   if(inventoryChanged)wheel::publishWheelInventory(catalog);
   if(wheel::takeWheelConfigChange() || inventoryChanged) {
    const auto category=model.category;model=wheel::selectedWheelInventory(catalog);model.category=category;view={};
