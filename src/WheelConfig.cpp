@@ -48,20 +48,22 @@ Model selectedWheelInventory(const Model& inventory){auto& s=state();std::scoped
 bool takeWheelConfigChange(){return state().changed.exchange(false);}
 void drawWheelConfig() {
  auto& s=state();std::unique_lock lock(s.mutex,std::try_to_lock);if(!lock.owns_lock())return;
- ImGui::TextUnformatted("WHEEL CONTENTS");
- ImGui::TextDisabled("Choose the categories and items available in quick access. Eight slots per category.");
+ ImGui::BeginChild("wheel-categories",{190,0});
+ ImGui::TextDisabled("QUICK ACCESS");
  ImGui::Spacing();
  for(unsigned c=0;c<3;++c) {
   ImGui::PushID(static_cast<int>(c));
-  if(c)ImGui::SameLine(0,24);
-  if(ImGui::Checkbox(categoryName(static_cast<Category>(c)),&s.prefs.enabled[c]))s.changed=true;
+  if(ImGui::Selectable(categoryName(static_cast<Category>(c)),s.category==c,0,{0,42}))s.category=c;
   ImGui::PopID();
  }
- ImGui::Separator();
- for(unsigned c=0;c<3;++c) {
-  if(c)ImGui::SameLine(0,24);
-  if(ImGui::RadioButton(categoryName(static_cast<Category>(c)),s.category==c))s.category=c;
- }
+ ImGui::EndChild();ImGui::SameLine(0,24);
+ ImGui::BeginChild("wheel-category-content",{0,0});
+ ImGui::TextUnformatted(categoryName(static_cast<Category>(s.category)));
+ ImGui::SameLine();
+ ImGui::SetCursorPosX(ImGui::GetWindowWidth()-270);
+ if(ImGui::Checkbox("Show in wheel",&s.prefs.enabled[s.category]))s.changed=true;
+ ImGui::TextDisabled("Choose up to eight items for this category.");
+ ImGui::Spacing();
  auto& favorites=s.prefs.slots[s.category];const auto& catalog=s.inventory.items[s.category];
  ImGui::Text("%zu / 8 selected",favorites.size());
  ImGui::SameLine();ImGui::TextDisabled("%s",s.status.c_str());
@@ -92,6 +94,7 @@ void drawWheelConfig() {
   }
   ImGui::EndDisabled();ImGui::SameLine();ImGui::TextDisabled("%u carried",item.count);ImGui::PopID();
  }
+ ImGui::EndChild();
  ImGui::EndChild();
 }
 }

@@ -81,3 +81,8 @@ target_compile_features(WheelPreviewIsolationTests PRIVATE cxx_std_23)
 target_compile_definitions(WheelPreviewIsolationTests PRIVATE WHEEL_DESKTOP_PREVIEW WIN32_LEAN_AND_MEAN NOMINMAX)
 target_link_libraries(WheelPreviewIsolationTests PRIVATE shell32)
 add_test(NAME Wheel.PreviewIsolation COMMAND WheelPreviewIsolationTests)
+
+add_executable(WheelConfigInteractionTests tests/ConfigInteractionTests.cpp preview/WorkshopAdapter.cpp)
+target_link_libraries(WheelConfigInteractionTests PRIVATE wheel_workshop_preview)
+target_compile_definitions(WheelConfigInteractionTests PRIVATE WHEEL_DESKTOP_PREVIEW)
+add_test(NAME Wheel.ConfigInteraction COMMAND WheelConfigInteractionTests)

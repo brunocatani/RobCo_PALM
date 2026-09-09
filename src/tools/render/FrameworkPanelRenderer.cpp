@@ -46,6 +46,8 @@ namespace devui::render
             std::uint64_t deviceGeneration{ 0 };
             bool backendReady{ false };
             bool initializationFailed{ false };
+            bool backWasDown{ false };
+            bool backRequested{ false };
         };
 
         struct FrameworkState
@@ -340,10 +342,14 @@ namespace devui::render
 
             ImGui_ImplDX11_NewFrame();
             ImGui::NewFrame();
-            if (!rock_configurator::drawImGui()) {
+            const bool backDown = frame->pointerValid != 0 && frame->backDown != 0;
+            state.backRequested |= backDown && !state.backWasDown;
+            state.backWasDown = backDown;
+            if (!rock_configurator::drawImGui(0, 0, kPanelPixelWidth, kPanelPixelHeight, state.backRequested)) {
                 ImGui::EndFrame();
                 return;
             }
+            state.backRequested = false;
             ImGui::Render();
             ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
         }
@@ -445,6 +451,7 @@ namespace devui::render
         panel.minimumPhysicalWidth = kMinimumPanelPhysicalWidth;
         panel.maximumPhysicalWidth = kMaximumPanelPhysicalWidth;
         panel.sortOrder = 310;
+        panel.flags = static_cast<std::uint32_t>(rpsui::sdk::PanelFlagV1::ConfigNavigation);
         panel.renderCallback = &renderPanel;
         if (state.api->registerPanel(
                 state.ownerToken,
