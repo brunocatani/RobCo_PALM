@@ -1,0 +1,15 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "custom-fast",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build-fast",
+      "cacheVariables": {
+        "COPY_PLUGIN_BASE_PATH": "D:/FO4/mods/ROCK_Wheel_Menu",
+        "CMAKE_CONFIGURATION_TYPES": "Release"
+      }
+    }
+  ]
+}
