@@ -106,6 +106,7 @@ namespace rock_configurator
 
         std::atomic<ConfiguratorTab> s_activeTab{ ConfiguratorTab::Wheel };
         std::atomic_bool s_panelOpen = false;
+        std::atomic_bool s_panelOpening = false;
         std::atomic<float> s_sessionPanelPhysicalWidth{
             devui::render::kDefaultPanelPhysicalWidth
         };
@@ -265,6 +266,7 @@ namespace rock_configurator
 
         void openPanelLocked(const RuntimeAction& action)
         {
+            struct OpeningFinished {~OpeningFinished(){s_panelOpening.store(false);}} openingFinished;
             if (s_panelOpen.load(std::memory_order_acquire)) {
                 return;
             }
@@ -1773,6 +1775,7 @@ namespace rock_configurator
     }
 
     bool isOpen() noexcept { return s_panelOpen.load(std::memory_order_acquire); }
+    bool isOpening() noexcept { return s_panelOpening.load(std::memory_order_acquire); }
     bool takeInventoryRefreshRequest() noexcept { return s_inventoryRefreshRequested.exchange(false); }
 
     void setAvailable(bool available) noexcept
@@ -1783,26 +1786,24 @@ namespace rock_configurator
 
     void close() noexcept
     {
+        s_panelOpening.store(false);
         s_panelOpen.store(false, std::memory_order_release);
         devui::render::SetPanelOpen(false);
         invalidateQueuedRuntimeActions();
     }
 
-    void openBeside(const devui::render::PanelPose& wheelPose)
+    void openAt(const devui::render::PanelPose& wheelPose)
     {
-        if (isOpen() || !s_providerInputReady.load(std::memory_order_acquire)) return;
+        if (isOpen() || !s_providerInputReady.load(std::memory_order_acquire) || s_panelOpening.exchange(true)) return;
         const float width = s_sessionPanelPhysicalWidth.load(std::memory_order_acquire);
-        const float offset = wheelPose.physicalWidth * 0.5f + width * 0.5f + 4.0f;
         PanelPose pose;
-        pose.position = {wheelPose.center.x + wheelPose.right.x * offset,
-                         wheelPose.center.y + wheelPose.right.y * offset,
-                         wheelPose.center.z + wheelPose.right.z * offset};
+        pose.position = wheelPose.center;
         pose.right = {wheelPose.right.x, wheelPose.right.y, wheelPose.right.z};
         pose.up = {wheelPose.up.x, wheelPose.up.y, wheelPose.up.z};
         pose.front = {wheelPose.front.x, wheelPose.front.y, wheelPose.front.z};
         pose.physicalWidth = width;
         pose.physicalHeight = width / devui::render::kPanelAspectRatio;
-        (void)queueUiAction({.kind = RuntimeActionKind::OpenPanel, .hasPanelPose = true, .panelPose = pose});
+        if (!queueUiAction({.kind = RuntimeActionKind::OpenPanel, .hasPanelPose = true, .panelPose = pose}))s_panelOpening.store(false);
     }
 
 #ifdef WHEEL_DESKTOP_PREVIEW

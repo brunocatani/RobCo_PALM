@@ -11,8 +11,11 @@ std::optional<Category> classify(RE::TESBoundObject* object) {
   if(aid->IsPoison()) return {};
   return aid->IsFood()?Category::Food:Category::Aid;
  }
- if(object->Is(RE::ENUM_FORM_ID::kWEAP) && static_cast<RE::TESObjectWEAP*>(object)->weaponData.type==RE::WEAPON_TYPE::kGrenade)
-  return Category::Grenades;
+ if(object->Is(RE::ENUM_FORM_ID::kWEAP)) {
+  const auto type=static_cast<RE::TESObjectWEAP*>(object)->weaponData.type;
+  // Preserve the throwable types supported by ROCK's replaced quick-draw path.
+  if(type==RE::WEAPON_TYPE::kGrenade || type==RE::WEAPON_TYPE::kMine)return Category::Grenades;
+ }
  return {};
 }
 }

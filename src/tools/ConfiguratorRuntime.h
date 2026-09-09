@@ -6,10 +6,11 @@ void onGameDataReady();
 void onGameSessionReady();
 void shutdown();
 bool isOpen() noexcept;
+bool isOpening() noexcept;
 bool takeInventoryRefreshRequest() noexcept;
 void setAvailable(bool available) noexcept;
 void close() noexcept;
-void openBeside(const devui::render::PanelPose& wheelPose);
+void openAt(const devui::render::PanelPose& wheelPose);
 [[nodiscard]] bool drawImGui(float x=0, float y=0,
  float width=devui::render::kPanelPixelWidth, float height=devui::render::kPanelPixelHeight) noexcept;
 void onFrameworkPanelFrame(float physicalWidth, panel_resize::Handle hovered, panel_resize::Handle active) noexcept;

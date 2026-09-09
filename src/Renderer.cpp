@@ -40,7 +40,7 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
   io.DisplaySize={static_cast<float>(frame->pixelWidth),static_cast<float>(frame->pixelHeight)};
   io.DeltaTime=std::clamp(frame->deltaSeconds,1.f/240,.1f);io.MouseDrawCursor=true;
   io.AddMousePosEvent(frame->pointerValid?frame->pointerPixelX:-FLT_MAX,frame->pointerValid?frame->pointerPixelY:-FLT_MAX);
-  io.AddMouseButtonEvent(0,frame->pointerValid && frame->primaryDown);
+  io.AddMouseButtonEvent(0,false); // The wheel selects on B release, never pointer clicks.
   io.AddMouseWheelEvent(0,frame->scrollAxisY*5.5f*io.DeltaTime);
   auto* target=static_cast<ID3D11RenderTargetView*>(frame->renderTargetView);
   context->OMSetRenderTargets(1,&target,nullptr);
@@ -49,8 +49,7 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
   {auto& shared=sharedModel();std::unique_lock modelLock(shared.mutex,std::try_to_lock);
    if(modelLock.owns_lock())action=drawWheel(shared.model,shared.view);}
   ImGui::Render();ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-  if(action.config)toggleConfig();
-  else if(action.useItem)activateItem(action.useItem);else if(action.close)closeWheel();
+  if(releasePending())completeRelease(action);
  } catch(const std::exception& e){spdlog::error("Wheel render failed: {}",e.what());closeWheel();}
  catch(...){closeWheel();}
 }

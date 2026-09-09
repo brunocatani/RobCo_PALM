@@ -10,9 +10,18 @@ int main(){try {
  check(hitCenter(0,120,1)==2);check(hitCenter(-120,0,1)==3);
  check(hitCenter(0,0,1)==4);check(hitCenter(0,190,1)==-1);
  check(hitCenter(60,0,.5f)==1);
- ClickLatch click;check(click.update(true,true,false,42)==0);check(click.update(false,false,true,43)==0);
- check(click.update(true,true,false,42)==0);check(click.update(false,false,true,42)==42);
- ToggleGesture gesture;check(!gesture.update(true,10));check(gesture.update(false,10.2));
- check(!gesture.update(true,11));check(!gesture.update(false,12));
- std::cout<<"Wheel selection, center navigation, cancellation and toggle policies passed\n";return 0;
+ HoldGesture gesture;
+ check(gesture.update(true,true)==HoldEdge::None); // Held on load must release first.
+ check(gesture.update(true,false)==HoldEdge::None);
+ check(gesture.update(true,true)==HoldEdge::Open);
+ check(gesture.update(true,true)==HoldEdge::None);
+ check(gesture.update(true,false)==HoldEdge::Release);
+ check(gesture.update(true,false)==HoldEdge::None); // Exactly one selection.
+ check(gesture.update(true,true)==HoldEdge::Open);
+ check(gesture.update(false,true)==HoldEdge::None); // Menu/provider loss cancels.
+ check(gesture.update(true,true)==HoldEdge::None);
+ check(gesture.update(true,false)==HoldEdge::None);
+ check(gesture.update(true,true)==HoldEdge::Open);
+ check(gesture.update(true,false)==HoldEdge::Release);
+ std::cout<<"Wheel selection, center navigation, cancellation and B-hold policies passed\n";return 0;
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

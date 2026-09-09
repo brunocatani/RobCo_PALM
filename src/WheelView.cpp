@@ -54,15 +54,17 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size) {
  auto* draw=ImGui::GetWindowDrawList();
  view.animation=std::min(1.f,view.animation+io.DeltaTime*7);
  const int alpha=static_cast<int>(255*view.animation);
- const auto accent=color(model.category,alpha);
  const auto white=IM_COL32(233,242,239,alpha);
  const auto muted=IM_COL32(146,166,164,alpha);
  const ImVec2 center=point(512,510);
  const float inner=180*scale, outer=(326+10*view.animation)*scale;
  const float mx=io.MousePos.x-center.x, my=io.MousePos.y-center.y;
+ const int navigation=hitCenter(mx,my,scale);
+ if(navigation>=0 && navigation<3 && model.enabled[navigation])model.category=static_cast<Category>(navigation);
  if(!model.enabled[static_cast<unsigned>(model.category)])
   for(unsigned c=0;c<3;++c)if(model.enabled[c]){model.category=static_cast<Category>(c);break;}
  const auto category=static_cast<unsigned>(model.category);
+ const auto accent=color(model.category,alpha);
  auto& items=model.items[category];
  const int hit=hitSlot(mx,my,inner,outer);
  const std::size_t index=hit>=0 ? hit : items.size();
@@ -95,7 +97,6 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size) {
  }
  draw->AddCircleFilled(center,inner-7*scale,IM_COL32(13,25,29,alpha*9/10),96);
  draw->AddCircle(center,inner-7*scale,IM_COL32(140,174,172,alpha/5),96,scale);
- const int navigation=hitCenter(mx,my,scale);
  for(unsigned c=0;c<4;++c) {
   if(c<3 && !model.enabled[c])continue;
   const float mid=-kPi/2+c*kPi/2;
@@ -109,20 +110,12 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size) {
    18*scale,over || c==category?tint:muted,c<3?categoryName(static_cast<Category>(c)):"CONFIG");
  }
  draw->AddCircleFilled(center,54*scale,navigation==4?IM_COL32(37,58,61,alpha):IM_COL32(12,24,28,alpha),48);
- centered(draw,center,25*scale,muted,"×");
- const auto selectedCenter=view.centerClick.update(ImGui::IsMouseDown(0),ImGui::IsMouseClicked(0),
-  ImGui::IsMouseReleased(0),navigation>=0 && (navigation>=3 || model.enabled[navigation])?navigation+1:0);
- action.useItem=view.click.update(ImGui::IsMouseDown(0),ImGui::IsMouseClicked(0),ImGui::IsMouseReleased(0),
-  hovered && hovered->count>0?hovered->id:0);
- if(selectedCenter) {
-  view.click={};
-  if(selectedCenter<=3)model.category=static_cast<Category>(selectedCenter-1);
-  else if(selectedCenter==4)action.config=true;
-  else action.close=true;
- }
+ centered(draw,center,13*scale,muted,"CANCEL");
+ action.hoveredItem=hovered && hovered->count>0?hovered->id:0;
+ action.configHovered=navigation==3;
  if(hovered) {
   centered(draw,point(512,886),23*scale,white,hovered->name.c_str());
-  centered(draw,point(512,920),16*scale,muted,hovered->count?"TAKE ONE INTO A FREE HAND":"NOT CURRENTLY CARRIED");
+  centered(draw,point(512,920),16*scale,muted,hovered->count?"RELEASE B TO TAKE ONE":"NOT CURRENTLY CARRIED");
  }else if(items.empty())centered(draw,point(512,886),20*scale,muted,"Choose your items in Config");
  centered(draw,point(512,960),14*scale,muted,model.status.c_str());
  ImGui::End();

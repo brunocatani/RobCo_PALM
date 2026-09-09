@@ -34,15 +34,6 @@ inline int hitSlot(float x, float y, float inner, float outer) {
  if(fraction < 0.025f || fraction > 0.975f) return -1;
  return static_cast<int>(segment);
 }
-struct ClickLatch {
- std::uint32_t pressed{};
- std::uint32_t update(bool down, bool pressEdge, bool releaseEdge, std::uint32_t hovered) {
-  if(pressEdge) pressed=hovered;
-  const auto chosen = releaseEdge && hovered != 0 && pressed == hovered ? hovered : 0;
-  if(releaseEdge || (!down && !pressEdge)) pressed=0;
-  return chosen;
- }
-};
 // Inner navigation: Aid above, Food right, Grenades below, Config left.
 inline int hitCenter(float x,float y,float scale) {
  const float radius=std::hypot(x,y)/scale;
@@ -55,13 +46,14 @@ inline int hitCenter(float x,float y,float scale) {
  if(fraction<.025f || fraction>.975f)return -1;
  return static_cast<int>(quadrant);
 }
-struct ToggleGesture {
- bool down{};
- double pressedAt{};
- bool update(bool held, double now) {
-  if(held && !down) {down=true; pressedAt=now;}
-  else if(!held && down) {down=false; return now-pressedAt <= 0.35 && now>=pressedAt;}
-  return false;
+enum class HoldEdge { None, Open, Release };
+struct HoldGesture {
+ bool armed{}, down{};
+ HoldEdge update(bool eligible,bool held) {
+  if(!eligible){armed=false;down=false;return HoldEdge::None;}
+  if(!held){const bool released=down;down=false;armed=true;return released?HoldEdge::Release:HoldEdge::None;}
+  if(armed && !down){down=true;return HoldEdge::Open;}
+  return HoldEdge::None;
  }
 };
 }

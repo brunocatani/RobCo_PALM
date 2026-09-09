@@ -8,6 +8,7 @@ SharedModel& sharedModel();
 bool startRuntime();
 bool isOpen();
 void closeWheel();
-void activateItem(std::uint32_t id);
-void toggleConfig();
+// Renderer publishes the live hover only after the B-release request.
+bool releasePending();
+void completeRelease(const Action& hover);
 }
