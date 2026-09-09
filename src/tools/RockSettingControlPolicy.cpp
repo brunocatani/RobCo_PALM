@@ -377,8 +377,19 @@ namespace rock_configurator::setting_control
         ValueType type,
         std::string_view key,
         std::string_view value,
-        std::string_view description)
+        std::string_view description,
+        RpsMod mod)
     {
+        if (mod != RpsMod::Rock) {
+            if (type == ValueType::Boolean) return { .kind = Kind::Checkbox };
+            if (mod == RpsMod::Paper && key == "sMaximumMode")
+                return { .kind = Kind::Dropdown, .options = {{"User","User"},{"Observe","Observe"},{"Harvest","Harvest"},{"Capture","Capture"}} };
+            if (mod == RpsMod::Paper && key == "sAccess")
+                return { .kind = Kind::Dropdown, .options = {{"Off","Off"},{"ReadOnly","Read only"},{"ReadWrite","Read and write"}} };
+            if (type == ValueType::String) return { .kind = Kind::Text };
+            // ROCK's keyed ranges and naming heuristics are not other mods' contracts.
+            return { .kind = Kind::Numeric, .step = fineStep(type, key, parseNumber(value), 0.0) };
+        }
         if (type == ValueType::Boolean) {
             return { .kind = Kind::Checkbox };
         }

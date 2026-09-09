@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RockSettingControlPolicy.h"
+#include "RpsMod.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -47,7 +48,7 @@ namespace rock_configurator
     class IniSettingsStore
     {
     public:
-        explicit IniSettingsStore(std::filesystem::path path = {}) : _path(std::move(path)) {}
+        explicit IniSettingsStore(std::filesystem::path path = {}, RpsMod mod = RpsMod::Rock) : _path(std::move(path)), _mod(mod) {}
 
         [[nodiscard]] bool load();
         [[nodiscard]] bool reload();
@@ -80,9 +81,9 @@ namespace rock_configurator
             bool isSetting{ false };
         };
 
-        [[nodiscard]] static std::filesystem::path resolveProductionIniPath();
+        [[nodiscard]] std::filesystem::path resolveProductionIniPath() const;
         [[nodiscard]] static SettingType inferType(std::string_view value);
-        static void refreshControl(SettingRecord& setting);
+        void refreshControl(SettingRecord& setting) const;
         [[nodiscard]] static std::string cycleStringValue(const SettingRecord& setting, int direction);
         [[nodiscard]] static std::string adjustNumericValue(const SettingRecord& setting, int direction);
 
@@ -91,6 +92,7 @@ namespace rock_configurator
         [[nodiscard]] std::pair<std::size_t, std::size_t> categoryBounds(std::size_t index) const;
 
         std::filesystem::path _path;
+        RpsMod _mod;
         std::vector<IniLine> _lines;
         std::vector<SettingRecord> _settings;
         std::string _lastError;

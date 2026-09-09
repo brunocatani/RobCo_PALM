@@ -81,6 +81,29 @@ int main() {
         require(rock_configurator::isOpen() && window("wheel-category-content"), "spawner back closed Config instead of returning home");
         frame(true);
         require(!rock_configurator::isOpen(), "back at Config home did not close it");
+        // Every loaded-mod combination, including none, uses the real tab widgets.
+        for (unsigned mask = 0; mask < 8; ++mask) {
+            rock_configurator::initializeRpsPreview({path, path, path},
+                {(mask & 1) != 0, (mask & 2) != 0, (mask & 4) != 0});
+            rock_configurator::setPreviewOpen(true);frame();frame();
+            click(railWidth + 250, 50);
+            auto* firstRows = window("settings-rows");
+            require((firstRows != nullptr) == (mask != 0), "unloaded mod exposed settings");
+            if (!mask) continue;
+            const auto firstId = firstRows->ID;
+            const int count = static_cast<int>((mask & 1) != 0) + static_cast<int>((mask & 2) != 0) + static_cast<int>((mask & 4) != 0);
+            ImGuiID previous = firstId;
+            for (int mod = 1; mod < count; ++mod) {
+                click(45.0f + mod * 168.0f, 120);
+                auto* currentRows = window("settings-rows");
+                require(currentRows && currentRows->ID != previous, "mod tabs did not isolate identical setting identities");
+                previous = currentRows->ID;
+            }
+            click(45, 120);
+            require(window("settings-rows")->ID == firstId, "first available mod did not restore its workspace");
+            click(45.0f + count * 168.0f, 120);
+            require(window("settings-rows")->ID == firstId, "hidden mod tab remained clickable");
+        }
         std::cout << "Config headless interaction and contextual scrolling passed\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n'; ImGui::DestroyContext(); return 1;

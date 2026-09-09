@@ -96,6 +96,33 @@ int main()
     expect(saved.find("fExperimentalRecovery = 5.25") != std::string::npos,
         "unbounded numeric commits retain fine adjustment");
 
+    const auto paperPath = directory / "PAPER.ini";
+    const auto scissorsPath = directory / "SCISSORS.ini";
+    {
+        std::ofstream paper(paperPath);
+        paper << "[Main]\nbEnabled = true\nfContactIntensity = 0.5\n"
+              << "[DevelopmentCapture]\nsMaximumMode = User\n[WeaponMotionCache]\nsAccess = Off\n";
+        std::ofstream scissors(scissorsPath);
+        scissors << "; untouched sibling\n[Main]\nbEnabled = true\nfContactIntensity = 0.5\n";
+    }
+    const auto scissorsBefore = readAll(scissorsPath);
+    rock_configurator::IniSettingsStore paper(paperPath, rock_configurator::RpsMod::Paper);
+    rock_configurator::IniSettingsStore scissors(scissorsPath, rock_configurator::RpsMod::Scissors);
+    expect(paper.load() && scissors.load(), "each mod loads its own INI");
+    expect(paper.settings()[0].control.kind == Kind::Checkbox, "PAPER boolean remains a checkbox");
+    expect(!paper.settings()[1].control.bounded && !scissors.settings()[1].control.bounded,
+        "ROCK-specific ranges cannot constrain another mod's matching key");
+    expect(paper.setBooleanByIndex(0, false).saved, "PAPER checkbox writes to its own file");
+    expect(paper.setOptionByIndex(2, 2).saved && paper.settings()[2].value == "Harvest",
+        "PAPER development modes use supported values");
+    expect(paper.setOptionByIndex(3, 2).saved && paper.settings()[3].value == "ReadWrite",
+        "PAPER cache access uses supported values");
+    expect(readAll(scissorsPath) == scissorsBefore && readAll(iniPath) == saved,
+        "editing PAPER leaves ROCK and SCISSORS unchanged");
+    expect(scissors.setBooleanByIndex(0, false).saved, "SCISSORS checkbox writes its own file");
+    expect(readAll(scissorsPath).find("; untouched sibling") != std::string::npos,
+        "SCISSORS comments survive edits");
+
     fs::remove_all(directory, error);
     if (error) {
         std::cerr << "FAIL: could not remove the isolated test directory\n";

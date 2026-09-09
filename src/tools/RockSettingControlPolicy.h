@@ -1,4 +1,5 @@
 #pragma once
+#include "RpsMod.h"
 
 #include <cstdint>
 #include <string>
@@ -43,7 +44,8 @@ namespace rock_configurator::setting_control
         ValueType type,
         std::string_view key,
         std::string_view value,
-        std::string_view description);
+        std::string_view description,
+        RpsMod mod = RpsMod::Rock);
 
     [[nodiscard]] double snapNumeric(const Spec& spec, double value) noexcept;
     [[nodiscard]] bool equalsIgnoreCase(std::string_view left, std::string_view right) noexcept;

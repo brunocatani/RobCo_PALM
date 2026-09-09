@@ -45,6 +45,7 @@ namespace rock_configurator
             UiClose,
             UiBack,
             UiSelectTab,
+            UiSelectMod,
             UiSelectRow,
             UiAdjustRow,
             UiSetBooleanRow,
@@ -97,14 +98,24 @@ namespace rock_configurator
             double value{ 0.0 };
         };
 
-        IniSettingsStore s_store;
+        struct ModSettings {
+            IniSettingsStore store;
+            bool loaded = false;
+            bool available = false;
+            std::uint64_t identity = 0;
+            SelectionAnchor anchor;
+            std::size_t activeIndex = 0;
+        };
+        std::array<ModSettings, 3> s_modSettings{
+            ModSettings{IniSettingsStore({}, RpsMod::Rock)},
+            ModSettings{IniSettingsStore({}, RpsMod::Paper)},
+            ModSettings{IniSettingsStore({}, RpsMod::Scissors)}
+        };
+        std::size_t s_modIndex = 0;
+        ModSettings& activeSettings() { return s_modSettings[s_modIndex]; }
         SpawnBrowser s_spawnBrowser;
         std::mutex s_runtimeMutex;
-        bool s_storeLoaded = false;
-        std::uint64_t s_storeIdentity = 0;
-        SelectionAnchor s_storeAnchor;
-        std::size_t s_activeIndex = 0;
-        std::string s_statusMessage = "Waiting for ROCK.ini";
+        std::string s_statusMessage;
         std::optional<PendingNumericEdit> s_pendingNumericEdit;
 
         std::atomic<ConfiguratorTab> s_activeTab{ ConfiguratorTab::Wheel };
@@ -186,7 +197,9 @@ namespace rock_configurator
 
         [[nodiscard]] std::uint64_t settingTargetLocked(std::size_t index) noexcept
         {
-            return selectedIdentity(s_storeIdentity, index);
+            auto identity = activeSettings().identity;
+            hashUint64(identity, s_modIndex);
+            return selectedIdentity(identity, index);
         }
 
         template <class Store>
@@ -218,11 +231,11 @@ namespace rock_configurator
             return loaded;
         }
 
-        [[nodiscard]] bool readRockStoreLocked(bool reload)
+        [[nodiscard]] bool readActiveStoreLocked(bool reload)
         {
             s_pendingNumericEdit.reset();
             return readStoreLocked(
-                s_store, s_storeLoaded, s_activeIndex, s_storeAnchor, s_storeIdentity, reload);
+                activeSettings().store, activeSettings().loaded, activeSettings().activeIndex, activeSettings().anchor, activeSettings().identity, reload);
         }
 
         [[nodiscard]] bool spawnTabActive() noexcept
@@ -230,12 +243,32 @@ namespace rock_configurator
             return s_activeTab.load(std::memory_order_acquire) == ConfiguratorTab::Spawn;
         }
 
-        void loadRockSettingsLocked(bool reloadLoaded)
+        void updateSettingsStatusLocked()
         {
-            (void)readRockStoreLocked(reloadLoaded && s_storeLoaded);
-            s_statusMessage = s_storeLoaded ?
-                std::format("Loaded {} ROCK settings", s_store.settings().size()) :
-                s_store.lastError();
+            s_statusMessage = activeSettings().loaded ?
+                modInfo(static_cast<RpsMod>(s_modIndex)).applyHint :
+                activeSettings().store.lastError();
+        }
+
+        void loadRpsSettingsLocked(bool reloadLoaded)
+        {
+            s_pendingNumericEdit.reset();
+            for (std::size_t i = 0; i < s_modSettings.size(); ++i) {
+                auto& settings = s_modSettings[i];
+#ifndef WHEEL_DESKTOP_PREVIEW
+                // F4SEVR unloads rejected plugins. Inspect loaded modules, not files in MO2.
+                settings.available = GetModuleHandleW(kRpsMods[i].module) != nullptr;
+#endif
+                if (settings.available)
+                    (void)readStoreLocked(settings.store, settings.loaded, settings.activeIndex,
+                        settings.anchor, settings.identity, reloadLoaded && settings.loaded);
+                else settings.loaded = false;
+            }
+            if (!activeSettings().available) {
+                for (std::size_t i = 0; i < s_modSettings.size(); ++i)
+                    if (s_modSettings[i].available) { s_modIndex = i; break; }
+            }
+            updateSettingsStatusLocked();
         }
 
         void invalidateQueuedRuntimeActions()
@@ -282,7 +315,7 @@ namespace rock_configurator
                 return;
             }
 
-            loadRockSettingsLocked(true);
+            loadRpsSettingsLocked(true);
             s_pendingNumericEdit.reset();
             if (spawnTabActive() && !s_spawnBrowser.ensureIndexBuilt()) {
                 s_statusMessage = s_spawnBrowser.lastResult();
@@ -296,7 +329,7 @@ namespace rock_configurator
             }
             s_panelOpen.store(true, std::memory_order_release);
             logger::info(
-                "Wheel Config fixed ROCK configurator panel opened at {:.2f},{:.2f},{:.2f}",
+                "Wheel Config RPS configurator panel opened at {:.2f},{:.2f},{:.2f}",
                 action.panelPose.position.x,
                 action.panelPose.position.y,
                 action.panelPose.position.z);
@@ -316,14 +349,14 @@ namespace rock_configurator
             logger::info("Wheel Config panel closed ({})", s_statusMessage);
         }
 
-        void applyRockChangeLocked(const SettingChangeResult& result)
+        void applySettingChangeLocked(const SettingChangeResult& result)
         {
             s_statusMessage = result.message.empty() ? "No change" : result.message;
             if (result.changed && result.saved) {
 #ifndef WHEEL_DESKTOP_PREVIEW
-                (void)readRockStoreLocked(true);
-                s_statusMessage = s_storeLoaded ?
-                    std::format("Saved {}", result.setting.key) : s_store.lastError();
+                (void)readActiveStoreLocked(true);
+                s_statusMessage = activeSettings().loaded ?
+                    std::format("Saved {}. {}", result.setting.key, kRpsMods[s_modIndex].applyHint) : activeSettings().store.lastError();
 #else
                 s_statusMessage = std::format("PREVIEW: {} changed in memory", result.setting.key);
 #endif
@@ -347,8 +380,8 @@ namespace rock_configurator
             }
             switch (tab) {
             case ConfiguratorTab::Settings:
-                if (index < s_store.settings().size()) {
-                    s_activeIndex = index;
+                if (index < activeSettings().store.settings().size()) {
+                    activeSettings().activeIndex = index;
                 }
                 break;
             case ConfiguratorTab::Wheel:
@@ -361,7 +394,7 @@ namespace rock_configurator
         {
             return action.tab == ConfiguratorTab::Settings &&
                    s_activeTab.load(std::memory_order_acquire) == ConfiguratorTab::Settings &&
-                   s_storeLoaded && action.index < s_store.settings().size() &&
+                   activeSettings().available && activeSettings().loaded && action.index < activeSettings().store.settings().size() &&
                    action.horizontalTarget == settingTargetLocked(action.index);
         }
 
@@ -370,8 +403,8 @@ namespace rock_configurator
             if (!validatesSettingTargetLocked(action)) {
                 return;
             }
-            s_activeIndex = action.index;
-            applyRockChangeLocked(s_store.setBooleanByIndex(action.index, action.value != 0));
+            activeSettings().activeIndex = action.index;
+            applySettingChangeLocked(activeSettings().store.setBooleanByIndex(action.index, action.value != 0));
         }
 
         void setNumericRowLocked(const RuntimeAction& action)
@@ -379,8 +412,8 @@ namespace rock_configurator
             if (!validatesSettingTargetLocked(action)) {
                 return;
             }
-            s_activeIndex = action.index;
-            applyRockChangeLocked(s_store.setNumericByIndex(action.index, action.numericValue));
+            activeSettings().activeIndex = action.index;
+            applySettingChangeLocked(activeSettings().store.setNumericByIndex(action.index, action.numericValue));
         }
 
         void setOptionRowLocked(const RuntimeAction& action)
@@ -388,8 +421,8 @@ namespace rock_configurator
             if (!validatesSettingTargetLocked(action) || action.value < 0) {
                 return;
             }
-            s_activeIndex = action.index;
-            applyRockChangeLocked(s_store.setOptionByIndex(
+            activeSettings().activeIndex = action.index;
+            applySettingChangeLocked(activeSettings().store.setOptionByIndex(
                 action.index, static_cast<std::size_t>(action.value)));
         }
 
@@ -400,8 +433,8 @@ namespace rock_configurator
             }
             switch (tab) {
             case ConfiguratorTab::Settings:
-                (void)readRockStoreLocked(true);
-                s_statusMessage = s_storeLoaded ? "Reloaded ROCK.ini" : s_store.lastError();
+                (void)readActiveStoreLocked(true);
+                updateSettingsStatusLocked();
                 break;
             case ConfiguratorTab::Wheel:
             case ConfiguratorTab::Spawn:
@@ -451,13 +484,22 @@ namespace rock_configurator
             case RuntimeActionKind::UiSelectTab:
                 setActiveTabLocked(action.tab);
                 break;
+            case RuntimeActionKind::UiSelectMod:
+                if (s_activeTab.load() == ConfiguratorTab::Settings && action.index < s_modSettings.size() &&
+                    s_modSettings[action.index].available && action.index != s_modIndex) {
+                    s_modIndex = action.index;
+                    s_pendingNumericEdit.reset();
+                    invalidateQueuedRuntimeActions();
+                    updateSettingsStatusLocked();
+                }
+                break;
             case RuntimeActionKind::UiSelectRow:
                 selectRowLocked(action.tab, action.index);
                 break;
             case RuntimeActionKind::UiAdjustRow:
                 if (validatesSettingTargetLocked(action)) {
-                    s_activeIndex = action.index;
-                    applyRockChangeLocked(s_store.adjustByIndex(action.index, action.value));
+                    activeSettings().activeIndex = action.index;
+                    applySettingChangeLocked(activeSettings().store.adjustByIndex(action.index, action.value));
                 }
                 break;
             case RuntimeActionKind::UiSetBooleanRow:
@@ -667,7 +709,10 @@ namespace rock_configurator
             if (hovered) draw->AddRectFilled(minimum, maximum, packed(accentColor(0.06f)), 4);
             if (active) draw->AddRectFilled({minimum.x + 10, maximum.y - 3},
                 {maximum.x - 10, maximum.y}, packed(accentColor()), 2);
-            draw->AddText(fontFor(devui::render::FontRole::Medium), 26,
+            auto* font = fontFor(devui::render::FontRole::Medium);
+            const float textWidth = font->CalcTextSizeA(26, FLT_MAX, 0, label).x;
+            const float fontSize = textWidth > size.x - 24 ? 26 * (size.x - 24) / textWidth : 26;
+            draw->AddText(font, fontSize,
                 {minimum.x + 12, minimum.y + 16},
                 packed(active ? accentColor() : textColor(hovered ? 0.95f : 0.65f)), label);
             ImGui::PopID();
@@ -692,7 +737,7 @@ namespace rock_configurator
         void drawTopBar()
         {
             constexpr std::array tabs{ConfiguratorTab::Wheel, ConfiguratorTab::Settings, ConfiguratorTab::Spawn};
-            constexpr std::array labels{"Wheel items", "ROCK settings", "Spawner"};
+            constexpr std::array labels{"Wheel items", "RPS configurator", "Spawner"};
             const auto active = s_activeTab.load(std::memory_order_acquire);
             const auto p = ImGui::GetWindowPos();
             const float width = ImGui::GetWindowWidth();
@@ -731,7 +776,7 @@ namespace rock_configurator
             ConfiguratorTab tab,
             const std::string& status)
         {
-            devui::visual::caption("ROCK SETTINGS");
+            devui::visual::caption(modInfo(static_cast<RpsMod>(s_modIndex)).name);
             ImGui::Dummy({0, 12});
             {
                 ScopedFont font(devui::render::FontRole::Body, 17);
@@ -1169,13 +1214,30 @@ namespace rock_configurator
             }
             const float railWidth = devui::visual::railWidth(ImGui::GetContentRegionAvail().x);
             const auto tab = s_activeTab.load(std::memory_order_acquire);
+            if (tab == ConfiguratorTab::Settings) {
+                ImGui::BeginChild("rps-mod-tabs", {0, 64});
+                ImGui::SetCursorPos({18, 4});
+                bool first = true;
+                for (std::size_t i = 0; i < s_modSettings.size(); ++i) {
+                    if (!s_modSettings[i].available) continue;
+                    if (!first) ImGui::SameLine(0, 12);
+                    first = false;
+                    if (tabChip(kRpsMods[i].name, s_modIndex == i, {156, 52}))
+                        (void)queueUiAction({.kind = RuntimeActionKind::UiSelectMod, .index = i});
+                }
+                if (first) ImGui::TextUnformatted("No supported RPS mods are loaded.");
+                ImGui::EndChild();
+                if (!activeSettings().available) return;
+            }
+            // Keep row/scroll/widget identities independent even for identical INI keys.
+            ImGui::PushID(tab == ConfiguratorTab::Settings ? static_cast<int>(s_modIndex) : -1);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 18.0f, 24.0f });
             ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.03f, 0.08f, 0.09f, 0.7f));
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.31f, 0.35f, 0.41f, 0.30f));
             ImGui::BeginChild("rail", { railWidth, 0.0f }, ImGuiChildFlags_AlwaysUseWindowPadding);
             switch (tab) {
             case ConfiguratorTab::Settings:
-                drawSettingsRail(s_store, s_storeLoaded, s_activeIndex, tab, s_statusMessage);
+                drawSettingsRail(activeSettings().store, activeSettings().loaded, activeSettings().activeIndex, tab, s_statusMessage);
                 break;
             case ConfiguratorTab::Spawn:
                 drawSpawnRail();
@@ -1189,7 +1251,7 @@ namespace rock_configurator
             ImGui::BeginChild("workspace", { 0.0f, 0.0f }, ImGuiChildFlags_AlwaysUseWindowPadding);
             switch (tab) {
             case ConfiguratorTab::Settings:
-                drawSettingsWorkspace(s_store, s_storeLoaded, s_activeIndex, tab, s_statusMessage);
+                drawSettingsWorkspace(activeSettings().store, activeSettings().loaded, activeSettings().activeIndex, tab, s_statusMessage);
                 break;
             case ConfiguratorTab::Spawn:
                 drawSpawnWorkspace();
@@ -1198,6 +1260,7 @@ namespace rock_configurator
             ImGui::EndChild();
             ImGui::PopStyleColor(2);
             ImGui::PopStyleVar();
+            ImGui::PopID();
         }
 
         void drawResizeChrome()
@@ -1386,7 +1449,7 @@ namespace rock_configurator
     void onGameSessionReady()
     {
         std::scoped_lock lock(s_runtimeMutex);
-        loadRockSettingsLocked(false);
+        loadRpsSettingsLocked(false);
     }
 
     bool isOpen() noexcept { return s_panelOpen.load(std::memory_order_acquire); }
@@ -1424,9 +1487,22 @@ namespace rock_configurator
 #ifdef WHEEL_DESKTOP_PREVIEW
     void initializePreview(const std::filesystem::path& settingsPath)
     {
-        if (!settingsPath.empty()) s_store = IniSettingsStore(settingsPath);
+        std::array<std::filesystem::path, 3> paths{settingsPath, {}, {}};
+        initializeRpsPreview(paths, {true, settingsPath.empty(), settingsPath.empty()});
+    }
+
+    void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available)
+    {
+        std::scoped_lock lock(s_runtimeMutex);
+        invalidateQueuedRuntimeActions();
+        s_modIndex = 0;
+        s_activeTab = ConfiguratorTab::Wheel;
+        for (std::size_t i = 0; i < s_modSettings.size(); ++i) {
+            s_modSettings[i] = ModSettings{IniSettingsStore(paths[i], kRpsMods[i].id)};
+            s_modSettings[i].available = available[i];
+        }
         s_providerInputReady.store(true);
-        loadRockSettingsLocked(false); // Read-only snapshot; preview saves are memory-only.
+        loadRpsSettingsLocked(false); // Read-only snapshot; preview saves are memory-only.
         s_spawnBrowser.ensureIndexBuilt(); // Compiled preview fixture, no engine calls.
     }
 

@@ -213,7 +213,7 @@ namespace rock_configurator
         }
     }
 
-    void IniSettingsStore::refreshControl(SettingRecord& setting)
+    void IniSettingsStore::refreshControl(SettingRecord& setting) const
     {
         setting.selectedOptionIndex.reset();
         setting.numericValueValid = false;
@@ -222,7 +222,7 @@ namespace rock_configurator
             controlValueType(setting.type),
             setting.key,
             setting.value,
-            setting.description);
+            setting.description, _mod);
         if (setting.type == SettingType::Integer) {
             long long value = 0;
             setting.numericValueValid = parseInteger(setting.value, value);
@@ -263,13 +263,13 @@ namespace rock_configurator
         _lastError.clear();
 
         if (_path.empty()) {
-            _lastError = "The Documents known folder could not be resolved; ROCK.ini was not accessed";
+            _lastError = "The Documents known folder could not be resolved; Configuration INI was not accessed";
             return false;
         }
 
         std::ifstream input(_path);
         if (!input) {
-            _lastError = std::format("ROCK.ini is not readable: {}", _path.string());
+            _lastError = std::format("Configuration INI is not readable: {}", _path.string());
             return false;
         }
 
@@ -531,7 +531,7 @@ namespace rock_configurator
         return setValueByIndex(index, setting.control.options[optionIndex].value);
     }
 
-    std::filesystem::path IniSettingsStore::resolveProductionIniPath()
+    std::filesystem::path IniSettingsStore::resolveProductionIniPath() const
     {
         PWSTR documents = nullptr;
         if (FAILED(SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &documents)) ||
@@ -542,8 +542,8 @@ namespace rock_configurator
         CoTaskMemFree(documents);
         path /= "My Games";
         path /= "Fallout4VR";
-        path /= "ROCK_Config";
-        path /= "ROCK.ini";
+        path /= modInfo(_mod).directory;
+        path /= modInfo(_mod).ini;
         return path;
     }
 
@@ -657,14 +657,14 @@ namespace rock_configurator
 #endif
         std::error_code ec;
         if (_path.empty() || !std::filesystem::is_regular_file(_path, ec) || ec) {
-            _lastError = "The existing production ROCK.ini is unavailable; Wheel Config will not create or replace it";
+            _lastError = "The existing production Configuration INI is unavailable; Wheel Config will not create or replace it";
             return false;
         }
 
         const auto tempPath = _path.string() + ".tmp";
         std::ofstream output(tempPath, std::ios::trunc);
         if (!output) {
-            _lastError = std::format("ROCK.ini is not writable: {}", _path.string());
+            _lastError = std::format("Configuration INI is not writable: {}", _path.string());
             return false;
         }
         for (const auto& line : _lines) {
@@ -672,13 +672,13 @@ namespace rock_configurator
         }
         output.close();
         if (!output) {
-            _lastError = std::format("ROCK.ini temp write failed: {}", tempPath);
+            _lastError = std::format("Configuration INI temp write failed: {}", tempPath);
             std::filesystem::remove(tempPath, ec);
             return false;
         }
 
         if (!MoveFileExA(tempPath.c_str(), _path.string().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-            _lastError = std::format("ROCK.ini replace failed: Windows error {}", GetLastError());
+            _lastError = std::format("Configuration INI replace failed: Windows error {}", GetLastError());
             std::filesystem::remove(tempPath, ec);
             return false;
         }

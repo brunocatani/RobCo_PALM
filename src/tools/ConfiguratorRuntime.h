@@ -1,5 +1,6 @@
 #pragma once
 #include <filesystem>
+#include <array>
 #include "PanelResizePolicy.h"
 #include "render/NativeRenderer.h"
 namespace rock_configurator {
@@ -17,6 +18,7 @@ void openAt(const devui::render::PanelPose& wheelPose);
 void onFrameworkPanelFrame(float physicalWidth, panel_resize::Handle hovered, panel_resize::Handle active) noexcept;
 #ifdef WHEEL_DESKTOP_PREVIEW
 void initializePreview(const std::filesystem::path& settingsPath = {});
+void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available);
 void setPreviewOpen(bool open);
 void drainPreviewActions();
 #endif

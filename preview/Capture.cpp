@@ -67,6 +67,8 @@ int main(int argc, char** argv) {
   showWheel=true;save(L"equipment-wheel.png");showWheel=false;settle();
   click(rail+250,55);save(L"rock-settings.png");
   click(100,385);save(L"rock-settings-controls.png");
+  click(220,120);save(L"paper-settings.png");
+  click(385,120);save(L"scissors-settings.png");
   click(rail+440,55);save(L"spawner.png");
   click(rail+100,335);save(L"item-actions.png");
   ImGui_ImplDX11_Shutdown();ImGui::DestroyContext();CoUninitialize();
