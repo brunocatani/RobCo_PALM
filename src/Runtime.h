@@ -9,4 +9,5 @@ bool startRuntime();
 bool isOpen();
 void closeWheel();
 void activateItem(std::uint32_t id);
+void toggleConfig();
 }

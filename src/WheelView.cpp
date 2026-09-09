@@ -42,12 +42,13 @@ void sector(ImDrawList* draw, ImVec2 center, float inner, float outer, float a, 
 }
 }
 
-Action drawWheel(Model& model, View& view) {
+Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size) {
  auto& io=ImGui::GetIO(); Action action;
- const float scale=std::min(io.DisplaySize.x,io.DisplaySize.y)/1024.f;
- const ImVec2 origin{(io.DisplaySize.x-1024*scale)/2,(io.DisplaySize.y-1024*scale)/2};
+ if(size.x<=0 || size.y<=0)size=io.DisplaySize;
+ const float scale=std::min(size.x,size.y)/1024.f;
+ const ImVec2 origin{position.x+(size.x-1024*scale)/2,position.y+(size.y-1024*scale)/2};
  auto point=[&](float x,float y){return ImVec2{origin.x+x*scale,origin.y+y*scale};};
- ImGui::SetNextWindowPos({0,0}); ImGui::SetNextWindowSize(io.DisplaySize);
+ ImGui::SetNextWindowPos(position); ImGui::SetNextWindowSize(size);
  ImGui::Begin("Wheel",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
   ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoScrollbar);
  auto* draw=ImGui::GetWindowDrawList();
@@ -59,11 +60,12 @@ Action drawWheel(Model& model, View& view) {
  const ImVec2 center=point(512,510);
  const float inner=180*scale, outer=(326+10*view.animation)*scale;
  const float mx=io.MousePos.x-center.x, my=io.MousePos.y-center.y;
+ if(!model.enabled[static_cast<unsigned>(model.category)])
+  for(unsigned c=0;c<3;++c)if(model.enabled[c]){model.category=static_cast<Category>(c);break;}
  const auto category=static_cast<unsigned>(model.category);
  auto& items=model.items[category];
- model.page=std::min(model.page,pageCount(items.size())-1);
  const int hit=hitSlot(mx,my,inner,outer);
- const std::size_t index=hit>=0 ? model.page*kSlots+hit : items.size();
+ const std::size_t index=hit>=0 ? hit : items.size();
  const Item* hovered=index<items.size()? &items[index]:nullptr;
 
  draw->AddCircleFilled(center,outer+12*scale,IM_COL32(10,19,24,alpha*3/4),128);
@@ -71,9 +73,9 @@ Action drawWheel(Model& model, View& view) {
  for(std::size_t slot=0;slot<kSlots;++slot) {
   const float mid=-kPi/2+static_cast<float>(slot)*kPi/4;
   const float start=mid-kPi/8+.021f, end=mid+kPi/8-.021f;
-  const auto itemIndex=model.page*kSlots+slot;
+  const auto itemIndex=slot;
   const bool available=itemIndex<items.size();
-  const bool active=available && hit==static_cast<int>(slot);
+  const bool active=available && items[itemIndex].count>0 && hit==static_cast<int>(slot);
   sector(draw,center,inner,outer,start,end,active?color(model.category,alpha*3/4):IM_COL32(25,40,45,available?alpha*9/10:alpha/3));
   if(active) sector(draw,center,outer-5*scale,outer,start,end,accent);
   const ImVec2 slotCenter{center.x+std::cos(mid)*258*scale,center.y+std::sin(mid)*258*scale};
@@ -93,52 +95,36 @@ Action drawWheel(Model& model, View& view) {
  }
  draw->AddCircleFilled(center,inner-7*scale,IM_COL32(13,25,29,alpha*9/10),96);
  draw->AddCircle(center,inner-7*scale,IM_COL32(140,174,172,alpha/5),96,scale);
- icon(draw,point(512,437),22*scale,model.category,accent);
- centered(draw,point(512,482),18*scale,muted,hovered?"TAKE TO HAND":"QUICK ACCESS");
- const char* title=hovered?hovered->name.c_str():items.empty()?"Nothing carried":categoryName(model.category);
- const float titleSize=hovered?29*scale:37*scale;
- const float wrapWidth=280*scale;
- const auto textSize=ImGui::GetFont()->CalcTextSizeA(titleSize,wrapWidth,wrapWidth,title);
- draw->PushClipRect(point(360,501),point(664,595),true);
- draw->AddText(ImGui::GetFont(),titleSize,{center.x-textSize.x/2,origin.y+507*scale},white,title,nullptr,wrapWidth);
- draw->PopClipRect();
- centered(draw,point(512,611),17*scale,muted,hovered?"CLICK TO TAKE ONE":"CLICK CENTER TO CLOSE");
-
- centered(draw,point(512,75),20*scale,muted,"R O C K   /   F I E L D   K I T");
- for(unsigned cat=0;cat<3;++cat) {
-  const float x=282.f+cat*230;
-  const ImVec2 a=point(x-100,113), b=point(x+100,162);
-  const bool over=io.MousePos.x>=a.x && io.MousePos.x<=b.x && io.MousePos.y>=a.y && io.MousePos.y<=b.y;
-  const auto tint=color(static_cast<Category>(cat),alpha);
-  draw->AddRectFilled(a,b,cat==category?IM_COL32(30,52,55,alpha):IM_COL32(13,25,29,alpha*3/4),20*scale);
-  if(cat==category || over) draw->AddRect(a,b,tint,20*scale,0,scale);
-  centered(draw,point(x,137),22*scale,cat==category?tint:muted,categoryName(static_cast<Category>(cat)));
-  if(over && ImGui::IsMouseClicked(0)) {model.category=static_cast<Category>(cat);model.page=0;view.click={};}
+ const int navigation=hitCenter(mx,my,scale);
+ for(unsigned c=0;c<4;++c) {
+  if(c<3 && !model.enabled[c])continue;
+  const float mid=-kPi/2+c*kPi/2;
+  const bool over=navigation==static_cast<int>(c);
+  const auto tint=c<3?color(static_cast<Category>(c),alpha):IM_COL32(104,226,193,alpha);
+  sector(draw,center,70*scale,(inner-8*scale),mid-kPi/4+.035f,mid+kPi/4-.035f,
+   over?IM_COL32(42,70,70,alpha):IM_COL32(17,31,35,alpha*9/10));
+  if(c==category && model.enabled[c])
+   sector(draw,center,inner-12*scale,inner-8*scale,mid-kPi/4+.06f,mid+kPi/4-.06f,tint);
+  centered(draw,{center.x+std::cos(mid)*119*scale,center.y+std::sin(mid)*119*scale},
+   18*scale,over || c==category?tint:muted,c<3?categoryName(static_cast<Category>(c)):"CONFIG");
  }
- char pagination[64]; std::snprintf(pagination,sizeof(pagination),"%zu ITEMS   /   %zu OF %zu",items.size(),model.page+1,pageCount(items.size()));
- centered(draw,point(512,900),19*scale,muted,pagination);
- for(int direction:{-1,1}) {
-  const auto pos=point(512+direction*205,900);
-  const bool over=std::hypot(io.MousePos.x-pos.x,io.MousePos.y-pos.y)<24*scale;
-  draw->AddCircleFilled(pos,24*scale,over?IM_COL32(48,71,72,alpha):IM_COL32(22,37,42,alpha),32);
-  centered(draw,pos,23*scale,white,direction<0?"‹":"›");
-  if(over && ImGui::IsMouseClicked(0)) {
-   if(direction<0 && model.page>0)--model.page;
-   if(direction>0 && model.page+1<pageCount(items.size()))++model.page;
-   view.click={};
-  }
+ draw->AddCircleFilled(center,54*scale,navigation==4?IM_COL32(37,58,61,alpha):IM_COL32(12,24,28,alpha),48);
+ centered(draw,center,25*scale,muted,"×");
+ const auto selectedCenter=view.centerClick.update(ImGui::IsMouseDown(0),ImGui::IsMouseClicked(0),
+  ImGui::IsMouseReleased(0),navigation>=0 && (navigation>=3 || model.enabled[navigation])?navigation+1:0);
+ action.useItem=view.click.update(ImGui::IsMouseDown(0),ImGui::IsMouseClicked(0),ImGui::IsMouseReleased(0),
+  hovered && hovered->count>0?hovered->id:0);
+ if(selectedCenter) {
+  view.click={};
+  if(selectedCenter<=3)model.category=static_cast<Category>(selectedCenter-1);
+  else if(selectedCenter==4)action.config=true;
+  else action.close=true;
  }
- if(std::hypot(mx,my)<=outer && io.MouseWheel!=0) {
-  view.scroll+=io.MouseWheel;
-  if(std::fabs(view.scroll)>=.3f) {
-   if(view.scroll>0 && model.page>0)--model.page;
-   if(view.scroll<0 && model.page+1<pageCount(items.size()))++model.page;
-   view.scroll=0; view.click={};
-  }
- }
+ if(hovered) {
+  centered(draw,point(512,886),23*scale,white,hovered->name.c_str());
+  centered(draw,point(512,920),16*scale,muted,hovered->count?"TAKE ONE INTO A FREE HAND":"NOT CURRENTLY CARRIED");
+ }else if(items.empty())centered(draw,point(512,886),20*scale,muted,"Choose your items in Config");
  centered(draw,point(512,960),14*scale,muted,model.status.c_str());
- action.useItem=view.click.update(ImGui::IsMouseDown(0),ImGui::IsMouseClicked(0),ImGui::IsMouseReleased(0),hovered?hovered->id:0);
- action.close=std::hypot(mx,my)<inner-7*scale && ImGui::IsMouseClicked(0);
  ImGui::End();
  return action;
 }
@@ -151,6 +137,7 @@ Model demoInventory() {
   model.items[1].push_back({id++,name,3+id,false});
  for(const char* name:{"Fragmentation Grenade","Molotov Cocktail","Plasma Grenade","Pulse Grenade","Cryogenic Grenade","Nuka Grenade"})
   model.items[2].push_back({id++,name,2+id%7,id==18});
+ for(auto& category:model.items)for(auto& item:category)item.key="preview|"+std::to_string(item.id);
  model.status="DESKTOP PREVIEW  /  SAMPLE INVENTORY";
  return model;
 }

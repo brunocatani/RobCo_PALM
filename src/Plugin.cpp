@@ -1,16 +1,21 @@
 #include "PCH.h"
 #include "Runtime.h"
 #include "Fonts.h"
+#include "tools/ConfiguratorRuntime.h"
 #include <spdlog/sinks/rotating_file_sink.h>
 
 namespace {
 void onMessage(F4SE::MessagingInterface::Message* message) noexcept {
  try {
-  if(!message || message->type!=F4SE::MessagingInterface::kGameDataReady)return;
+  if(!message)return;
+  if(message->type==F4SE::MessagingInterface::kPostLoadGame || message->type==F4SE::MessagingInterface::kNewGame) {
+   rock_configurator::onGameSessionReady();return;
+  }
+  if(message->type!=F4SE::MessagingInterface::kGameDataReady)return;
   static bool started=false;if(started)return;started=true;
   wheel::prepareFonts();
   if(!wheel::startRuntime())spdlog::critical("Wheel initialization failed; check ROCK and RPS UI Framework are loaded");
-  else spdlog::info("Wheel ready for gameplay input");
+  else {rock_configurator::onGameDataReady();spdlog::info("Wheel and workshop ready for gameplay input");}
  }catch(const std::exception& e){spdlog::critical("Wheel startup: {}",e.what());}
  catch(...){OutputDebugStringA("ROCKWheelMenu startup failed\n");}
 }

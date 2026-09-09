@@ -1,8 +1,12 @@
 #include "PCH.h"
 #include "Runtime.h"
 #include "Inventory.h"
+#include "WheelConfig.h"
+#include <ShlObj.h>
 #include "Renderer.h"
 #include "ROCKProviderApi.h"
+#include "tools/ConfiguratorRuntime.h"
+#include "tools/render/FrameworkPanelRenderer.h"
 
 namespace wheel {
 namespace {
@@ -13,6 +17,8 @@ struct RuntimeState {
  std::atomic_uint32_t requestedItem{0};
  std::atomic_uint64_t requestGeneration{0};
  std::atomic_bool actionPending{false};
+ std::atomic_bool configRequested{false};
+ rpsui::sdk::PanelPoseV1 wheelPose; // Frame callback owns the open-session anchor.
  std::uint64_t owner{}, callback{};
  std::uint64_t command{}; // Owned by ROCK's frame callback only.
  ToggleGesture toggle;
@@ -20,6 +26,17 @@ struct RuntimeState {
  std::uint32_t world{},skeleton{},provider{};
 };
 RuntimeState& state(){static RuntimeState s;return s;}
+void refreshWheelInventory() {
+ const auto ticket=state().generation.load();
+ if(const auto* tasks=F4SE::GetTaskInterface())tasks->AddTask([ticket] {
+  if(!state().open.load() || state().generation.load()!=ticket)return;
+  try {
+   auto inventory=readInventory();auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
+   inventory.category=shared.model.category;inventory.status=shared.lastAction;
+   shared.model=std::move(inventory);shared.view={};
+  } catch(...) {spdlog::error("Wheel inventory refresh failed");}
+ });
+}
 void actionStatus(const char* message) {
  auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
  shared.lastAction=message;shared.model.status=message;
@@ -99,13 +116,34 @@ std::optional<rpsui::sdk::PanelPoseV1> poseFor(const RockProviderFrameSnapshot& 
 void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) noexcept {
  try {
   if(!frame)return;
+  if(takeWheelConfigChange())if(const auto* tasks=F4SE::GetTaskInterface())
+   tasks->AddTask([]{
+    try {flushWheelConfig();refreshWheelInventory();}
+    catch(const std::exception& error){spdlog::error("Wheel item configuration: {}",error.what());}
+    catch(...){spdlog::error("Wheel item configuration save failed");}
+   });
   auto& s=state(); const bool usable=ready(*frame);s.inputReady.store(usable);
+  rock_configurator::setAvailable(usable);
   if(!usable) {++s.generation;s.toggle={};cancelAction();clearSuppression();if(s.open.load())closeWheel();return;}
   if(s.world!=frame->worldGeneration || s.skeleton!=frame->skeletonGeneration || s.provider!=frame->providerGeneration) {
    ++s.generation;s.toggle={};cancelAction();if(s.open.load())closeWheel();
    s.world=frame->worldGeneration;s.skeleton=frame->skeletonGeneration;s.provider=frame->providerGeneration;
   }
   serviceAction(*frame);
+  if(rock_configurator::takeInventoryRefreshRequest() && s.open.load())refreshWheelInventory();
+  if(s.configRequested.exchange(false) && s.open.load()) {
+   if(rock_configurator::isOpen())rock_configurator::close();
+   else {
+    const auto& p=s.wheelPose;
+    devui::render::PanelPose pose;
+    pose.center={p.center[0],p.center[1],p.center[2]};
+    pose.right={p.right[0],p.right[1],p.right[2]};
+    pose.up={p.up[0],p.up[1],p.up[2]};
+    pose.front={p.front[0],p.front[1],p.front[2]};
+    pose.physicalWidth=p.physicalWidth;pose.physicalHeight=p.physicalHeight;
+    rock_configurator::openBeside(pose);
+   }
+  }
   RockProviderRawWandButtonStateV1 button{};
   if(!RockProviderApi::inst->getRawWandButtonStateV1(RockProviderHand::Right,32,&button) || !button.available) {
    s.toggle={};clearSuppression();if(s.open.load())closeWheel();return;
@@ -123,6 +161,7 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
   if(!s.toggle.update(button.held!=0,now))return;
   if(s.open.load()) {closeWheel();return;}
   const auto pose=poseFor(*frame);if(!pose || !s.suppression)return;
+  s.wheelPose=*pose;
   const auto* tasks=F4SE::GetTaskInterface();if(!tasks)return;
   const auto ticket=++s.generation;
   tasks->AddTask([p=*pose,ticket] {
@@ -145,7 +184,8 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
 }
 SharedModel& sharedModel(){static SharedModel s;return s;}
 bool isOpen(){return state().open.load();}
-void closeWheel(){auto& s=state();s.open.store(false);++s.generation;(void)presentPanel(false);}
+void closeWheel(){auto& s=state();s.open.store(false);++s.generation;s.configRequested.store(false);rock_configurator::close();(void)presentPanel(false);}
+void toggleConfig(){if(isOpen())state().configRequested.store(true);}
 void activateItem(std::uint32_t id) {
  auto& s=state();const auto ticket=s.generation.load();
  if(!id || !s.open.load() || !s.inputReady.load() || s.actionPending.exchange(true))return;
@@ -153,11 +193,18 @@ void activateItem(std::uint32_t id) {
  s.requestGeneration.store(ticket);s.requestedItem.store(id);
 }
 bool startRuntime() {
+ PWSTR documents=nullptr;
+ if(FAILED(SHGetKnownFolderPath(FOLDERID_Documents,KF_FLAG_DEFAULT,nullptr,&documents)) || !documents)return false;
+ const auto configPath=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"ROCKWheelMenu"/"ROCKWheelMenu.ini";
+ CoTaskMemFree(documents);
+ loadWheelConfig(configPath);
  if(!installPanel())return false;
  struct RegistrationRollback {
   bool complete{};
-  ~RegistrationRollback(){if(!complete)unregisterPanel();}
+  ~RegistrationRollback(){if(!complete){devui::render::Shutdown();unregisterPanel();}}
  } rollback;
+ devui::render::PrepareFonts();
+ if(!devui::render::InstallFrameworkPanel())return false;
  const auto result=RockProviderApi::initialize(ROCK_PROVIDER_API_VERSION,ROCK_PROVIDER_API_V1_COMMAND_CANCELLATION_TABLE_BYTES);
  auto* api=RockProviderApi::inst;
  if(result || !api || !api->registerConsumerV1 || !api->unregisterConsumerV1 ||

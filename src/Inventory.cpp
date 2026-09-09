@@ -1,5 +1,6 @@
 #include "PCH.h"
 #include "Inventory.h"
+#include "WheelConfig.h"
 
 namespace wheel {
 namespace {
@@ -36,10 +37,13 @@ Model readInventory() {
    if(items.size()>=kMaxItems) {result.status="Category item limit reached";continue;}
    const auto name=RE::TESFullName::GetFullName(*entry.object,false);
    if(name.empty()) continue;
-   items.push_back({entry.object->GetFormID(),std::string(name),static_cast<std::uint32_t>(std::min<std::uint64_t>(count,UINT32_MAX)),equipped});
+   const auto* owner=entry.object->GetFile(0);
+   const auto key=owner?stableItemKey(owner->filename,entry.object->GetFormID()):std::string{};
+   items.push_back({entry.object->GetFormID(),std::string(name),static_cast<std::uint32_t>(std::min<std::uint64_t>(count,UINT32_MAX)),equipped,key});
   }
  }
  for(auto& items:result.items) std::sort(items.begin(),items.end(),[](const Item& a,const Item& b){return a.name==b.name?a.id<b.id:a.name<b.name;});
- return result;
+ publishWheelInventory(result);
+ return selectedWheelInventory(result);
 }
 }
