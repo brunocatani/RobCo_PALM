@@ -8,7 +8,7 @@
 namespace devui::render {
 ImFont* GetFont(FontRole) noexcept { return ImGui::GetIO().FontDefault; }
 void PrepareFonts() noexcept {}
-void SetPanelOpen(bool, const PanelPose*) noexcept {}
+bool SetPanelOpen(bool, const PanelPose*) noexcept { return true; }
 void Shutdown() noexcept {}
 bool InstallFrameworkPanel() noexcept { return false; }
 bool ResetFrameworkPanelSize() noexcept {

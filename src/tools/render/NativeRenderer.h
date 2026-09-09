@@ -40,6 +40,6 @@ namespace devui::render
 
     void PrepareFonts() noexcept;
     [[nodiscard]] ImFont* GetFont(FontRole role) noexcept;
-    void SetPanelOpen(bool open, const PanelPose* pose = nullptr) noexcept;
+    bool SetPanelOpen(bool open, const PanelPose* pose = nullptr) noexcept;
     void Shutdown() noexcept;
 }

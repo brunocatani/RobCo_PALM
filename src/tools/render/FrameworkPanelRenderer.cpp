@@ -485,14 +485,14 @@ namespace devui::render
                    rpsui::sdk::ResultV1::Ok;
     }
 
-    void SetPanelOpen(bool open, const PanelPose* pose) noexcept
+    bool SetPanelOpen(bool open, const PanelPose* pose) noexcept
     {
         auto& state = frameworkState();
         std::scoped_lock lock(state.mutex);
         if (!state.installed ||
             !state.api ||
             !state.api->submitPanelPresentation) {
-            return;
+            return false;
         }
 
         rpsui::sdk::PanelPresentationV1 presentation{};
@@ -500,7 +500,7 @@ namespace devui::render
         presentation.open = open ? 1 : 0;
         if (open) {
             if (!pose) {
-                return;
+                return false;
             }
             const auto copy = [](const DirectX::XMFLOAT3& value, float out[3]) {
                 out[0] = value.x;
@@ -523,7 +523,23 @@ namespace devui::render
             logger::error(
                 "Wheel Config panel presentation was rejected ({})",
                 static_cast<std::uint32_t>(result));
+            return false;
         }
+        if (open && state.api->getPanelState) {
+            rpsui::sdk::PanelStateV1 accepted;
+            const auto query = state.api->getPanelState(state.ownerToken, state.panelHandle, &accepted);
+            if (query == rpsui::sdk::ResultV1::Ok) {
+                logger::info("Wheel Config accepted pose: requested=({:.2f},{:.2f},{:.2f}) actual=({:.2f},{:.2f},{:.2f}) shift=({:.2f},{:.2f},{:.2f}) open={}",
+                    presentation.pose.center[0], presentation.pose.center[1], presentation.pose.center[2],
+                    accepted.pose.center[0], accepted.pose.center[1], accepted.pose.center[2],
+                    accepted.pose.center[0]-presentation.pose.center[0],
+                    accepted.pose.center[1]-presentation.pose.center[1],
+                    accepted.pose.center[2]-presentation.pose.center[2], accepted.open);
+            } else {
+                logger::warn("Wheel Config accepted-pose query failed ({})", static_cast<std::uint32_t>(query));
+            }
+        }
+        return true;
     }
 
     void Shutdown() noexcept

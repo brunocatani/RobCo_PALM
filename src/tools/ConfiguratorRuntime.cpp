@@ -250,7 +250,7 @@ namespace rock_configurator
             s_actionCount = 0;
         }
 
-        void publishPanelToRenderer(const PanelPose& pose) noexcept
+        bool publishPanelToRenderer(const PanelPose& pose) noexcept
         {
             const devui::render::PanelPose nativePose{
                 .center = { pose.position.x, pose.position.y, pose.position.z },
@@ -260,7 +260,7 @@ namespace rock_configurator
                 .physicalWidth = pose.physicalWidth,
                 .physicalHeight = pose.physicalHeight,
             };
-            devui::render::SetPanelOpen(true, &nativePose);
+            return devui::render::SetPanelOpen(true, &nativePose);
         }
 
         void openPanelLocked(const RuntimeAction& action)
@@ -285,7 +285,10 @@ namespace rock_configurator
 
             s_hoveredResizeHandle.store(panel_resize::Handle::None, std::memory_order_release);
             s_activeResizeHandle.store(panel_resize::Handle::None, std::memory_order_release);
-            publishPanelToRenderer(action.panelPose);
+            if (!publishPanelToRenderer(action.panelPose)) {
+                s_statusMessage = "The UI framework rejected the Config panel";
+                return;
+            }
             s_panelOpen.store(true, std::memory_order_release);
             logger::info(
                 "Wheel Config fixed ROCK configurator panel opened at {:.2f},{:.2f},{:.2f}",
