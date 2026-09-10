@@ -23,6 +23,7 @@ struct Model {
  std::array<bool,kCategoryCount> enabled{true,true,true,true,true};
  std::string status{"Select something to take"};
 };
+struct Action { std::uint64_t hoveredItem{}; bool configHovered{}; };
 inline const char* categoryName(Category c) {
  switch(c) {case Category::Aid: return "AID"; case Category::Food: return "FOOD"; case Category::Grenades: return "GRENADES"; case Category::Weapons: return "WEAPONS"; case Category::Armor: return "ARMOR";}
  return "";

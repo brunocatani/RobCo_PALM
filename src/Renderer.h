@@ -3,5 +3,6 @@
 namespace wheel {
 bool installPanel();
 void unregisterPanel();
+bool frameworkReady();
 bool presentPanel(bool open,const rpsui::sdk::PanelPoseV1* pose=nullptr);
 }

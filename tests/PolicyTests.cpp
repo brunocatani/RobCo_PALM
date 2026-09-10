@@ -1,4 +1,5 @@
 #include "WheelModel.h"
+#include "WheelSelectionState.h"
 #include <stdexcept>
 #include <iostream>
 void check(bool b){if(!b)throw std::runtime_error("Wheel policy check failed");}
@@ -41,5 +42,37 @@ int main(){try {
  check(gesture.update(true,false)==HoldEdge::None);
  check(gesture.update(true,true)==HoldEdge::Open);
  check(gesture.update(true,false)==HoldEdge::Release);
+ // An invisible wheel closes on release without waiting for a render callback.
+ WheelSelectionState selection;
+ selection.begin(41);
+ check(!selection.release().has_value());
+ check(selection.generation==0);
+ check(!selection.publish(41,{selectionToken(first),false}));
+ check(!selection.release().has_value());
+
+ // A visible wheel uses the latest drawn hover, including an explicit cancel.
+ selection.begin(42);
+ check(selection.publish(42,{selectionToken(first),false}));
+ check(selection.publish(42,{selectionToken(second),false}));
+ auto chosen=selection.release();
+ check(chosen && chosen->hoveredItem==selectionToken(second) && !chosen->configHovered);
+ check(!selection.release().has_value()); // Exactly one selection.
+ selection.begin(43);
+ check(selection.publish(43,{selectionToken(first),false}));
+ check(selection.publish(43,{}));
+ chosen=selection.release();
+ check(chosen && !chosen->hoveredItem && !chosen->configHovered);
+
+ // A cancelled/opening session cannot publish into the next opening or save.
+ selection.begin(44);
+ check(selection.publish(44,{selectionToken(first),false}));
+ selection.begin(45);
+ check(!selection.publish(44,{selectionToken(second),false}));
+ check(!selection.release().has_value());
+ selection.begin(46);
+ check(selection.publish(46,{0,true}));
+ chosen=selection.release();
+ check(chosen && chosen->configHovered && !chosen->hoveredItem);
+ check(!selection.publish(46,{selectionToken(first),false}));
  std::cout<<"Wheel selection, center navigation, cancellation and B-hold policies passed\n";return 0;
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

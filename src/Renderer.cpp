@@ -21,11 +21,16 @@ struct RenderState {
  void release(){if(imgui){ImGui::SetCurrentContext(imgui.get());if(backend)ImGui_ImplDX11_Shutdown();imgui.reset();}backend=false;device.Reset();}
 };
 RenderState& renderState(){static RenderState s;return s;}
-struct PanelState {std::mutex mutex; const rpsui::sdk::ApiV1* api{};std::uint64_t owner{},panel{},sequence{};};
+struct PanelState {
+ std::mutex mutex;const rpsui::sdk::ApiV1* api{};std::uint64_t owner{},panel{},sequence{};
+ rpsui::sdk::ResultV1 lastPresentationResult{rpsui::sdk::ResultV1::Ok};
+};
 PanelState& panelState(){static PanelState s;return s;}
 void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noexcept {
+ std::uint64_t ticket{};
  try {
-  if(!frame || frame->structSize<sizeof(*frame) || !frame->d3dDevice || !frame->d3dContext || !frame->renderTargetView || !isOpen())return;
+  if(!frame || frame->structSize<sizeof(*frame) || !frame->d3dDevice || !frame->d3dContext || !frame->renderTargetView)return;
+  ticket=wheelDrawGeneration();if(!ticket)return;
   auto& render=renderState();std::scoped_lock lock(render.mutex);
   auto* device=static_cast<ID3D11Device*>(frame->d3dDevice);
   auto* context=static_cast<ID3D11DeviceContext*>(frame->d3dContext);
@@ -49,9 +54,9 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
   {auto& shared=sharedModel();std::unique_lock modelLock(shared.mutex,std::try_to_lock);
    if(modelLock.owns_lock())action=drawWheel(shared.model,shared.view);}
   ImGui::Render();ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-  if(releasePending())completeRelease(action);
- } catch(const std::exception& e){spdlog::error("Wheel render failed: {}",e.what());closeWheel();}
- catch(...){closeWheel();}
+  publishWheelSelection(ticket,action);
+ } catch(const std::exception& e){spdlog::error("Wheel render failed: {}",e.what());if(ticket)closeWheel(ticket);}
+ catch(...){if(ticket)closeWheel(ticket);}
 }
 }
 bool installPanel() {
@@ -59,7 +64,7 @@ bool installPanel() {
  if(p.panel)return true;
  p.api=rpsui::sdk::RequestApiV1();
  if(!p.api || !p.api->registerConsumer || !p.api->unregisterConsumer || !p.api->registerPanel ||
-  !p.api->unregisterPanel || !p.api->submitPanelPresentation ||
+  !p.api->unregisterPanel || !p.api->submitPanelPresentation || !p.api->isFrameworkReady ||
   !(p.api->featureBits&rpsui::sdk::featureMask(rpsui::sdk::FeatureV1::ShapedPanels))) {
   spdlog::error("Wheel requires RPS UI Framework with shaped panel support");return false;
  }
@@ -94,8 +99,19 @@ void unregisterPanel() {
 bool presentPanel(bool open,const rpsui::sdk::PanelPoseV1* pose) {
  auto& p=panelState();std::scoped_lock lock(p.mutex);
  if(!p.panel || !p.api || (open && !pose))return false;
+ if(open && !p.api->isFrameworkReady()) {
+  spdlog::warn("Wheel opening cancelled: RPS UI Framework is not ready; check RPS_UI_Framework.log");return false;
+ }
  rpsui::sdk::PanelPresentationV1 presentation;
  presentation.sequence=++p.sequence;presentation.open=open?1:0;if(pose)presentation.pose=*pose;
- return p.api->submitPanelPresentation(p.owner,p.panel,&presentation)==rpsui::sdk::ResultV1::Ok;
+ const auto result=p.api->submitPanelPresentation(p.owner,p.panel,&presentation);
+ if(result!=rpsui::sdk::ResultV1::Ok && result!=p.lastPresentationResult)
+  spdlog::error("Wheel panel {} rejected by RPS UI Framework: {}",open?"open":"close",static_cast<unsigned>(result));
+ p.lastPresentationResult=result;
+ return result==rpsui::sdk::ResultV1::Ok;
+}
+bool frameworkReady() {
+ auto& p=panelState();std::scoped_lock lock(p.mutex);
+ return p.panel && p.api && p.api->isFrameworkReady && p.api->isFrameworkReady();
 }
 }

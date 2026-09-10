@@ -4,6 +4,7 @@
 #include "Equipment.h"
 #include "WheelConfig.h"
 #include "Renderer.h"
+#include "WheelSelectionState.h"
 #include "ROCKProviderApi.h"
 #include "tools/ConfiguratorRuntime.h"
 #include "tools/render/FrameworkPanelRenderer.h"
@@ -14,14 +15,19 @@ using namespace rock::provider;
 constexpr std::uint32_t kBButton=1;
 constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kItemChoice=std::uint64_t{1}<<63;
 struct RuntimeState {
- std::atomic_bool open{false},held{false},inputReady{false},releaseRequested{false};
+ std::atomic_bool open{false},held{false},inputReady{false};
  std::atomic_bool equipmentPending{false};
  std::atomic_bool sessionReady{false},sessionResetPending{true};
  std::atomic_uint64_t generation{1},choice{0},choiceGeneration{0};
+ // Serializes panel open/close on the game task and provider callback threads,
+ // and short selection publication from the renderer. Never acquires the model
+ // or render mutex while held; framework callbacks run outside its own lock.
+ std::mutex presentationMutex;
+ WheelSelectionState selection;
  rpsui::sdk::PanelPoseV1 wheelPose;
  std::uint64_t owner{},callback{},command{};
  HoldGesture gesture;
- bool suppression{};
+ bool suppression{},frameworkUnavailable{};
  std::uint32_t world{},skeleton{},provider{};
 };
 RuntimeState& state(){static RuntimeState s;return s;}
@@ -135,7 +141,9 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
 void openHeldWheel(const RockProviderFrameSnapshot& frame) {
  auto& s=state();const auto pose=poseFor(frame);const auto* tasks=F4SE::GetTaskInterface();
  if(!pose || !tasks)return;
- s.wheelPose=*pose;const auto ticket=++s.generation;
+ std::uint64_t ticket;
+ {std::scoped_lock lock(s.presentationMutex);
+  s.wheelPose=*pose;ticket=++s.generation;s.selection.begin(ticket);}
  tasks->AddTask([p=*pose,ticket] {
   auto& s=state();
   if(!s.sessionReady.load() || !s.inputReady.load() || !s.held.load() || s.generation.load()!=ticket)return;
@@ -146,12 +154,24 @@ void openHeldWheel(const RockProviderFrameSnapshot& frame) {
     inventory.category=shared.model.category;
     if(!shared.lastAction.empty())inventory.status=shared.lastAction;
     shared.model=std::move(inventory);shared.view={};}
-   if(!s.held.load() || s.generation.load()!=ticket)return;
+   std::scoped_lock presentationLock(s.presentationMutex);
+   if(!s.sessionReady.load() || !s.inputReady.load() || !s.held.load() || s.generation.load()!=ticket)return;
    s.open=true;
-   if(!presentPanel(true,&p))s.open=false;
+   if(!presentPanel(true,&p)){s.open=false;++s.generation;(void)s.selection.release();}
    else spdlog::info("B-held wheel opened, generation {}",ticket);
-  }catch(...){spdlog::error("Held wheel inventory failed");closeWheel();}
+  }catch(...){spdlog::error("Held wheel inventory failed");closeWheel(ticket);}
  });
+}
+void releaseHeldWheel() {
+ auto& s=state();std::scoped_lock lock(s.presentationMutex);
+ const auto hover=s.selection.release();
+ const auto ticket=++s.generation; // Also cancels a queued open and any in-flight draw.
+ if(!s.open.exchange(false))return;
+ (void)presentPanel(false);
+ s.choiceGeneration=ticket;
+ s.choice=hover?(hover->configHovered?kConfigChoice:hover->hoveredItem?(kItemChoice|hover->hoveredItem):kCancelChoice):kCancelChoice;
+ if(!hover)spdlog::warn("B release cancelled wheel without a rendered frame; input released; check RPS_UI_Framework.log");
+ else spdlog::info("B release closed wheel using its last drawn selection, generation {}",ticket);
 }
 void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) noexcept {
  try {
@@ -163,7 +183,15 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
   const bool nativeMenu=(nativeContext&static_cast<std::uint32_t>(RockProviderNativeInputContextFlagV1::MenuActive))!=0;
   const bool nativeTarget=(nativeContext&static_cast<std::uint32_t>(RockProviderNativeInputContextFlagV1::PrimaryActivationTarget))!=0;
   const bool wasOwning=s.open.load() || s.held.load() || s.suppression || rock_configurator::isOpen() || rock_configurator::isOpening();
-  const bool usable=gameplayReady && contextAvailable && !nativeMenu;
+  const bool nativeReady=gameplayReady && contextAvailable && !nativeMenu;
+  const bool hostReady=nativeReady && frameworkReady();
+  const bool hostUnavailable=!hostReady;
+  if(nativeReady && s.frameworkUnavailable!=hostUnavailable) {
+   s.frameworkUnavailable=hostUnavailable;
+   if(hostReady)spdlog::info("RPS UI Framework recovered; wheel input available");
+   else spdlog::warn("Wheel input unavailable: RPS UI Framework is not ready; check RPS_UI_Framework.log");
+  }
+  const bool usable=nativeReady && hostReady;
   s.inputReady=usable;rock_configurator::setAvailable(usable);
   const bool changed=s.sessionResetPending.exchange(false) || s.world!=frame->worldGeneration || s.skeleton!=frame->skeletonGeneration || s.provider!=frame->providerGeneration;
   if(!usable || changed) {
@@ -179,7 +207,7 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
   if(!RockProviderApi::inst->getRawWandButtonStateV1(RockProviderHand::Right,kBButton,&button) || !button.available) {
    closeWheel();cancelCommand();clearSuppression();s.gesture={};return;
   }
-  const bool eligible=!s.command && !s.equipmentPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening() && !s.releaseRequested.load();
+  const bool eligible=!s.command && !s.equipmentPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening();
   if(eligible && nativeTarget && button.held && s.gesture.armed && !s.gesture.down)
    spdlog::info("Wheel B deferred to native activation target until physical release");
   const auto edge=s.gesture.update(eligible,button.held!=0,nativeTarget);
@@ -187,7 +215,7 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
   // Claim only a wheel-owned gesture, never every raw B press. Retain
   // suppression through the physical release; ROCK's native VATS gate
   // latches a suppressed hold so its later release cannot become a VATS tap.
-  if(s.gesture.down || edge==HoldEdge::Release || s.releaseRequested.load()) {
+  if(s.gesture.down || edge==HoldEdge::Release) {
    RockProviderHandInputSuppressionRequestV1 request;request.hand=RockProviderHand::Right;
    request.flags=static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::SuppressOpenVrGameInput)|
     static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::SuppressNativeVats)|
@@ -198,19 +226,26 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
    if(!s.suppression){closeWheel();s.gesture={};return;}
   }else clearSuppression();
   if(edge==HoldEdge::Open)openHeldWheel(*frame);
-  else if(edge==HoldEdge::Release) {
-   if(s.open.load())s.releaseRequested=true;
-   else ++s.generation; // Release before inventory loading cancels the queued open.
-  }
+  else if(edge==HoldEdge::Release)releaseHeldWheel();
  }catch(...){state().inputReady=false;cancelCommand();clearSuppression();state().gesture={};closeWheel();}
 }
 }
 SharedModel& sharedModel(){static SharedModel s;return s;}
-bool isOpen(){return state().open.load();}
-bool releasePending(){return state().releaseRequested.load();}
-void closeWheel(){
- auto& s=state();s.open=false;s.held=false;s.releaseRequested=false;s.choice=0;++s.generation;
- rock_configurator::close();(void)presentPanel(false);
+std::uint64_t wheelDrawGeneration() {
+ auto& s=state();std::scoped_lock lock(s.presentationMutex);
+ return s.open.load()?s.generation.load():0;
+}
+void publishWheelSelection(std::uint64_t ticket,const Action& hover) {
+ auto& s=state();std::scoped_lock lock(s.presentationMutex);
+ if(s.open.load() && s.generation.load()==ticket)(void)s.selection.publish(ticket,hover);
+}
+void closeWheel(std::uint64_t expectedGeneration){
+ auto& s=state();
+ {std::scoped_lock lock(s.presentationMutex);
+  if(expectedGeneration && s.generation.load()!=expectedGeneration)return;
+  s.open=false;s.held=false;s.choice=0;++s.generation;(void)s.selection.release();
+  (void)presentPanel(false);}
+ rock_configurator::close();
 }
 void beginGameLoad() {
  auto& s=state();s.sessionReady=false;s.inputReady=false;s.sessionResetPending=true;
@@ -222,14 +257,6 @@ void beginGameLoad() {
  // on their owning callback thread. Queued game tasks fail the generation check.
 }
 void finishGameLoad(bool success){state().sessionReady=success;}
-void completeRelease(const Action& hover) {
- auto& s=state();
- if(!s.releaseRequested.exchange(false) || !s.open.exchange(false))return;
- const auto ticket=s.generation.load();
- (void)presentPanel(false);
- s.choiceGeneration=ticket;
- s.choice=hover.configHovered?kConfigChoice:hover.hoveredItem?(kItemChoice|hover.hoveredItem):kCancelChoice;
-}
 bool startRuntime() {
  if(!validateEquipmentRuntime())return false;
  if(!installPanel())return false;

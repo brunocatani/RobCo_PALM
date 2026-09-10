@@ -6,11 +6,10 @@ namespace wheel {
 struct SharedModel { std::mutex mutex; Model model; View view; std::string lastAction; };
 SharedModel& sharedModel();
 bool startRuntime();
-bool isOpen();
-void closeWheel();
+void closeWheel(std::uint64_t expectedGeneration=0);
 void beginGameLoad();
 void finishGameLoad(bool success);
-// Renderer publishes the live hover only after the B-release request.
-bool releasePending();
-void completeRelease(const Action& hover);
+// The renderer publishes the last drawn hover; the input callback owns release.
+std::uint64_t wheelDrawGeneration();
+void publishWheelSelection(std::uint64_t generation,const Action& hover);
 }
