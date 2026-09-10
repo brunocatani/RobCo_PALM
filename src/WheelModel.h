@@ -55,8 +55,11 @@ inline int hitCenter(float x,float y,float scale) {
 enum class HoldEdge { None, Open, Release };
 struct HoldGesture {
  bool armed{}, down{};
- HoldEdge update(bool eligible,bool held) {
+ HoldEdge update(bool eligible,bool held,bool nativeActivationTarget=false) {
   if(!eligible){armed=false;down=false;return HoldEdge::None;}
+  // Classify at press time. A native-owned hold cannot become a wheel hold
+  // by moving the ray off the target; an existing wheel hold keeps its owner.
+  if(held && !down && nativeActivationTarget){armed=false;return HoldEdge::None;}
   if(!held){const bool released=down;down=false;armed=true;return released?HoldEdge::Release:HoldEdge::None;}
   if(armed && !down){down=true;return HoldEdge::Open;}
   return HoldEdge::None;

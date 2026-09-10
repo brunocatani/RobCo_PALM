@@ -22,6 +22,18 @@ int main(){try {
  check(gesture.update(true,true)==HoldEdge::Open);
  check(gesture.update(true,true)==HoldEdge::None);
  check(gesture.update(true,false)==HoldEdge::Release);
+ check(gesture.update(true,true,true)==HoldEdge::None); // Native use owns the press.
+ check(!gesture.down);
+ check(gesture.update(true,true,false)==HoldEdge::None); // Looking away while held cannot steal it.
+ check(!gesture.down);
+ check(gesture.update(true,false,false)==HoldEdge::None);
+ check(gesture.update(true,true,false)==HoldEdge::Open);
+ check(gesture.update(true,true,true)==HoldEdge::None && gesture.down); // Existing wheel hold keeps ownership.
+ check(gesture.update(false,true,true)==HoldEdge::None && !gesture.down); // Native menu cancels.
+ check(gesture.update(true,true,false)==HoldEdge::None); // B held across menu exit stays native.
+ check(gesture.update(true,false,false)==HoldEdge::None);
+ check(gesture.update(true,true,false)==HoldEdge::Open);
+ check(gesture.update(true,false,false)==HoldEdge::Release);
  check(gesture.update(true,false)==HoldEdge::None); // Exactly one selection.
  check(gesture.update(true,true)==HoldEdge::Open);
  check(gesture.update(false,true)==HoldEdge::None); // Menu/provider loss cancels.

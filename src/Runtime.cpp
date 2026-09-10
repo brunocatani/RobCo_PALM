@@ -157,9 +157,17 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
  try {
   if(!frame)return;auto& s=state();
   if(takeWheelConfigChange())refreshWheelInventory();
-  const bool usable=s.sessionReady.load() && ready(*frame);s.inputReady=usable;rock_configurator::setAvailable(usable);
+  const bool gameplayReady=s.sessionReady.load() && ready(*frame);
+  const auto nativeContext=gameplayReady?RockProviderApi::inst->getNativeInputContextV1():0u;
+  const bool contextAvailable=(nativeContext&static_cast<std::uint32_t>(RockProviderNativeInputContextFlagV1::Available))!=0;
+  const bool nativeMenu=(nativeContext&static_cast<std::uint32_t>(RockProviderNativeInputContextFlagV1::MenuActive))!=0;
+  const bool nativeTarget=(nativeContext&static_cast<std::uint32_t>(RockProviderNativeInputContextFlagV1::PrimaryActivationTarget))!=0;
+  const bool wasOwning=s.open.load() || s.held.load() || s.suppression || rock_configurator::isOpen() || rock_configurator::isOpening();
+  const bool usable=gameplayReady && contextAvailable && !nativeMenu;
+  s.inputReady=usable;rock_configurator::setAvailable(usable);
   const bool changed=s.sessionResetPending.exchange(false) || s.world!=frame->worldGeneration || s.skeleton!=frame->skeletonGeneration || s.provider!=frame->providerGeneration;
   if(!usable || changed) {
+   if(wasOwning)spdlog::info("Wheel input released: nativeMenu={}, contextAvailable={}, providerMenu={}, lifecycleChanged={}",nativeMenu,contextAvailable,frame->menuBlocking,changed);
    closeWheel();cancelCommand();clearSuppression();s.gesture={};
    s.world=frame->worldGeneration;s.skeleton=frame->skeletonGeneration;s.provider=frame->providerGeneration;
    return;
@@ -171,9 +179,15 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
   if(!RockProviderApi::inst->getRawWandButtonStateV1(RockProviderHand::Right,kBButton,&button) || !button.available) {
    closeWheel();cancelCommand();clearSuppression();s.gesture={};return;
   }
-  // Retain suppression through the physical release; ROCK's native VATS gate
+  const bool eligible=!s.command && !s.equipmentPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening() && !s.releaseRequested.load();
+  if(eligible && nativeTarget && button.held && s.gesture.armed && !s.gesture.down)
+   spdlog::info("Wheel B deferred to native activation target until physical release");
+  const auto edge=s.gesture.update(eligible,button.held!=0,nativeTarget);
+  s.held=s.gesture.down;
+  // Claim only a wheel-owned gesture, never every raw B press. Retain
+  // suppression through the physical release; ROCK's native VATS gate
   // latches a suppressed hold so its later release cannot become a VATS tap.
-  if(button.held || s.gesture.down || s.releaseRequested.load()) {
+  if(s.gesture.down || edge==HoldEdge::Release || s.releaseRequested.load()) {
    RockProviderHandInputSuppressionRequestV1 request;request.hand=RockProviderHand::Right;
    request.flags=static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::SuppressOpenVrGameInput)|
     static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::SuppressNativeVats)|
@@ -183,9 +197,6 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
    s.suppression=RockProviderApi::inst->setHandInputSuppressionV1(s.owner,&request)==RockProviderResultV1::Ok;
    if(!s.suppression){closeWheel();s.gesture={};return;}
   }else clearSuppression();
-  const bool eligible=!s.command && !s.equipmentPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening() && !s.releaseRequested.load();
-  const auto edge=s.gesture.update(eligible,button.held!=0);
-  s.held=s.gesture.down;
   if(edge==HoldEdge::Open)openHeldWheel(*frame);
   else if(edge==HoldEdge::Release) {
    if(s.open.load())s.releaseRequested=true;
@@ -228,10 +239,11 @@ bool startRuntime() {
  } rollback;
  devui::render::PrepareFonts();
  if(!devui::render::InstallFrameworkPanel())return false;
- const auto result=RockProviderApi::initialize(ROCK_PROVIDER_API_VERSION,ROCK_PROVIDER_API_V1_COMMAND_CANCELLATION_TABLE_BYTES);
+ constexpr auto requiredTableBytes=static_cast<std::uint32_t>(offsetof(RockProviderApi,getNativeInputContextV1)+sizeof(std::declval<RockProviderApi>().getNativeInputContextV1));
+ const auto result=RockProviderApi::initialize(ROCK_PROVIDER_API_VERSION,requiredTableBytes);
  auto* api=RockProviderApi::inst;
  if(result || !api || !api->registerConsumerV1 || !api->unregisterConsumerV1 ||
-  !api->registerFrameCallbackForOwnerV1 || !api->getRawWandButtonStateV1 ||
+  !api->registerFrameCallbackForOwnerV1 || !api->getRawWandButtonStateV1 || !api->getNativeInputContextV1 ||
   !api->setHandInputSuppressionV1 || !api->clearHandInputSuppressionV1 ||
   !api->requestForceGrabV1 || !api->getInteractionCommandResultV1 || !api->cancelInteractionCommandV1 || !api->getHandInteractionStateV1)return false;
  if(!hasFeatureBitV1(RockProviderApi::negotiatedFeatureBits,RockProviderFeatureBitV1::InventoryForceGrab)) {
