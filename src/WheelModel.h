@@ -54,15 +54,24 @@ inline int hitCenter(float x,float y,float scale) {
  return static_cast<int>(quadrant);
 }
 enum class HoldEdge { None, Open, Release };
+inline constexpr double kWheelHoldSeconds=0.25;
 struct HoldGesture {
- bool armed{}, down{};
- HoldEdge update(bool eligible,bool held,bool nativeActivationTarget=false) {
-  if(!eligible){armed=false;down=false;return HoldEdge::None;}
+ bool armed{}, pending{}, down{};
+ double pressedAt{};
+ HoldEdge update(bool eligible,bool held,double nowSeconds,bool nativeActivationTarget=false) {
+  if(!eligible || !std::isfinite(nowSeconds)){*this={};return HoldEdge::None;}
+  if(!held){const bool released=down;*this={};armed=true;return released?HoldEdge::Release:HoldEdge::None;}
   // Classify at press time. A native-owned hold cannot become a wheel hold
-  // by moving the ray off the target; an existing wheel hold keeps its owner.
-  if(held && !down && nativeActivationTarget){armed=false;return HoldEdge::None;}
-  if(!held){const bool released=down;down=false;armed=true;return released?HoldEdge::Release:HoldEdge::None;}
-  if(armed && !down){down=true;return HoldEdge::Open;}
+  // by moving the ray off the target; an existing candidate keeps its owner.
+  if(!pending && !down) {
+   if(!armed || nativeActivationTarget){armed=false;return HoldEdge::None;}
+   armed=false;pending=true;pressedAt=nowSeconds;return HoldEdge::None;
+  }
+  if(pending) {
+   if(nowSeconds<pressedAt){*this={};return HoldEdge::None;}
+   // Pending presses remain native. Only a qualified hold may claim game input.
+   if(nowSeconds-pressedAt>=kWheelHoldSeconds){pending=false;down=true;return HoldEdge::Open;}
+  }
   return HoldEdge::None;
  }
 };

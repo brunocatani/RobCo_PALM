@@ -60,7 +60,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   for(float x=0;x<size.x;x+=48)bg->AddLine({x,0},{x,size.y},IM_COL32(135,175,175,9));
   for(float y=0;y<size.y;y+=48)bg->AddLine({0,y},{size.x,y},IM_COL32(135,175,175,9));
   if(cancelGesture){gesture={};wheelOpen=false;cancelGesture=false;}
-  const auto edge=gesture.update(focused && !rock_configurator::isOpen(),ImGui::IsKeyDown(ImGuiKey_B));
+  const auto edge=gesture.update(focused && !rock_configurator::isOpen(),ImGui::IsKeyDown(ImGuiKey_B),ImGui::GetTime());
   if(!focused)wheelOpen=false;
   if(edge==wheel::HoldEdge::Open) {wheelOpen=true;view={};model=wheel::selectedWheelInventory(catalog);}
   wheel::Action hover;

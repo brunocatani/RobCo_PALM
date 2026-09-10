@@ -210,8 +210,15 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
   const bool eligible=!s.command && !s.equipmentPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening();
   if(eligible && nativeTarget && button.held && s.gesture.armed && !s.gesture.down)
    spdlog::info("Wheel B deferred to native activation target until physical release");
-  const auto edge=s.gesture.update(eligible,button.held!=0,nativeTarget);
+  const double now=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+  const bool wasPending=s.gesture.pending;
+  const double heldSeconds=now-s.gesture.pressedAt;
+  const auto edge=s.gesture.update(eligible,button.held!=0,now,nativeTarget);
   s.held=s.gesture.down;
+  if(eligible && wasPending && !button.held)
+   spdlog::info("B tap left to native input: held {:.3f}s; wheel did not claim input",heldSeconds);
+  if(edge==HoldEdge::Open)
+   spdlog::info("B hold qualified after {:.3f}s; wheel owns input through release",heldSeconds);
   // Claim only a wheel-owned gesture, never every raw B press. Retain
   // suppression through the physical release; ROCK's native VATS gate
   // latches a suppressed hold so its later release cannot become a VATS tap.
@@ -292,7 +299,7 @@ bool startRuntime() {
   (void)api->unregisterConsumerV1(s.owner);s.owner=0;return false;
  }
  rollback.complete=true;
- spdlog::info("Wheel registered with ROCK; hold right B and release over an item or Config");
+ spdlog::info("Wheel registered with ROCK; tap right B for native input, hold {:.2f}s for the wheel, release over an item or Config",kWheelHoldSeconds);
  return true;
 }
 }
