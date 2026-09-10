@@ -55,8 +55,8 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
    if(modelLock.owns_lock())action=drawWheel(shared.model,shared.view);}
   ImGui::Render();ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
   publishWheelSelection(ticket,action);
- } catch(const std::exception& e){spdlog::error("Wheel render failed: {}",e.what());if(ticket)closeWheel(ticket);}
- catch(...){if(ticket)closeWheel(ticket);}
+ } catch(const std::exception& e){spdlog::error("Wheel render failed: {}",e.what());if(ticket)failWheelPresentation(ticket);}
+ catch(...){if(ticket)failWheelPresentation(ticket);}
 }
 }
 bool installPanel() {
