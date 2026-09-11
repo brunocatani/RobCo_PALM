@@ -718,15 +718,14 @@ namespace rock_configurator
             const bool hovered = ImGui::IsItemHovered();
             const ImVec2 maximum{minimum.x + size.x, minimum.y + size.y};
             auto* draw = ImGui::GetWindowDrawList();
-            if (hovered) draw->AddRectFilled(minimum, maximum, packed(accentColor(0.06f)), 4);
-            if (active) draw->AddRectFilled({minimum.x + 10, maximum.y - 3},
-                {maximum.x - 10, maximum.y}, packed(accentColor()), 2);
+            if (hovered || active) draw->AddRectFilled(minimum, maximum, packed(accentColor()));
+            draw->AddRect(minimum,maximum,packed(palm::theme::border()));
             auto* font = fontFor(devui::render::FontRole::Medium);
             const float textWidth = font->CalcTextSizeA(26, FLT_MAX, 0, label).x;
             const float fontSize = textWidth > size.x - 24 ? 26 * (size.x - 24) / textWidth : 26;
             draw->AddText(font, fontSize,
                 {minimum.x + 12, minimum.y + 16},
-                packed(active ? accentColor() : textColor(hovered ? 0.95f : 0.65f)), label);
+                packed(active || hovered ? devui::visual::surface() : mutedColor()), label);
             ImGui::PopID();
             return clicked;
         }
@@ -755,7 +754,6 @@ namespace rock_configurator
             const float width = ImGui::GetWindowWidth();
             auto* draw = ImGui::GetWindowDrawList();
             draw->AddLine({p.x, p.y + 94}, {p.x + width, p.y + 94}, packed(mutedColor(0.24f)));
-            draw->AddRectFilled(p, {p.x + 5, p.y + 94}, packed(accentColor(0.7f)));
             ImGui::SetCursorPos({28, 15});
             { ScopedFont font(devui::render::FontRole::Medium, 16); ImGui::TextColored(accentColor(), "RobCo PALM"); }
             ImGui::SetCursorPos({28, 43});
@@ -768,17 +766,15 @@ namespace rock_configurator
             }
             ImGui::SetCursorPos({width - 322, 20});
             { ScopedFont font(devui::render::FontRole::Medium, 24);
-              if (ImGui::Button("< Back", {100, 54})) (void)queueUiAction({.kind = RuntimeActionKind::UiBack}); }
+              if (devui::visual::button("< Back", {100, 54})) (void)queueUiAction({.kind = RuntimeActionKind::UiBack}); }
             ImGui::SameLine(0, 10);
             const float percent = s_sessionPanelPhysicalWidth.load(std::memory_order_acquire) / devui::render::kDefaultPanelPhysicalWidth * 100;
             std::array<char, 32> sizeLabel{};
             std::snprintf(sizeLabel.data(), sizeLabel.size(), "SIZE  %.0f%%", percent);
             { ScopedFont font(devui::render::FontRole::Medium, 18);
-              if (ImGui::Button(sizeLabel.data(), {126, 54})) (void)queueUiAction({.kind = RuntimeActionKind::UiResetPanelSize}); }
+              if (devui::visual::button(sizeLabel.data(), {126, 54})) (void)queueUiAction({.kind = RuntimeActionKind::UiResetPanelSize}); }
             ImGui::SameLine(0, 10);
-            ImGui::PushStyleColor(ImGuiCol_Button, {0.16f, 0.075f, 0.085f, 1});
-            if (ImGui::Button("X##close", {52, 54})) (void)queueUiAction({.kind = RuntimeActionKind::UiClose});
-            ImGui::PopStyleColor();
+            if (devui::visual::button("X##close", {52, 54})) (void)queueUiAction({.kind = RuntimeActionKind::UiClose});
         }
 
         template <class Store>
@@ -793,7 +789,7 @@ namespace rock_configurator
             ImGui::Dummy({0, 12});
             {
                 ScopedFont font(devui::render::FontRole::Body, 17);
-                if (ImGui::Button("Reload from disk", {-1, 40})) {
+                if (devui::visual::button("Reload from disk", {-1, 40})) {
                     (void)queueUiAction({.kind = RuntimeActionKind::UiReload, .tab = tab});
                 }
             }
@@ -910,7 +906,7 @@ namespace rock_configurator
                                setting.value == "1";
                 ImGui::SetCursorPos({ windowWidth - 61.0f, 10.0f });
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 6.0f, 6.0f });
-                if (ImGui::Checkbox("##checkbox", &enabled)) {
+                if (devui::visual::checkbox("##checkbox", &enabled)) {
                     (void)queueUiAction({
                         .kind = RuntimeActionKind::UiSetBooleanRow,
                         .tab = tab,
@@ -924,7 +920,7 @@ namespace rock_configurator
             }
             case setting_control::Kind::Numeric: {
                 ImGui::SetCursorPos({ controlsStart, 10.0f });
-                if (ImGui::Button("-", { 36.0f, 36.0f })) {
+                if (devui::visual::button("-", { 36.0f, 36.0f })) {
                     (void)queueUiAction({
                         .kind = RuntimeActionKind::UiAdjustRow,
                         .tab = tab,
@@ -981,7 +977,7 @@ namespace rock_configurator
                     s_pendingNumericEdit.reset();
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("+", { 36.0f, 36.0f })) {
+                if (devui::visual::button("+", { 36.0f, 36.0f })) {
                     (void)queueUiAction({
                         .kind = RuntimeActionKind::UiAdjustRow,
                         .tab = tab,
@@ -1035,13 +1031,11 @@ namespace rock_configurator
                 draw->AddRectFilled(
                     valueMinimum,
                     valueMaximum,
-                    packed(ImVec4(0.035f, 0.085f, 0.10f, 1.0f)),
-                    7.0f);
+                    packed(devui::visual::surface()));
                 draw->AddRect(
                     valueMinimum,
                     valueMaximum,
-                    packed(ImVec4(0.35f, 0.39f, 0.45f, 0.30f)),
-                    7.0f);
+                    packed(palm::theme::border()));
                 draw->PushClipRect(
                     { valueMinimum.x + 10.0f, valueMinimum.y },
                     { valueMaximum.x - 10.0f, valueMaximum.y },
@@ -1088,7 +1082,7 @@ namespace rock_configurator
             devui::visual::heading(groupLabel.text.data(), status.c_str());
             const auto header = ImGui::GetCursorScreenPos();
             const float width = ImGui::GetContentRegionAvail().x;
-            ImGui::GetWindowDrawList()->AddRectFilled(header, {header.x + width, header.y + 36}, packed(ImVec4(0.045f,0.10f,0.12f,1)));
+            ImGui::GetWindowDrawList()->AddRectFilled(header, {header.x + width, header.y + 36}, packed(accentColor(0.06f)));
             { ScopedFont font(devui::render::FontRole::Medium, 18);
               ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 14);
               ImGui::TextColored(mutedColor(), "SETTING");
@@ -1142,12 +1136,10 @@ namespace rock_configurator
                 if (i) ImGui::SameLine(0, 6);
                 ImGui::PushID(static_cast<int>(i));
                 const bool active = i == s_spawnBrowser.categoryCursor();
-                ImGui::PushStyleColor(ImGuiCol_Button, active ? accentColor(0.2f) : ImVec4(0,0,0,0));
-                ImGui::PushStyleColor(ImGuiCol_Text, active ? accentColor() : mutedColor());
                 { ScopedFont font(devui::render::FontRole::Medium, 18);
-                  if (ImGui::Button(s_spawnBrowser.categoryName(i).data(), {categoryWidth, 36}))
+                  if (devui::visual::button(s_spawnBrowser.categoryName(i).data(), {categoryWidth, 36},active))
                     (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnSelectCategory, .tab = ConfiguratorTab::Spawn, .index = i}); }
-                ImGui::PopStyleColor(2); ImGui::PopID();
+                ImGui::PopID();
             }
             ImGui::Dummy({0, 16});
             constexpr auto flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
@@ -1194,19 +1186,18 @@ namespace rock_configurator
                 if (!action) continue;
                 if (i % 2) ImGui::SameLine(0, 16);
                 ImGui::PushID(static_cast<int>(i));
-                ImGui::PushStyleColor(ImGuiCol_Button, i == 0 ? accentColor(0.16f) : ImVec4(0.06f,0.11f,0.125f,1));
                 { ScopedFont font(devui::render::FontRole::Medium, 28);
-                  if (ImGui::Button(action->label.c_str(), {width,76})) {
+                  if (devui::visual::button(action->label.c_str(), {width,76},i==0)) {
                     (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnActivateAction, .tab = ConfiguratorTab::Spawn, .index = i, .formId = s_spawnBrowser.menuFormId()});
                   } }
-                ImGui::PopStyleColor(); ImGui::PopID();
+                ImGui::PopID();
                 if (i % 2) ImGui::Dummy({0, 8});
             }
             ImGui::Dummy({0, 20});
             { ScopedFont font(devui::render::FontRole::Body, 16);
               ImGui::TextColored(mutedColor(), "%s", s_spawnBrowser.lastResult().c_str()); }
             ImGui::Dummy({0, 16});
-            if (ImGui::Button("< Item list", {160,44})) {
+            if (devui::visual::button("< Item list", {160,44})) {
                 (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnBack, .tab = ConfiguratorTab::Spawn});
             }
         }
@@ -1252,8 +1243,8 @@ namespace rock_configurator
             // Keep row/scroll/widget identities independent even for identical INI keys.
             ImGui::PushID(tab == ConfiguratorTab::Settings ? static_cast<int>(s_modIndex) : -1);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 18.0f, 24.0f });
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.03f, 0.08f, 0.09f, 0.7f));
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.31f, 0.35f, 0.41f, 0.30f));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, devui::visual::surface(0.7f));
+            ImGui::PushStyleColor(ImGuiCol_Border, palm::theme::border());
             ImGui::BeginChild("rail", { railWidth, 0.0f }, ImGuiChildFlags_AlwaysUseWindowPadding);
             switch (tab) {
             case ConfiguratorTab::Settings:
@@ -1267,7 +1258,7 @@ namespace rock_configurator
             ImGui::PopStyleColor(2);
             ImGui::SameLine(0,0);
             ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0,0,0,0));
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.31f, 0.35f, 0.41f, 0.30f));
+            ImGui::PushStyleColor(ImGuiCol_Border, palm::theme::border());
             ImGui::BeginChild("workspace", { 0.0f, 0.0f }, ImGuiChildFlags_AlwaysUseWindowPadding);
             switch (tab) {
             case ConfiguratorTab::Settings:
@@ -1411,13 +1402,8 @@ namespace rock_configurator
             const float windowWidth = ImGui::GetWindowWidth();
             const float windowHeight = ImGui::GetWindowHeight();
             auto* draw = ImGui::GetWindowDrawList();
-            draw->AddRectFilledMultiColor(
-                windowPosition,
-                { windowPosition.x + windowWidth, windowPosition.y + windowHeight },
-                packed(ImVec4(0.035f, 0.063f, 0.068f, 1.0f)),
-                packed(ImVec4(0.025f, 0.065f, 0.078f, 1.0f)),
-                packed(ImVec4(0.018f, 0.05f, 0.06f, 1.0f)),
-                packed(ImVec4(0.025f, 0.06f, 0.07f, 1.0f)));
+            draw->AddRectFilled(windowPosition,
+                { windowPosition.x + windowWidth, windowPosition.y + windowHeight },packed(devui::visual::surface()));
             drawTopBar();
             constexpr float bodyTop = 94.0f;
             ImGui::SetCursorPos({ 0.0f, bodyTop });

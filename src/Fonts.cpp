@@ -18,11 +18,16 @@ void prepareFonts() {
  bytes.resize(static_cast<std::size_t>(size)); input.seekg(0);
  if(!input.read(bytes.data(), static_cast<std::streamsize>(bytes.size()))) bytes.clear();
 }
+ImFont* addPreparedFont(float size) {
+ auto& io=ImGui::GetIO();ImFontConfig config;config.SizePixels=size;
+ if(!bytes.empty()) {
+  config.FontDataOwnedByAtlas=false;
+  if(auto* font=io.Fonts->AddFontFromMemoryTTF(bytes.data(),static_cast<int>(bytes.size()),size,&config))return font;
+ }
+ return io.Fonts->AddFontDefaultVector(&config);
+}
 void installFonts() {
  auto& io=ImGui::GetIO(); io.IniFilename=nullptr; io.LogFilename=nullptr;
- ImFontConfig config; config.SizePixels=24; config.FontDataOwnedByAtlas=false;
- if(bytes.empty() || !io.Fonts->AddFontFromMemoryTTF(bytes.data(),static_cast<int>(bytes.size()),24,&config))
-  io.Fonts->AddFontDefaultVector();
- io.FontDefault=io.Fonts->Fonts[0];
+ io.FontDefault=addPreparedFont(24);
 }
 }

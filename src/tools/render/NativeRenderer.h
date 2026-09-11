@@ -3,6 +3,7 @@
 #include <DirectXMath.h>
 
 #include <cstdint>
+#include <array>
 
 struct ImFont;
 
@@ -27,6 +28,7 @@ namespace devui::render
         Mono,
         Count,
     };
+    inline constexpr std::array<float,static_cast<std::size_t>(FontRole::Count)> kFontSizes{20,21,27,32,18};
 
     struct PanelPose
     {

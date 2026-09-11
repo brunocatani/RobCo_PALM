@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cfloat>
 #include <string_view>
+#include <cstring>
 
 namespace devui::visual {
 inline float railWidth(float width) { return std::clamp(width * 0.17f, 280.0f, 320.0f); }
@@ -24,6 +25,33 @@ struct ReadableLabel {
     }
 };
 inline ImU32 color(ImVec4 value) { return ImGui::ColorConvertFloat4ToU32(value); }
+inline bool button(const char* label,ImVec2 size={},bool selected=false) {
+    // Keep native button input/IDs; only render the label with inverted ink.
+    ImGui::PushStyleColor(ImGuiCol_Text,ImVec4(0,0,0,0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,accent());
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,accent());
+    if(selected)ImGui::PushStyleColor(ImGuiCol_Button,accent());
+    const bool clicked=ImGui::Button(label,size);
+    if(selected)ImGui::PopStyleColor();
+    ImGui::PopStyleColor(3);
+    const auto minimum=ImGui::GetItemRectMin(),maximum=ImGui::GetItemRectMax();
+    const char* end=std::strstr(label,"##");
+    auto* font=ImGui::GetFont();float fontSize=ImGui::GetFontSize();
+    auto extent=font->CalcTextSizeA(fontSize,FLT_MAX,0,label,end);
+    const float available=(std::max)(1.f,maximum.x-minimum.x-2*ImGui::GetStyle().FramePadding.x);
+    if(extent.x>available){fontSize*=available/extent.x;extent=font->CalcTextSizeA(fontSize,FLT_MAX,0,label,end);}
+    const auto align=ImGui::GetStyle().ButtonTextAlign;
+    auto* draw=ImGui::GetWindowDrawList();draw->PushClipRect(minimum,maximum,true);
+    draw->AddText(font,fontSize,{minimum.x+(maximum.x-minimum.x-extent.x)*align.x,minimum.y+(maximum.y-minimum.y-extent.y)*align.y},
+        ImGui::GetColorU32(selected || ImGui::IsItemHovered()?surface():text()),label,end);
+    draw->PopClipRect();return clicked;
+}
+inline bool checkbox(const char* label,bool* value) {
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered,accent());
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,accent());
+    const bool changed=ImGui::Checkbox(label,value);
+    ImGui::PopStyleColor(2);return changed;
+}
 class Font {
 public:
     Font(render::FontRole role, float size) { ImGui::PushFont(render::GetFont(role) ? render::GetFont(role) : ImGui::GetFont(), size); }
@@ -47,8 +75,8 @@ inline bool navigation(const char* label, bool selected, const char* badge = nul
     const bool clicked = ImGui::InvisibleButton(label, {width, height});
     const bool hovered = ImGui::IsItemHovered();
     auto* draw = ImGui::GetWindowDrawList();
-    if (selected || hovered) draw->AddRectFilled(p, {p.x + width, p.y + height}, color(accent(selected ? 0.15f : 0.07f)));
-    if (selected) draw->AddRectFilled(p, {p.x + 4, p.y + height}, color(accent()));
+    if (selected || hovered) draw->AddRectFilled(p, {p.x + width, p.y + height}, color(accent()));
+    draw->AddRect(p,{p.x+width,p.y+height},color(palm::theme::border()));
     const float right = p.x + width - (badge ? 42 : 12);
     auto* font = render::GetFont(render::FontRole::Medium) ? render::GetFont(render::FontRole::Medium) : ImGui::GetFont();
     const float size = badge ? 20.0f : 26.0f;
@@ -57,9 +85,9 @@ inline bool navigation(const char* label, bool selected, const char* badge = nul
     const auto extent = font->CalcTextSizeA(size, FLT_MAX, wrap, readable.text.data());
     draw->PushClipRect({p.x + 16, p.y}, {right, p.y + height}, true);
     draw->AddText(font, size, {p.x + 16, p.y + (std::max)(5.0f, (height - extent.y) * 0.5f)},
-        color(selected ? text() : muted()), readable.text.data(), nullptr, wrap);
+        color(selected || hovered ? surface() : muted()), readable.text.data(), nullptr, wrap);
     draw->PopClipRect();
-    if (badge) draw->AddText(ImGui::GetFont(), 16, {right + 8, p.y + 21}, color(muted()), badge);
+    if (badge) draw->AddText(ImGui::GetFont(), 16, {right + 8, p.y + 21}, color(selected || hovered ? surface() : muted()), badge);
     if (hovered) ImGui::SetTooltip("%s", label);
     return clicked;
 }

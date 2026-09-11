@@ -56,7 +56,7 @@ void drawWheelSettings() {
   ImGui::BeginDisabled(!enabled && s.prefs.enabledEntries()+cost>palm::api::kMaxVisibleEntries);
   bool changed;
   {visual::Font font(render::FontRole::Medium,24);ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{4,4});
-   changed=ImGui::Checkbox(name,&enabled);ImGui::PopStyleVar();}
+   changed=devui::visual::checkbox(name,&enabled);ImGui::PopStyleVar();}
   ImGui::EndDisabled();
   {visual::Font font(render::FontRole::Body,18);ImGui::TextColored(visual::muted(),"%s",detail);}
   ImGui::Dummy({0,14});ImGui::PopID();return changed;
@@ -137,7 +137,7 @@ void drawWheelConfig() {
    if(selected)ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,visual::color(visual::accent(0.13f)));
    ImGui::BeginDisabled(!selected && favorites.size()>=kSlots);
    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{3,3});
-   const bool changed=ImGui::Checkbox("##selected",&selected);
+   const bool changed=devui::visual::checkbox("##selected",&selected);
    ImGui::PopStyleVar();ImGui::SameLine(0,18);
    ImGui::TextUnformatted(name.data(),name.data()+name.size());ImGui::EndDisabled();
    ImGui::TableSetColumnIndex(1);

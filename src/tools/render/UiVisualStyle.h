@@ -1,27 +1,28 @@
 #pragma once
 
 #include <imgui.h>
+#include "PalmTheme.h"
 
 namespace devui::visual
 {
     [[nodiscard]] inline ImVec4 accent(float alpha = 1.0f) noexcept
     {
-        return { 0.25f, 0.91f, 0.86f, alpha };
+        return palm::theme::green(alpha);
     }
 
     [[nodiscard]] inline ImVec4 text(float alpha = 1.0f) noexcept
     {
-        return { 0.914f, 0.949f, 0.937f, alpha };
+        return palm::theme::green(alpha);
     }
 
     [[nodiscard]] inline ImVec4 muted(float alpha = 1.0f) noexcept
     {
-        return { 0.60f, 0.74f, 0.77f, alpha };
+        return palm::theme::muted(alpha);
     }
 
     [[nodiscard]] inline ImVec4 surface(float alpha = 1.0f) noexcept
     {
-        return { 0.051f, 0.098f, 0.114f, alpha };
+        return palm::theme::ink(alpha);
     }
 
     inline void applyStyle() noexcept
@@ -36,12 +37,12 @@ namespace devui::visual
         style.ScrollbarSize = 18.0f;
         style.GrabMinSize = 20.0f;
         style.WindowRounding = 0.0f;
-        style.ChildRounding = 4.0f;
-        style.FrameRounding = 5.0f;
-        style.PopupRounding = 10.0f;
-        style.ScrollbarRounding = 10.0f;
-        style.GrabRounding = 10.0f;
-        style.TabRounding = 8.0f;
+        style.ChildRounding = 0.0f;
+        style.FrameRounding = 0.0f;
+        style.PopupRounding = 0.0f;
+        style.ScrollbarRounding = 0.0f;
+        style.GrabRounding = 0.0f;
+        style.TabRounding = 0.0f;
         style.WindowBorderSize = 0.0f;
         style.ChildBorderSize = 0.0f;
         style.FrameBorderSize = 1.0f;
@@ -57,41 +58,64 @@ namespace devui::visual
         auto* colors = style.Colors;
         colors[ImGuiCol_Text] = text();
         colors[ImGuiCol_TextDisabled] = muted();
-        colors[ImGuiCol_WindowBg] = ImVec4(0.035f, 0.063f, 0.068f, 1.0f);
+        colors[ImGuiCol_WindowBg] = surface();
         colors[ImGuiCol_ChildBg] = ImVec4(0, 0, 0, 0);
-        colors[ImGuiCol_PopupBg] = ImVec4(0.067f, 0.102f, 0.107f, 0.98f);
-        colors[ImGuiCol_Border] = ImVec4(0.38f, 0.43f, 0.49f, 0.25f);
+        colors[ImGuiCol_PopupBg] = surface();
+        colors[ImGuiCol_Border] = palm::theme::border();
         colors[ImGuiCol_BorderShadow] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-        colors[ImGuiCol_FrameBg] = ImVec4(0.065f, 0.115f, 0.13f, 1.0f);
-        colors[ImGuiCol_FrameBgHovered] = ImVec4(0.125f, 0.178f, 0.183f, 1.0f);
-        colors[ImGuiCol_FrameBgActive] = accent(0.24f);
-        colors[ImGuiCol_TitleBg] = ImVec4(0.047f, 0.075f, 0.080f, 1.0f);
+        colors[ImGuiCol_FrameBg] = surface();
+        colors[ImGuiCol_FrameBgHovered] = accent(0.12f);
+        colors[ImGuiCol_FrameBgActive] = accent(0.18f);
+        colors[ImGuiCol_TitleBg] = surface();
         colors[ImGuiCol_TitleBgActive] = colors[ImGuiCol_TitleBg];
-        colors[ImGuiCol_Button] = ImVec4(0.09f, 0.137f, 0.142f, 1.0f);
-        colors[ImGuiCol_ButtonHovered] = accent(0.22f);
-        colors[ImGuiCol_ButtonActive] = accent(0.40f);
+        colors[ImGuiCol_TitleBgCollapsed] = surface();
+        colors[ImGuiCol_MenuBarBg] = surface();
+        colors[ImGuiCol_Button] = surface();
+        colors[ImGuiCol_ButtonHovered] = accent(0.16f);
+        colors[ImGuiCol_ButtonActive] = accent(0.24f);
         colors[ImGuiCol_Header] = accent(0.13f);
         colors[ImGuiCol_HeaderHovered] = accent(0.22f);
         colors[ImGuiCol_HeaderActive] = accent(0.34f);
-        colors[ImGuiCol_CheckMark] = ImVec4(0.025f, 0.10f, 0.11f, 1);
+        colors[ImGuiCol_CheckMark] = surface();
         colors[ImGuiCol_CheckboxSelectedBg] = accent();
-        colors[ImGuiCol_SliderGrab] = accent(0.82f);
-        colors[ImGuiCol_SliderGrabActive] = ImVec4(0.65f, 1.0f, 0.85f, 1.0f);
-        colors[ImGuiCol_Separator] = ImVec4(0.38f, 0.43f, 0.49f, 0.22f);
+        colors[ImGuiCol_SliderGrab] = accent(0.3f);
+        colors[ImGuiCol_SliderGrabActive] = accent(0.45f);
+        colors[ImGuiCol_Separator] = palm::theme::border();
         colors[ImGuiCol_SeparatorHovered] = accent(0.55f);
         colors[ImGuiCol_SeparatorActive] = accent(0.85f);
-        colors[ImGuiCol_ScrollbarBg] = ImVec4(0.035f, 0.063f, 0.068f, 0.4f);
-        colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.22f, 0.298f, 0.303f, 0.9f);
-        colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.32f, 0.36f, 0.41f, 1.0f);
-        colors[ImGuiCol_ScrollbarGrabActive] = accent(0.75f);
-        colors[ImGuiCol_Tab] = ImVec4(0.055f, 0.090f, 0.095f, 1.0f);
+        colors[ImGuiCol_ScrollbarBg] = surface();
+        colors[ImGuiCol_ScrollbarGrab] = accent(0.4f);
+        colors[ImGuiCol_ScrollbarGrabHovered] = accent(0.75f);
+        colors[ImGuiCol_ScrollbarGrabActive] = accent();
+        colors[ImGuiCol_Tab] = surface();
         colors[ImGuiCol_TabHovered] = accent(0.24f);
         colors[ImGuiCol_TabSelected] = accent(0.20f);
         colors[ImGuiCol_NavHighlight] = accent(0.82f);
-        colors[ImGuiCol_TableHeaderBg] = ImVec4(0.045f, 0.10f, 0.12f, 1);
-        colors[ImGuiCol_TableRowBg] = ImVec4(0.04f, 0.08f, 0.095f, 0.4f);
-        colors[ImGuiCol_TableRowBgAlt] = ImVec4(0.065f, 0.115f, 0.13f, 0.3f);
-        colors[ImGuiCol_TableBorderStrong] = ImVec4(0.18f, 0.29f, 0.32f, 0.8f);
-        colors[ImGuiCol_TableBorderLight] = ImVec4(0.16f, 0.27f, 0.30f, 0.55f);
+        colors[ImGuiCol_TableHeaderBg] = accent(0.06f);
+        colors[ImGuiCol_TableRowBg] = surface(0.4f);
+        colors[ImGuiCol_TableRowBgAlt] = accent(0.025f);
+        colors[ImGuiCol_TableBorderStrong] = palm::theme::border();
+        colors[ImGuiCol_TableBorderLight] = accent(0.16f);
+        colors[ImGuiCol_TextLink] = accent();
+        colors[ImGuiCol_TextSelectedBg] = accent(0.25f);
+        colors[ImGuiCol_InputTextCursor] = accent();
+        colors[ImGuiCol_ResizeGrip] = accent(0.2f);
+        colors[ImGuiCol_ResizeGripHovered] = accent(0.7f);
+        colors[ImGuiCol_ResizeGripActive] = accent();
+        colors[ImGuiCol_TabSelectedOverline] = accent();
+        colors[ImGuiCol_TabDimmed] = surface();
+        colors[ImGuiCol_TabDimmedSelected] = accent(0.12f);
+        colors[ImGuiCol_TabDimmedSelectedOverline] = muted();
+        colors[ImGuiCol_PlotLines] = accent();
+        colors[ImGuiCol_PlotLinesHovered] = accent();
+        colors[ImGuiCol_PlotHistogram] = accent(0.6f);
+        colors[ImGuiCol_PlotHistogramHovered] = accent();
+        colors[ImGuiCol_TreeLines] = palm::theme::border();
+        colors[ImGuiCol_DragDropTarget] = accent();
+        colors[ImGuiCol_DragDropTargetBg] = accent(0.12f);
+        colors[ImGuiCol_UnsavedMarker] = accent();
+        colors[ImGuiCol_NavWindowingHighlight] = accent(0.5f);
+        colors[ImGuiCol_NavWindowingDimBg] = surface(0.8f);
+        colors[ImGuiCol_ModalWindowDimBg] = surface(0.8f);
     }
 }

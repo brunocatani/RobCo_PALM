@@ -1,10 +1,11 @@
 #include "WheelView.h"
+#include "PalmTheme.h"
 #include <imgui.h>
 #include <cstdio>
 
 namespace wheel {
 namespace {
-ImU32 phosphor(int alpha=255) {return IM_COL32(124,240,108,alpha);}
+ImU32 phosphor(int alpha=255) {return ImGui::ColorConvertFloat4ToU32(palm::theme::green(alpha/255.f));}
 void centered(ImDrawList* draw, ImVec2 position, float size, ImU32 tint, const char* text) {
  auto* font=ImGui::GetFont();
  const auto extent=font->CalcTextSizeA(size,10000,0,text);
@@ -41,7 +42,8 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
  view.animation=std::min(1.f,view.animation+io.DeltaTime*7);
  const int alpha=static_cast<int>(255*view.animation);
  const auto green=phosphor(alpha),muted=phosphor(alpha*3/4);
- const auto dark=IM_COL32(5,16,7,alpha),surface=IM_COL32(5,16,7,alpha*3/4);
+ const auto dark=ImGui::ColorConvertFloat4ToU32(palm::theme::ink(alpha/255.f));
+ const auto surface=ImGui::ColorConvertFloat4ToU32(palm::theme::ink((alpha*3/4)/255.f));
  const auto boundary=phosphor(alpha/3);
  const ImVec2 center=point(512,510);
  const float inner=180*scale, outer=(326+10*view.animation)*scale;

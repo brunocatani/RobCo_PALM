@@ -10,31 +10,12 @@
 #include <imgui_impl_dx11.h>
 
 #include <cfloat>
-#include <fstream>
+#include "Fonts.h"
 
 namespace devui::render
 {
     namespace
     {
-        enum class FontSource : std::uint8_t
-        {
-            Regular,
-            Semibold,
-            Bold,
-            Mono,
-            Count,
-        };
-
-        struct PreparedFonts
-        {
-            std::mutex mutex;
-            std::array<std::vector<std::byte>,
-                static_cast<std::size_t>(FontSource::Count)> data;
-            std::filesystem::path directory;
-            std::size_t loadedSources{ 0 };
-            bool prepared{ false };
-        };
-
         struct RenderState
         {
             std::mutex mutex;
@@ -60,12 +41,6 @@ namespace devui::render
             bool installed{ false };
         };
 
-        [[nodiscard]] PreparedFonts& preparedFonts() noexcept
-        {
-            static PreparedFonts fonts;
-            return fonts;
-        }
-
         [[nodiscard]] RenderState& renderState() noexcept
         {
             static RenderState state;
@@ -78,112 +53,14 @@ namespace devui::render
             return state;
         }
 
-        [[nodiscard]] std::filesystem::path windowsFontsDirectory() noexcept
-        {
-            std::array<wchar_t, MAX_PATH> windows{};
-            const auto length = GetWindowsDirectoryW(
-                windows.data(),
-                static_cast<UINT>(windows.size()));
-            if (length == 0 || length >= windows.size()) {
-                return {};
-            }
-            return std::filesystem::path(windows.data()) / L"Fonts";
-        }
-
-        [[nodiscard]] bool readFontFile(
-            const std::filesystem::path& path,
-            std::vector<std::byte>& destination) noexcept
-        {
-            destination.clear();
-            try {
-                std::error_code error;
-                const auto size = std::filesystem::file_size(path, error);
-                constexpr std::uintmax_t maximumBytes =
-                    16u * 1024u * 1024u;
-                if (error ||
-                    size < 100 ||
-                    size > maximumBytes) {
-                    return false;
-                }
-                std::ifstream input(path, std::ios::binary);
-                if (!input) {
-                    return false;
-                }
-                destination.resize(static_cast<std::size_t>(size));
-                input.read(
-                    reinterpret_cast<char*>(destination.data()),
-                    static_cast<std::streamsize>(destination.size()));
-                if (!input ||
-                    input.gcount() !=
-                        static_cast<std::streamsize>(destination.size())) {
-                    destination.clear();
-                    return false;
-                }
-                return true;
-            } catch (...) {
-                destination.clear();
-                return false;
-            }
-        }
-
-        [[nodiscard]] ImFont* addFontRole(
-            ImGuiIO& io,
-            const std::vector<std::byte>& data,
-            float size,
-            const char* name) noexcept
-        {
-            ImFontConfig config{};
-            config.SizePixels = size;
-            config.RasterizerMultiply = 1.08f;
-            std::snprintf(
-                config.Name,
-                sizeof(config.Name),
-                "%s",
-                name);
-            if (!data.empty() &&
-                data.size() <=
-                    static_cast<std::size_t>(
-                        (std::numeric_limits<int>::max)())) {
-                config.FontDataOwnedByAtlas = false;
-                if (auto* font = io.Fonts->AddFontFromMemoryTTF(
-                        const_cast<std::byte*>(data.data()),
-                        static_cast<int>(data.size()),
-                        size,
-                        &config)) {
-                    return font;
-                }
-            }
-            return io.Fonts->AddFontDefaultVector(&config);
-        }
-
         void configureFonts(RenderState& state, ImGuiIO& io)
         {
-            auto& prepared = preparedFonts();
-            std::scoped_lock lock(prepared.mutex);
-            const auto& regular =
-                prepared.data[static_cast<std::size_t>(FontSource::Regular)];
-            const auto& semibold =
-                prepared.data[static_cast<std::size_t>(FontSource::Semibold)];
-            const auto& bold =
-                prepared.data[static_cast<std::size_t>(FontSource::Bold)];
-            const auto& mono =
-                prepared.data[static_cast<std::size_t>(FontSource::Mono)];
-            state.fonts[static_cast<std::size_t>(FontRole::Body)] =
-                addFontRole(io, regular, 20.0f, "Segoe UI Body 20");
-            state.fonts[static_cast<std::size_t>(FontRole::Medium)] =
-                addFontRole(io, semibold, 21.0f, "Segoe UI Semibold 21");
-            state.fonts[static_cast<std::size_t>(FontRole::Heading)] =
-                addFontRole(io, semibold, 27.0f, "Segoe UI Semibold 27");
-            state.fonts[static_cast<std::size_t>(FontRole::Display)] =
-                addFontRole(io, bold, 32.0f, "Segoe UI Bold 32");
-            state.fonts[static_cast<std::size_t>(FontRole::Mono)] =
-                addFontRole(io, mono, 18.0f, "VR Mono 18");
-            io.FontDefault =
-                state.fonts[static_cast<std::size_t>(FontRole::Body)];
-            ImGui::GetStyle().FontSizeBase = 20.0f;
-            ImGui::GetStyle().FontScaleMain = 1.0f;
+            for(std::size_t i=0;i<state.fonts.size();++i)
+                state.fonts[i]=wheel::addPreparedFont(kFontSizes[i]);
+            io.FontDefault=state.fonts[static_cast<std::size_t>(FontRole::Body)];
+            ImGui::GetStyle().FontSizeBase=20.0f;
+            ImGui::GetStyle().FontScaleMain=1.0f;
         }
-
         void releaseRenderState(RenderState& state) noexcept
         {
             if (state.imguiContext) {
@@ -357,36 +234,9 @@ namespace devui::render
 
     void PrepareFonts() noexcept
     {
-        auto& prepared = preparedFonts();
-        std::scoped_lock lock(prepared.mutex);
-        if (prepared.prepared) {
-            return;
-        }
-        prepared.directory = windowsFontsDirectory();
-        const auto read =
-            [&](FontSource source, const std::filesystem::path& path) {
-                auto& destination =
-                    prepared.data[static_cast<std::size_t>(source)];
-                if (readFontFile(path, destination)) {
-                    ++prepared.loadedSources;
-                }
-            };
-        read(FontSource::Regular, prepared.directory / L"segoeui.ttf");
-        read(FontSource::Semibold, prepared.directory / L"seguisb.ttf");
-        read(FontSource::Bold, prepared.directory / L"segoeuib.ttf");
-        auto monoPath = prepared.directory / L"CascadiaMono.ttf";
-        std::error_code error;
-        if (!std::filesystem::is_regular_file(monoPath, error) ||
-            error) {
-            monoPath = prepared.directory / L"consola.ttf";
-        }
-        read(FontSource::Mono, monoPath);
-        prepared.prepared = true;
-        logger::info(
-            "PALM Config preloaded {}/4 RPS UI font sources",
-            prepared.loadedSources);
+        try {wheel::prepareFonts();}
+        catch(...){logger::error("PALM terminal font preload failed; using the ImGui font");}
     }
-
     ImFont* GetFont(FontRole role) noexcept
     {
         const auto index = static_cast<std::size_t>(role);
