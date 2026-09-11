@@ -2,6 +2,7 @@
 #include <array>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 
@@ -15,7 +16,15 @@ namespace
     std::uint64_t currentRevision() noexcept { return revision; }
     bool visit(Group group, VisitorV1 callback, void* context) noexcept
     {
-        if (group != Group::Developer) return false;
+        if (group == Group::Consumer) {
+            const SettingV1 logging{"Logging", "iLogLevel", "6", "6",
+                "01. Logging", "Log detail", ValueType::Integer, 0};
+            const SettingV1 weapon{"ImmersiveWeapons", "bBipodMode", "true", "true",
+                "04. Weapon Handling", "Surface latch", ValueType::Boolean, 0};
+            callback(&logging, context);
+            callback(&weapon, context);
+            return true;
+        }
         const SettingV1 toggle{"Debug", "bDeveloperModeEnabled", configured.c_str(), "false",
             "Developer", "Enables developer controls", ValueType::Boolean, configured == "false" ? 0u : 1u};
         const SettingV1 number{"PhysicsInteraction", "fDebugVideoSyncMarkerSize", "4", "4",
@@ -67,6 +76,14 @@ int main()
         configured = "false"; ++revision;
         require(store.needsReload() && store.reload(), "external removal did not refresh");
         require(!store.settings()[0].overridden, "default still displayed as overridden");
+        struct Cleanup { std::filesystem::path path; ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); } } cleanup{absent};
+        { std::ofstream file(absent); file << "[ImmersiveWeapons]\n; 99. Old weapon section\nbBipodMode=true\n[Logging]\n; Old help\niLogLevel=6\n"; }
+        IniSettingsStore consumer(absent, RpsMod::Rock, &api);
+        require(consumer.load(), "consumer catalog could not load");
+        require(consumer.settings()[0].key == "iLogLevel" && consumer.settings()[1].key == "bBipodMode",
+            "consumer menu used disk order instead of the provider catalog");
+        require(consumer.settings()[0].category == "01. Logging" && consumer.settings()[1].category == "04. Weapon Handling" &&
+            consumer.settings()[0].description == "Log detail", "old INI comments replaced compiled section labels or help");
         std::cout << "Wheel configuration bridge checks passed.\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

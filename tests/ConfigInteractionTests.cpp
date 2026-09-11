@@ -53,8 +53,8 @@ std::string renderedText() {
 std::uint64_t fixtureRevision() noexcept { return 1; }
 bool fixtureVisit(rock::configuration_api::Group group, rock::configuration_api::VisitorV1 visitor, void* context) noexcept {
     using namespace rock::configuration_api;
-    const SettingV1 consumer{"PhysicsInteraction", "bConsumerFixture", "true", "true", "Shared", "consumer-fixture", ValueType::Boolean, 0};
-    const SettingV1 developer{"PhysicsInteraction", "fMovedFixture", "4", "4", "Shared", "developer-fixture", ValueType::Float, 0};
+    const SettingV1 consumer{"PhysicsInteraction", "bConsumerFixture", "true", "true", "01. Consumer Controls", "consumer-fixture", ValueType::Boolean, 0};
+    const SettingV1 developer{"PhysicsInteraction", "fMovedFixture", "4", "4", "01. Developer Controls", "developer-fixture", ValueType::Float, 0};
     visitor(group == Group::Consumer ? &consumer : &developer, context);
     return true;
 }
@@ -131,11 +131,13 @@ int main() {
         const auto consumerText = renderedText();
         require(consumerText.find("consumer-fixture") != std::string::npos && consumerText.find("developer-fixture") == std::string::npos,
             "ROCK page mixed consumer and developer controls");
+        require(consumerText.find("01. Consumer Controls") != std::string::npos, "consumer section heading lost its catalog label");
         const auto consumerWorkspace = window("settings-rows")->ID;
         click(220, 120);
         const auto developerText = renderedText();
         require(developerText.find("developer-fixture") != std::string::npos && developerText.find("consumer-fixture") == std::string::npos,
             "Developer tab is missing or does not expose moved non-debug options");
+        require(developerText.find("01. Developer Controls") != std::string::npos, "developer section heading lost its catalog label");
         require(window("settings-rows")->ID != consumerWorkspace, "Developer page reused the consumer workspace");
         click(45, 120);
         require(window("settings-rows")->ID == consumerWorkspace, "ROCK tab did not restore the consumer workspace");

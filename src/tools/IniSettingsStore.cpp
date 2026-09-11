@@ -293,7 +293,7 @@ namespace rock_configurator
                 setting.value = entry->value;
                 setting.defaultValue = entry->defaultValue;
                 setting.category = entry->category;
-                setting.description = entry->description;
+                setting.description = collapseWhitespace(entry->description);
                 setting.fromRockApi = true;
                 setting.overridden = entry->overridden != 0;
                 setting.lineIndex = (std::numeric_limits<std::size_t>::max)();
@@ -302,16 +302,6 @@ namespace rock_configurator
                 case rock::configuration_api::ValueType::Integer: setting.type = SettingType::Integer; break;
                 case rock::configuration_api::ValueType::Float: setting.type = SettingType::Float; break;
                 case rock::configuration_api::ValueType::String: setting.type = SettingType::String; break;
-                }
-                // Retain the consumer file's category order and help. The developer
-                // page gets its complete help/catalog even when no file exists.
-                if (store._mod == RpsMod::Rock) {
-                    if (const auto old = store.indexForId(setting.id)) {
-                        const auto& previous = store._settings[*old];
-                        setting.category = previous.category;
-                        setting.description = previous.description;
-                        setting.lineIndex = previous.lineIndex;
-                    }
                 }
                 store.refreshControl(setting);
                 snapshot.settings.push_back(std::move(setting));
@@ -322,11 +312,6 @@ namespace rock_configurator
         if (!_configurationApi->visit(rockGroup(), visitor, &snapshot) || snapshot.failed) {
             _lastError = "ROCK configuration is not ready";
             return false;
-        }
-        if (_mod == RpsMod::Rock) {
-            std::stable_sort(snapshot.settings.begin(), snapshot.settings.end(), [](const auto& a, const auto& b) {
-                return a.lineIndex < b.lineIndex;
-            });
         }
         _settings = std::move(snapshot.settings);
         _loadedRevision = _configurationApi->revision();
@@ -357,11 +342,10 @@ namespace rock_configurator
         }
 
         if (_useRockApi && !connectRockApi()) return false;
-        if (_useRockApi && _mod == RpsMod::RockDeveloper) return reloadRockSnapshot();
+        if (_useRockApi) return reloadRockSnapshot();
 
         std::ifstream input(_path);
         if (!input) {
-            if (_useRockApi) return reloadRockSnapshot();
             _lastError = std::format("Configuration INI is not readable: {}", _path.string());
             return false;
         }
@@ -447,7 +431,7 @@ namespace rock_configurator
             _settings.push_back(std::move(setting));
         }
 
-        return _useRockApi ? reloadRockSnapshot() : true;
+        return true;
     }
 
     std::optional<std::size_t> IniSettingsStore::indexForId(std::string_view id) const

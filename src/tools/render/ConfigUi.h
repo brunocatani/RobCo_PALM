@@ -14,7 +14,7 @@ struct ReadableLabel {
     explicit ReadableLabel(std::string_view key, bool stripTypePrefix = false) {
         std::size_t out = 0;
         const std::size_t begin = stripTypePrefix && key.size() > 1 &&
-            (key[0] == 'b' || key[0] == 'f' || key[0] == 'i') && std::isupper(static_cast<unsigned char>(key[1])) ? 1 : 0;
+            (key[0] == 'b' || key[0] == 'f' || key[0] == 'i' || key[0] == 's') && std::isupper(static_cast<unsigned char>(key[1])) ? 1 : 0;
         for (std::size_t i = begin; i < key.size() && out + 2 < text.size(); ++i) {
             if (i > begin && std::isupper(static_cast<unsigned char>(key[i])) &&
                 (std::islower(static_cast<unsigned char>(key[i-1])) ||
