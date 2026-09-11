@@ -2,46 +2,28 @@
 
 **Personal Access & Loadout Manager**
 
-RobCo P.A.L.M. is a wheel menu for Fallout 4 VR. Hold right trigger + grab, point at an item, and release either button to select it. It brings weapons, armor, consumables, hand gestures, and configuration into a green RobCo-style radial interface.
+RobCo P.A.L.M. is a customisable wheel menu for Fallout 4 VR, with quick access to your equipment, consumables, hand gestures, and mod settings.
 
 ## Features
 
-- **Five item categories:** Weapons, Armor, Aid, Food, and Grenades, with up to eight chosen items in each category.
-- **Weapons first:** The wheel opens on Weapons by default.
-- **Equipment selection:** Equip a weapon or armor piece, or select equipped gear again to unequip it.
-- **Physical item access:** Bring one aid item, food item, or grenade from your inventory into a free hand for use with ROCK.
-- **Eight hand gestures:** Thumbs up, middle finger, rock and roll, peace, pointing, fist, open hand, and shaka. Choose the left or right hand from the inner ring. A busy hand shows a warning; a pose clears when that hand starts another action or interaction.
-- **Fallout-specific outline icons:** Distinct icons for weapon types, equipment, consumables, and gestures.
-- **PALM settings:** Show or hide Aid, Food, Grenades, Weapons, Armor, and Gestures. Visible sections redistribute around the inner ring without empty gaps.
-- **In-game configuration:** Choose wheel items and access ROCK, ROCK developer, PAPER, and SCISSORS settings.
-- **Mod sections:** Other native mods can add named sections and up to eight items per section through PALM's API. Enable those sections in PALM settings.
-- **Item spawner:** Browse by plugin and category and add items to your inventory.
+- Choose up to eight items per category and hide sections you do not use.
+- Equip weapons and armor, use consumables, or bring items into your hand with ROCK.
+- Use eight hand gestures with ROCK and FRIK.
+- Change PALM controls and RPS mod settings in game.
+- Add wheel sections through supported mods.
+- Browse and spawn items by plugin and category.
 
 ## Requirements
 
-- Fallout 4 VR and F4SEVR.
-- ROCK and RPS UI Framework, together with their requirements.
-- FRIK v78.2 or later for the custom hand-pose interface.
+Fallout 4 VR, F4SEVR, and RPS UI Framework.
 
-PAPER and SCISSORS are optional integrations for their corresponding configuration pages.
+ROCK adds physical item handling; hand gestures also need FRIK v78.2 or later. PAPER and SCISSORS are optional integrations for their settings pages.
 
-## Controls
+## Using PALM
 
-1. Hold the physical right controller's **trigger and grab buttons together** for approximately 0.25 seconds.
-2. Point at a category in the inner ring or an item in the outer ring.
-3. Release **either button** to choose the highlighted item. Release both before opening the wheel again. Point at the center to cancel; **CANCEL** beneath the **P.A.L.M** branding grows when the center is highlighted.
+By default, hold **right trigger + grab** to open the wheel, point, and release to select.
 
-Choose **Config** to set up your wheel items. The **Left Gestures** and **Right Gestures** entries choose which hand receives a pose. Selecting the active gesture again clears it.
-
-The **Items** tab chooses inventory entries. **PALM settings** controls visible sections. The inner ring supports up to **10 entries**, including Config; Gestures occupies two entries. Hiding sections keeps their item choices, and Config and Cancel always remain accessible.
-
-**B** remains available for VATS on a tap and grenades on a hold, using ROCK's immersive-grenades setting. The complete right trigger/grab chord belongs exclusively to PALM through both releases.
-
-## Plugin and configuration
-
-The plugin is **`F4SE/Plugins/wheelmenu.dll`**. Its registration name is `RobCoPALM` and its log is `RobCoPALM.log` in the F4SE log directory.
-
-The configuration pages edit the owning mods' settings under `Documents\My Games\Fallout4VR\Mods_Config\`: `ROCK\ROCK.ini`, `ROCK\ROCK_Developer.ini`, `PAPER\PAPER.ini`, and `SCISSORS\SCISSORS.ini`. Changes follow each mod's own apply and reload rules.
+Choose your items in **Config → Items**. Rebind the controls or switch between **Hold / release** and **Press / click** in **Config → PALM settings → Controls**.
 
 ## Adding a mod section
 
