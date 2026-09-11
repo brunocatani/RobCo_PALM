@@ -22,9 +22,11 @@ int main(){try {
  Preferences forty;std::istringstream fullSource(full.str());check(readPreferences(fullSource,forty));
  std::size_t total=0;for(const auto& list:forty.slots)total+=list.size();check(total==40);
  check(!forty.select(4,{"ninth","Ninth armor"},true));
- std::istringstream legacy("WheelItems 1\ncategory 0 1\nitem 0 \"fallout4.esm|023736\" \"Stimpak\"\ncategory 1 0\ncategory 2 1\n");
- Preferences migrated;check(readPreferences(legacy,migrated));
- check(migrated.slots[0].size()==1 && !migrated.enabled[1] && migrated.slots[3].empty() && migrated.enabled[4]);
+ for(const auto header:{"WheelItems 1","WheelItems 2"}) {
+  std::istringstream legacy(std::string(header)+full.str().substr(full.str().find('\n')));
+  Preferences rejected;check(!readPreferences(legacy,rejected));
+  for(const auto& category:rejected.slots)check(category.empty());
+ }
  const std::array<std::string,1> mod{"weapon-mod.esp|001234:0:1:0"};
  check(equipmentKey("fallout4.esm|000001","Rifle",mod)!=equipmentKey("fallout4.esm|000001","Named Rifle",mod));
  check(equipmentKey("fallout4.esm|000001","Rifle",mod)!=equipmentKey("fallout4.esm|000001","Rifle",{}));
@@ -42,7 +44,7 @@ int main(){try {
  check(visible.items[0].size()==2 && visible.items[0][0].id==999 && visible.items[0][1].id==555);
  check(loaded.select(0,{"plugin|0","Item 0"},false));
  check(loaded.select(0,{"plugin|8","Ninth item"},true));
- std::istringstream invalid("WheelItems 1\ncategory 0 1\nitem 0 \"same\" \"A\"\nitem 0 \"same\" \"B\"\n");
+ std::istringstream invalid("PALMItems 1\ncategory 0 1\nitem 0 \"same\" \"A\"\nitem 0 \"same\" \"B\"\ncategory 1 1\ncategory 2 1\ncategory 3 1\ncategory 4 1\n");
  check(!readPreferences(invalid,loaded));check(loaded.slots[0].size()==8);
  std::cout<<"Slot limit, persistence, stable identity and unavailable-item behavior passed\n";return 0;
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

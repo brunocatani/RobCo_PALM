@@ -9,13 +9,13 @@
 namespace {
 void F4SEAPI onRevert(const F4SE::SerializationInterface*) noexcept {
  try {wheel::beginGameLoad();}
- catch(...){spdlog::error("Wheel save-state reset failed");}
+ catch(...){spdlog::error("PALM save-state reset failed");}
 }
 void F4SEAPI onSave(const F4SE::SerializationInterface* stream) noexcept {
  try {
   if(!stream || !wheel::writeWheelSave(*stream,wheel::snapshotWheelPreferences()))
    spdlog::error("Could not write wheel favorites to the F4SE co-save");
- }catch(...){spdlog::error("Wheel favorites serialization failed");}
+ }catch(...){spdlog::error("PALM favorites serialization failed");}
 }
 void F4SEAPI onLoad(const F4SE::SerializationInterface* stream) noexcept {
  try {
@@ -23,8 +23,8 @@ void F4SEAPI onLoad(const F4SE::SerializationInterface* stream) noexcept {
   const auto result=stream?wheel::readWheelSave(*stream,prefs):wheel::SaveReadResult::Missing;
   wheel::restoreWheelPreferences(std::move(prefs));
   if(result==wheel::SaveReadResult::Invalid)spdlog::error("Invalid wheel favorites co-save record; favorites reset for this save");
-  else spdlog::info("Wheel favorites: {}",result==wheel::SaveReadResult::Loaded?"restored from co-save":"no saved selections");
- }catch(...){spdlog::error("Wheel favorites restoration failed; session selections remain empty");}
+  else spdlog::info("PALM favorites: {}",result==wheel::SaveReadResult::Loaded?"restored from co-save":"no saved selections");
+ }catch(...){spdlog::error("PALM favorites restoration failed; session selections remain empty");}
 }
 void onMessage(F4SE::MessagingInterface::Message* message) noexcept {
  try {
@@ -43,10 +43,10 @@ void onMessage(F4SE::MessagingInterface::Message* message) noexcept {
   if(message->type!=F4SE::MessagingInterface::kGameDataReady)return;
   static bool started=false;if(started)return;started=true;
   wheel::prepareFonts();
-  if(!wheel::startRuntime())spdlog::critical("Wheel initialization failed; check ROCK and RPS UI Framework are loaded");
-  else {rock_configurator::onGameDataReady();spdlog::info("Wheel and workshop ready for gameplay input");}
- }catch(const std::exception& e){spdlog::critical("Wheel startup: {}",e.what());}
- catch(...){OutputDebugStringA("ROCKWheelMenu startup failed\n");}
+  if(!wheel::startRuntime())spdlog::critical("PALM initialization failed; check ROCK and RPS UI Framework are loaded");
+  else {rock_configurator::onGameDataReady();spdlog::info("PALM and workshop ready for gameplay input");}
+ }catch(const std::exception& e){spdlog::critical("PALM startup: {}",e.what());}
+ catch(...){OutputDebugStringA("RobCoPALM startup failed\n");}
 }
 }
 extern "C" __declspec(dllexport) bool F4SEAPI F4SEPlugin_Query(const F4SE::QueryInterface* f4se,F4SE::PluginInfo* info) noexcept {
@@ -55,11 +55,11 @@ extern "C" __declspec(dllexport) bool F4SEAPI F4SEPlugin_Query(const F4SE::Query
   auto directory=F4SE::log::log_directory();if(!directory)return false;
   if(!directory->generic_string().ends_with("Fallout4VR/F4SE")) *directory=directory->parent_path()/"Fallout4VR/F4SE";
   std::filesystem::create_directories(*directory);
-  auto logger=spdlog::rotating_logger_mt("ROCKWheelMenu",(*directory/"ROCKWheelMenu.log").string(),2*1024*1024,2,true);
+  auto logger=spdlog::rotating_logger_mt("RobCoPALM",(*directory/"RobCoPALM.log").string(),2*1024*1024,2,true);
   spdlog::set_default_logger(logger);logger->set_pattern("%Y-%m-%d %H:%M:%S.%e [%l] %v");logger->flush_on(spdlog::level::info);
-  info->infoVersion=F4SE::PluginInfo::kVersion;info->name="ROCKWheelMenu";info->version=1;
+  info->infoVersion=F4SE::PluginInfo::kVersion;info->name="RobCoPALM";info->version=1;
   spdlog::info("Query passed for Fallout4VR.exe 1.2.72");return true;
- }catch(...){OutputDebugStringA("ROCKWheelMenu Query failed\n");return false;}
+ }catch(...){OutputDebugStringA("RobCoPALM Query failed\n");return false;}
 }
 extern "C" __declspec(dllexport) bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* f4se) noexcept {
  try {
@@ -72,5 +72,5 @@ extern "C" __declspec(dllexport) bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadIn
   serialization->SetSaveCallback(onSave);
   serialization->SetLoadCallback(onLoad);
   spdlog::info("Load complete");return true;
- }catch(...){OutputDebugStringA("ROCKWheelMenu Load failed\n");return false;}
+ }catch(...){OutputDebugStringA("RobCoPALM Load failed\n");return false;}
 }

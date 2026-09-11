@@ -280,7 +280,7 @@ namespace rock_configurator
             const auto generation = s_actionGeneration.load(std::memory_order_relaxed);
             if (generation == (std::numeric_limits<std::uint64_t>::max)()) {
                 if (!s_actionGenerationExhausted.exchange(true, std::memory_order_relaxed)) {
-                    logger::critical("Wheel Config runtime action generation exhausted; input disabled");
+                    logger::critical("PALM Config runtime action generation exhausted; input disabled");
                 }
             } else {
                 s_actionGeneration.store(generation + 1, std::memory_order_release);
@@ -333,7 +333,7 @@ namespace rock_configurator
             }
             s_panelOpen.store(true, std::memory_order_release);
             logger::info(
-                "Wheel Config RPS configurator panel opened at {:.2f},{:.2f},{:.2f}",
+                "PALM Config RPS configurator panel opened at {:.2f},{:.2f},{:.2f}",
                 action.panelPose.position.x,
                 action.panelPose.position.y,
                 action.panelPose.position.z);
@@ -350,7 +350,7 @@ namespace rock_configurator
             invalidateQueuedRuntimeActions();
             s_pendingNumericEdit.reset();
             s_statusMessage = reason ? reason : "Panel closed";
-            logger::info("Wheel Config panel closed ({})", s_statusMessage);
+            logger::info("PALM Config panel closed ({})", s_statusMessage);
         }
 
         void applySettingChangeLocked(const SettingChangeResult& result)
@@ -747,7 +747,7 @@ namespace rock_configurator
         void drawTopBar()
         {
             constexpr std::array tabs{ConfiguratorTab::Wheel, ConfiguratorTab::Settings, ConfiguratorTab::Spawn};
-            constexpr std::array labels{"Wheel items", "RPS configurator", "Spawner"};
+            constexpr std::array labels{"PALM items", "RPS configurator", "Spawner"};
             const auto active = s_activeTab.load(std::memory_order_acquire);
             const auto p = ImGui::GetWindowPos();
             const float width = ImGui::GetWindowWidth();
@@ -755,7 +755,7 @@ namespace rock_configurator
             draw->AddLine({p.x, p.y + 94}, {p.x + width, p.y + 94}, packed(mutedColor(0.24f)));
             draw->AddRectFilled(p, {p.x + 5, p.y + 94}, packed(accentColor(0.7f)));
             ImGui::SetCursorPos({28, 15});
-            { ScopedFont font(devui::render::FontRole::Medium, 16); ImGui::TextColored(accentColor(), "R O C K  /  F I E L D  K I T"); }
+            { ScopedFont font(devui::render::FontRole::Medium, 16); ImGui::TextColored(accentColor(), "RobCo PALM"); }
             ImGui::SetCursorPos({28, 43});
             { ScopedFont font(devui::render::FontRole::Heading, 30); ImGui::TextUnformatted("Configuration"); }
             const float start = devui::visual::railWidth(width) + 14;
@@ -1395,7 +1395,7 @@ namespace rock_configurator
                 ImGuiWindowFlags_NoBringToFrontOnFocus |
                 ImGuiWindowFlags_NoNavFocus;
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-            if (!ImGui::Begin("Wheel Config##root", nullptr, flags)) {
+            if (!ImGui::Begin("PALM Config##root", nullptr, flags)) {
                 ImGui::End();
                 ImGui::PopStyleVar();
                 return true;
@@ -1428,7 +1428,7 @@ namespace rock_configurator
         } catch (...) {
             static std::atomic_bool logged = false;
             if (!logged.exchange(true, std::memory_order_relaxed)) {
-                logger::error("Wheel Config contained an exception while building the ImGui frame");
+                logger::error("PALM Config contained an exception while building the ImGui frame");
             }
             return false;
         }
@@ -1457,7 +1457,7 @@ namespace rock_configurator
             std::scoped_lock lock(s_runtimeMutex);
             if (!s_spawnBrowser.ensureIndexBuilt()) {
                 logger::warn(
-                    "Wheel Config spawn index not ready at game-data-ready ({}); it will retry on first use",
+                    "PALM Config spawn index not ready at game-data-ready ({}); it will retry on first use",
                     s_spawnBrowser.lastResult());
             }
         }

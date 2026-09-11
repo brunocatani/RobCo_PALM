@@ -45,7 +45,7 @@ void refreshWheelInventory() {
    if(!state().sessionReady.load() || state().generation.load()!=ticket)return;
    inventory.category=shared.model.category;inventory.status=shared.lastAction;inventory.gestures=shared.model.gestures;
    shared.model=std::move(inventory);shared.view={};
-  }catch(...){spdlog::error("Wheel inventory refresh failed");}
+  }catch(...){spdlog::error("PALM inventory refresh failed");}
  });
 }
 void actionStatus(const char* message) {
@@ -74,7 +74,7 @@ bool claimInput(const RockProviderFrameSnapshot& frame,bool gestureOwned) {
  request.skeletonGeneration=frame.skeletonGeneration;request.providerGeneration=frame.providerGeneration;
  const auto result=RockProviderApi::inst->setHandInputSuppressionV1(s.owner,&request);
  if(result!=RockProviderResultV1::Ok) {
-  spdlog::error("Wheel could not claim grenade-mode input: {}; grenade mode restored until the next load",static_cast<unsigned>(result));
+  spdlog::error("PALM could not claim grenade-mode input: {}; grenade mode restored until the next load",static_cast<unsigned>(result));
   s.presentationFailed=true;clearSuppression();return false;
  }
  s.suppression=true;return true;
@@ -94,7 +94,7 @@ void serviceCommand() {
   result.failure==RockProviderInteractionFailureV1::HandBusy?"No free hand — put something down and try again":
   result.failure==RockProviderInteractionFailureV1::TargetAlreadyOwned?"A throwable is already held or attaching":"Item handoff failed";
  actionStatus(message);
- spdlog::info("Wheel handoff {}: {} (query {}, failure {})",s.command,message,static_cast<unsigned>(query),static_cast<unsigned>(result.failure));
+ spdlog::info("PALM handoff {}: {} (query {}, failure {})",s.command,message,static_cast<unsigned>(query),static_cast<unsigned>(result.failure));
  if(query!=RockProviderResultV1::Ok)cancelCommand();else s.command=0;
 }
 bool ready(const RockProviderFrameSnapshot& f) {
@@ -130,7 +130,7 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
   auto* vm=RE::BSScript::Internal::VirtualMachine::GetSingleton();
   const RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback{};
   if(!vm || !Papyrus::detail::DispatchStaticCall(vm,RE::BSFixedString{"Debug"},RE::BSFixedString{"Notification"},callback,RE::BSFixedString{message}))
-   spdlog::warn("Wheel gesture notification unavailable: {}",message);
+   spdlog::warn("PALM gesture notification unavailable: {}",message);
   publishGestureState();
  }else if(choice&kItemChoice) {
   s.handGestures.clear(s.owner);
@@ -195,7 +195,7 @@ void openHeldWheel(const RockProviderFrameSnapshot& frame) {
    s.open=true;
    if(!presentPanel(true,&p)){
     s.open=false;s.presentationFailed=true;++s.generation;(void)s.selection.release();
-    spdlog::warn("Wheel presentation failed; grenade mode restored until the next load");
+    spdlog::warn("PALM presentation failed; grenade mode restored until the next load");
    }
    else spdlog::info("B-held wheel opened, generation {}",ticket);
   }catch(...){failWheelPresentation(ticket);}
@@ -210,7 +210,7 @@ void releaseHeldWheel() {
  s.choiceGeneration=ticket;
  s.choice=hover?(hover->configHovered?kConfigChoice:hover->hoveredGesture?hover->hoveredGesture:
   hover->hoveredItem?(kItemChoice|hover->hoveredItem):kCancelChoice):kCancelChoice;
- if(!hover){s.presentationFailed=true;spdlog::warn("Wheel had no rendered frame; grenade mode restored until the next load; check RPS_UI_Framework.log");}
+ if(!hover){s.presentationFailed=true;spdlog::warn("PALM had no rendered frame; grenade mode restored until the next load; check RPS_UI_Framework.log");}
  else spdlog::info("B release closed wheel using its last drawn selection, generation {}",ticket);
 }
 void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) noexcept {
@@ -229,13 +229,13 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
   if(nativeReady && s.frameworkUnavailable!=hostUnavailable) {
    s.frameworkUnavailable=hostUnavailable;
    if(hostReady)spdlog::info("RPS UI Framework readiness recovered");
-   else spdlog::warn("Wheel input unavailable: RPS UI Framework is not ready; check RPS_UI_Framework.log");
+   else spdlog::warn("PALM input unavailable: RPS UI Framework is not ready; check RPS_UI_Framework.log");
   }
   const bool usable=nativeReady && hostReady && !s.presentationFailed.load();
   s.inputReady=usable;rock_configurator::setAvailable(usable);
   const bool changed=s.sessionResetPending.exchange(false) || s.world!=frame->worldGeneration || s.skeleton!=frame->skeletonGeneration || s.provider!=frame->providerGeneration;
   if(!usable || changed) {
-   if(wasOwning)spdlog::info("Wheel input released: nativeMenu={}, contextAvailable={}, providerMenu={}, lifecycleChanged={}",nativeMenu,contextAvailable,frame->menuBlocking,changed);
+   if(wasOwning)spdlog::info("PALM input released: nativeMenu={}, contextAvailable={}, providerMenu={}, lifecycleChanged={}",nativeMenu,contextAvailable,frame->menuBlocking,changed);
    s.handGestures.clear(s.owner);publishGestureState();
    closeWheel();cancelCommand();clearSuppression();s.gesture={};
    s.world=frame->worldGeneration;s.skeleton=frame->skeletonGeneration;s.provider=frame->providerGeneration;
@@ -254,7 +254,7 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
   }
   const bool eligible=!s.command && !s.equipmentPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening();
   if(eligible && nativeTarget && button.held && s.gesture.armed && !s.gesture.down)
-   spdlog::info("Wheel B deferred to native activation target until physical release");
+   spdlog::info("PALM B deferred to native activation target until physical release");
   const double now=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
   const bool wasPending=s.gesture.pending;
   const double heldSeconds=now-s.gesture.pressedAt;
@@ -274,7 +274,7 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
   if(edge==HoldEdge::Open)openHeldWheel(*frame);
   else if(edge==HoldEdge::Release)releaseHeldWheel();
  }catch(...){
-  spdlog::error("Wheel input failed; grenade mode restored until the next load");
+  spdlog::error("PALM input failed; grenade mode restored until the next load");
   state().presentationFailed=true;state().inputReady=false;
   state().handGestures.clear(state().owner);
   cancelCommand();clearSuppression();state().gesture={};closeWheel();
@@ -304,7 +304,7 @@ void failWheelPresentation(std::uint64_t expectedGeneration) {
   if(expectedGeneration && s.generation.load()!=expectedGeneration)return;
   s.presentationFailed=true;s.inputReady=false;
  }
- spdlog::error("Wheel presentation unavailable; grenade mode restored until the next load");
+ spdlog::error("PALM presentation unavailable; grenade mode restored until the next load");
  closeWheel(expectedGeneration);
  // The owning input callback clears the claim, or its three-frame lease expires.
 }
@@ -336,10 +336,10 @@ bool startRuntime() {
   !api->setHandInputSuppressionV1 || !api->clearHandInputSuppressionV1 ||
   !api->requestForceGrabV1 || !api->getInteractionCommandResultV1 || !api->cancelInteractionCommandV1 || !api->getHandInteractionStateV1)return false;
  if(!hasFeatureBitV1(RockProviderApi::negotiatedFeatureBits,RockProviderFeatureBitV1::InventoryForceGrab)) {
-  spdlog::error("Wheel requires ROCK with inventory-to-hand support");return false;
+  spdlog::error("PALM requires ROCK with inventory-to-hand support");return false;
  }
  RockProviderConsumerRegistrationV1 registration;
- std::snprintf(registration.modName,sizeof(registration.modName),"ROCK Wheel Menu");
+ std::snprintf(registration.modName,sizeof(registration.modName),"RobCo PALM");
  registration.requestedCapabilities=static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::FrameSnapshots)|
   static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::HandInputSuppression)|
   static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::InteractionCommands)|
@@ -357,7 +357,7 @@ bool startRuntime() {
   (void)api->unregisterConsumerV1(s.owner);s.owner=0;return false;
  }
  rollback.complete=true;
- spdlog::info("Wheel registered with ROCK; tap right B for native input, hold {:.2f}s for the wheel, release over an item or Config",kWheelHoldSeconds);
+ spdlog::info("PALM registered with ROCK; tap right B for native input, hold {:.2f}s for the wheel, release over an item or Config",kWheelHoldSeconds);
  return true;
 }
 }

@@ -7,7 +7,7 @@
       "architecture": "x64",
       "binaryDir": "${sourceDir}/build-fast",
       "cacheVariables": {
-        "COPY_PLUGIN_BASE_PATH": "D:/FO4/mods/ROCK_Wheel_Menu",
+        "COPY_PLUGIN_BASE_PATH": "D:/FO4/mods/RobCo_PALM",
         "CMAKE_CONFIGURATION_TYPES": "Release"
       }
     }

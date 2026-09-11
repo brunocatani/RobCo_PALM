@@ -160,7 +160,7 @@ namespace rock_configurator
         auto* dataHandler = RE::TESDataHandler::GetSingleton();
         if (!dataHandler) {
             _lastResult = "TESDataHandler unavailable; spawn index not built";
-            logger::warn("Wheel Config spawn: TESDataHandler unavailable; index build skipped.");
+            logger::warn("PALM Config spawn: TESDataHandler unavailable; index build skipped.");
             return false;
         }
 
@@ -234,7 +234,7 @@ namespace rock_configurator
         const auto elapsedMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
         _lastResult = std::format("Indexed {} items from {} plugins", itemCount, _plugins.size());
         logger::info(
-            "Wheel Config spawn: indexed {} named items across {} plugins in {:.1f} ms ({} forms skipped without an owning plugin file).",
+            "PALM Config spawn: indexed {} named items across {} plugins in {:.1f} ms ({} forms skipped without an owning plugin file).",
             itemCount, _plugins.size(), elapsedMs, skippedUnowned);
         return true;
 #endif
@@ -359,13 +359,13 @@ namespace rock_configurator
         auto* player = RE::PlayerCharacter::GetSingleton();
         if (!player) {
             _lastResult = "Player unavailable; nothing added";
-            logger::warn("Wheel Config spawn: player singleton unavailable; add aborted.");
+            logger::warn("PALM Config spawn: player singleton unavailable; add aborted.");
             return;
         }
         auto* object = resolveSpawnableObject(action.formId);
         if (!object) {
             _lastResult = std::format("Form {:08X} is not a spawnable object", action.formId);
-            logger::warn("Wheel Config spawn: form {:08X} did not resolve to a TESBoundObject; add aborted.", action.formId);
+            logger::warn("PALM Config spawn: form {:08X} did not resolve to a TESBoundObject; add aborted.", action.formId);
             return;
         }
         if (action.count <= 0) {
@@ -378,7 +378,7 @@ namespace rock_configurator
         player->AddInventoryItem(object, extra, static_cast<std::uint32_t>(action.count), nullptr, nullptr, nullptr);
         const auto owned = player->GetInventoryObjectCount(object);
         _lastResult = std::format("Added {}× {} (inventory: {})", action.count, name.empty() ? "item" : name, owned);
-        logger::info("Wheel Config spawn: added {}x {:08X} ('{}') to the player inventory (now {}).",
+        logger::info("PALM Config spawn: added {}x {:08X} ('{}') to the player inventory (now {}).",
             action.count, action.formId, name, owned);
 #endif
     }

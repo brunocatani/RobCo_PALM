@@ -4,7 +4,8 @@
 namespace wheel {
 // One owned record in the F4SE co-save. Keys are plugin/local-ID strings and
 // equipment variant fingerprints, not load-order-dependent runtime FormIDs.
-inline constexpr std::uint32_t kWheelSaveID=0x5257464D; // RWFM
+// PALM starts a new identity; selections from the earlier wheel are not imported.
+inline constexpr std::uint32_t kWheelSaveID=0x50414C4D; // PALM
 inline constexpr std::uint32_t kPreferencesRecord=0x50524546; // PREF
 inline constexpr std::uint32_t kPreferencesVersion=1;
 // Covers all forty maximum-length keys/names, including quoted escaping.

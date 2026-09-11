@@ -734,7 +734,7 @@ namespace rock_configurator
 #endif
         std::error_code ec;
         if (_path.empty() || !std::filesystem::is_regular_file(_path, ec) || ec) {
-            _lastError = "The existing production Configuration INI is unavailable; Wheel Config will not create or replace it";
+            _lastError = "The existing production Configuration INI is unavailable; PALM Config will not create or replace it";
             return false;
         }
 

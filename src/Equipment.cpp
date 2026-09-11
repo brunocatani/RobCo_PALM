@@ -24,9 +24,9 @@ bool validateEquipmentRuntime() noexcept {
    matches(0xe6fea0,std::array<unsigned char,8>{0x4c,0x8b,0xdc,0x49,0x89,0x53,0x10,0x55}) &&
    matches(0xe70280,std::array<unsigned char,8>{0x48,0x8b,0xc4,0x48,0x89,0x58,0x18,0x55}) &&
    matches(0xc15f0,std::array<unsigned char,15>{0x48,0x89,0x5c,0x24,0x08,0x48,0x89,0x74,0x24,0x10,0x57,0x48,0x83,0xec,0x30});
-  spdlog::info("Wheel equipment native entrypoint guards: {}",equipmentReady?"accepted":"rejected");
+  spdlog::info("PALM equipment native entrypoint guards: {}",equipmentReady?"accepted":"rejected");
   return equipmentReady;
- }catch(...){spdlog::error("Wheel equipment entrypoint validation failed");return false;}
+ }catch(...){spdlog::error("PALM equipment entrypoint validation failed");return false;}
 }
 const char* toggleEquipment(const Item& selected,std::uint64_t owner) noexcept {
  try {
@@ -83,9 +83,9 @@ const char* toggleEquipment(const Item& selected,std::uint64_t owner) noexcept {
   const bool accepted=equipped?
    manager->UnequipObject(player,&objectInstance,1,nullptr,stackIndex,false,false,true,true,nullptr):
    manager->EquipObject(player,objectInstance,stackIndex,1,nullptr,false,false,true,true,false);
-  spdlog::info("Wheel equipment {} {:08X}, current stack {}, accepted {}",equipped?"unequip":"equip",selected.id,stackIndex,accepted);
+  spdlog::info("PALM equipment {} {:08X}, current stack {}, accepted {}",equipped?"unequip":"equip",selected.id,stackIndex,accepted);
   if(!accepted)return "The game refused that equipment change";
   return equipped?"Unequip requested":"Equip requested";
- }catch(...){spdlog::error("Wheel equipment change failed");return "Equipment change failed";}
+ }catch(...){spdlog::error("PALM equipment change failed");return "Equipment change failed";}
 }
 }

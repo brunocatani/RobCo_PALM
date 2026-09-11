@@ -124,7 +124,8 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
  const bool cancelHovered=navigation==static_cast<int>(kCancelNavigation);
  draw->AddCircleFilled(center,54*scale,cancelHovered?green:surface,48);
  draw->AddCircle(center,54*scale,cancelHovered?green:boundary,48,scale);
- centered(draw,center,13*scale,cancelHovered?dark:muted,"CANCEL");
+ centered(draw,{center.x,center.y-10*scale},16*scale,cancelHovered?dark:green,"P.A.L.M");
+ centered(draw,{center.x,center.y+16*scale},(cancelHovered?18:12)*scale,cancelHovered?dark:muted,"CANCEL");
  action.hoveredItem=hovered && hovered->count>0?selectionToken(*hovered):0;
  action.configHovered=navigation==static_cast<int>(kConfigNavigation);
  if(showingGestures) {

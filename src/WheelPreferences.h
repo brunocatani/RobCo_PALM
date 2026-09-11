@@ -43,7 +43,7 @@ inline Model curatedInventory(const Model& inventory,const Preferences& prefs) {
  return result;
 }
 inline void writePreferences(std::ostream& out,const Preferences& prefs) {
- out<<"WheelItems 2\n";
+ out<<"PALMItems 1\n";
  for(unsigned c=0;c<kCategoryCount;++c) {
   out<<"category "<<c<<' '<<prefs.enabled[c]<<'\n';
   for(const auto& f:prefs.slots[c])out<<"item "<<c<<' '<<std::quoted(f.key)<<' '<<std::quoted(f.name)<<'\n';
@@ -53,13 +53,12 @@ inline bool readPreferences(std::istream& in,Preferences& prefs) {
  Preferences parsed;std::string line;
  if(!std::getline(in,line))return false;
  if(!line.empty() && line.back()=='\r')line.pop_back();
- const unsigned categoryCount=line=="WheelItems 1"?3:line=="WheelItems 2"?kCategoryCount:0;
- if(!categoryCount)return false;
+ if(line!="PALMItems 1")return false;
  std::array<bool,kCategoryCount> categories{};unsigned lines=0;
  while(std::getline(in,line)) {
   if(++lines>kCategoryCount*(kSlots+1) || line.size()>2048)return false;
   std::istringstream row(line);std::string kind;unsigned c;
-  if(!(row>>kind>>c) || c>=categoryCount)return false;
+  if(!(row>>kind>>c) || c>=kCategoryCount)return false;
   if(kind=="category") {int enabled;if(categories[c] || !(row>>enabled) || enabled<0 || enabled>1)return false;
    categories[c]=true;parsed.enabled[c]=enabled!=0;
   }else if(kind=="item") {Favorite f;if(!(row>>std::quoted(f.key)>>std::quoted(f.name)) ||
@@ -68,7 +67,7 @@ inline bool readPreferences(std::istream& in,Preferences& prefs) {
   }else return false;
   row>>std::ws;if(!row.eof())return false;
  }
- if(in.bad() || !std::all_of(categories.begin(),categories.begin()+categoryCount,[](bool b){return b;}))return false;
+ if(in.bad() || !std::all_of(categories.begin(),categories.end(),[](bool b){return b;}))return false;
  prefs=std::move(parsed);return true;
 }
 }

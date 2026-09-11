@@ -42,7 +42,7 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
    ImGui::SetCurrentContext(render.imgui.get());installFonts();
    if(!render.icons.create(device,context))throw std::runtime_error("Embedded wheel icon atlases unavailable");
    if(!ImGui_ImplDX11_Init(device,context))throw std::runtime_error("DX11 backend unavailable");
-   render.backend=true;spdlog::info("Wheel renderer initialized");
+   render.backend=true;spdlog::info("PALM renderer initialized");
   }
   ImGui::SetCurrentContext(render.imgui.get());auto& io=ImGui::GetIO();
   io.DisplaySize={static_cast<float>(frame->pixelWidth),static_cast<float>(frame->pixelHeight)};
@@ -58,7 +58,7 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
    if(modelLock.owns_lock())action=drawWheel(shared.model,shared.view,{},{},render.icons.ids());}
   ImGui::Render();ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
   publishWheelSelection(ticket,action);
- } catch(const std::exception& e){spdlog::error("Wheel render failed: {}",e.what());if(ticket)failWheelPresentation(ticket);}
+ } catch(const std::exception& e){spdlog::error("PALM render failed: {}",e.what());if(ticket)failWheelPresentation(ticket);}
  catch(...){if(ticket)failWheelPresentation(ticket);}
 }
 }
@@ -69,18 +69,18 @@ bool installPanel() {
  if(!p.api || !p.api->registerConsumer || !p.api->unregisterConsumer || !p.api->registerPanel ||
   !p.api->unregisterPanel || !p.api->submitPanelPresentation || !p.api->isFrameworkReady ||
   !(p.api->featureBits&rpsui::sdk::featureMask(rpsui::sdk::FeatureV1::ShapedPanels))) {
-  spdlog::error("Wheel requires RPS UI Framework with shaped panel support");return false;
+  spdlog::error("PALM requires RPS UI Framework with shaped panel support");return false;
  }
  rpsui::sdk::ConsumerRegistrationV1 consumer;
- std::snprintf(consumer.consumerId,sizeof(consumer.consumerId),"rock.wheel");
- std::snprintf(consumer.displayName,sizeof(consumer.displayName),"ROCK Wheel Menu");
+ std::snprintf(consumer.consumerId,sizeof(consumer.consumerId),"robco.palm");
+ std::snprintf(consumer.displayName,sizeof(consumer.displayName),"RobCo PALM");
  consumer.requestedFeatures=p.api->featureBits;
  rpsui::sdk::ConsumerHandleV1 handle;
  if(p.api->registerConsumer(&consumer,&handle)!=rpsui::sdk::ResultV1::Ok)return false;
  p.owner=handle.ownerToken;
  rpsui::sdk::PanelRegistrationV1 panel;
- std::snprintf(panel.panelId,sizeof(panel.panelId),"rock.wheel.main");
- std::snprintf(panel.displayName,sizeof(panel.displayName),"ROCK Wheel Menu");
+ std::snprintf(panel.panelId,sizeof(panel.panelId),"robco.palm.main");
+ std::snprintf(panel.displayName,sizeof(panel.displayName),"RobCo PALM");
  panel.pixelWidth=1024;panel.pixelHeight=1024;
  panel.defaultPhysicalWidth=95;panel.minimumPhysicalWidth=95;panel.maximumPhysicalWidth=95;
  panel.flags=static_cast<std::uint32_t>(rpsui::sdk::PanelFlagV1::Transparent)|
@@ -103,13 +103,13 @@ bool presentPanel(bool open,const rpsui::sdk::PanelPoseV1* pose) {
  auto& p=panelState();std::scoped_lock lock(p.mutex);
  if(!p.panel || !p.api || (open && !pose))return false;
  if(open && !p.api->isFrameworkReady()) {
-  spdlog::warn("Wheel opening cancelled: RPS UI Framework is not ready; check RPS_UI_Framework.log");return false;
+  spdlog::warn("PALM opening cancelled: RPS UI Framework is not ready; check RPS_UI_Framework.log");return false;
  }
  rpsui::sdk::PanelPresentationV1 presentation;
  presentation.sequence=++p.sequence;presentation.open=open?1:0;if(pose)presentation.pose=*pose;
  const auto result=p.api->submitPanelPresentation(p.owner,p.panel,&presentation);
  if(result!=rpsui::sdk::ResultV1::Ok && result!=p.lastPresentationResult)
-  spdlog::error("Wheel panel {} rejected by RPS UI Framework: {}",open?"open":"close",static_cast<unsigned>(result));
+  spdlog::error("PALM panel {} rejected by RPS UI Framework: {}",open?"open":"close",static_cast<unsigned>(result));
  p.lastPresentationResult=result;
  return result==rpsui::sdk::ResultV1::Ok;
 }

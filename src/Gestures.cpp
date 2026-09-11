@@ -17,12 +17,12 @@ void Gestures::initialize() {
   api->getCurrentHandPose && api->isConfigOpen && api->isWristPipboyOpen && api->isOffHandGrippingWeapon &&
   RockProviderApi::inst->setHandVisualAuthorityV1 && RockProviderApi::inst->clearHandVisualAuthorityV1 &&
   supportsHandVisualAuthorityV1();
- spdlog::info("Wheel gestures: {} (skeleton pose resolver result {})",_available?"available through ROCK":"unavailable",error);
+ spdlog::info("PALM gestures: {} (skeleton pose resolver result {})",_available?"available through ROCK":"unavailable",error);
 }
 void Gestures::clearHand(std::uint64_t owner,unsigned hand,const char* reason) {
  if(!_view.active[hand])return;
  const auto result=RockProviderApi::inst->clearHandVisualAuthorityV1(owner,physicalHand(hand));
- spdlog::info("Wheel gesture cleared: hand={}, reason={}, result={}",hand?"left":"right",reason,static_cast<unsigned>(result));
+ spdlog::info("PALM gesture cleared: hand={}, reason={}, result={}",hand?"left":"right",reason,static_cast<unsigned>(result));
  // Even if explicit cleanup is rejected, stopping renewal expires ROCK's lease.
  _view.active[hand]=0;
 }
@@ -36,7 +36,7 @@ bool Gestures::publish(std::uint64_t owner,unsigned hand,const RockProviderFrame
  request.providerGeneration=frame.providerGeneration;
  const auto result=RockProviderApi::inst->setHandVisualAuthorityV1(owner,&request);
  if(result==RockProviderResultV1::Ok)return true;
- spdlog::warn("Wheel gesture publication rejected: hand={}, result={}",hand?"left":"right",static_cast<unsigned>(result));
+ spdlog::warn("PALM gesture publication rejected: hand={}, result={}",hand?"left":"right",static_cast<unsigned>(result));
  clearHand(owner,hand,"publication rejected");return false;
 }
 void Gestures::update(std::uint64_t owner,const RockProviderFrameSnapshot& frame,bool usable) {
@@ -102,7 +102,7 @@ const char* Gestures::select(std::uint64_t owner,unsigned choice,const RockProvi
  }
  _view.active[hand]=choice;
  if(!publish(owner,hand,frame))return "ROCK could not activate this gesture";
- spdlog::info("Wheel gesture activated: hand={}, pose={}, frame={}",hand?"left":"right",gesture.name,frame.frameIndex);
+ spdlog::info("PALM gesture activated: hand={}, pose={}, frame={}",hand?"left":"right",gesture.name,frame.frameIndex);
  return hand?"Gesture active on left hand":"Gesture active on right hand";
 }
 }

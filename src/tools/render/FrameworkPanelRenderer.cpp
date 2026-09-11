@@ -250,17 +250,17 @@ namespace devui::render
                 }
                 state.backendReady = true;
                 logger::info(
-                    "Wheel Config initialized its RPS UI consumer renderer "
+                    "PALM Config initialized its RPS UI consumer renderer "
                     "(device generation {})",
                     frame.deviceGeneration);
                 return true;
             } catch (const std::exception& error) {
                 logger::critical(
-                    "Wheel Config consumer renderer initialization failed: {}",
+                    "PALM Config consumer renderer initialization failed: {}",
                     error.what());
             } catch (...) {
                 logger::critical(
-                    "Wheel Config consumer renderer initialization failed");
+                    "PALM Config consumer renderer initialization failed");
             }
             releaseRenderState(state);
             state.initializationFailed = true;
@@ -383,7 +383,7 @@ namespace devui::render
         read(FontSource::Mono, monoPath);
         prepared.prepared = true;
         logger::info(
-            "Wheel Config preloaded {}/4 RPS UI font sources",
+            "PALM Config preloaded {}/4 RPS UI font sources",
             prepared.loadedSources);
     }
 
@@ -410,7 +410,7 @@ namespace devui::render
             !state.api->registerPanel ||
             !state.api->submitPanelPresentation) {
             logger::critical(
-                "RPS UI Framework V1 is unavailable; Wheel Config consumer disabled");
+                "RPS UI Framework V1 is unavailable; PALM Config consumer disabled");
             return false;
         }
 
@@ -418,11 +418,11 @@ namespace devui::render
         std::snprintf(
             consumer.consumerId,
             sizeof(consumer.consumerId),
-            "rock.wheel.workshop");
+            "robco.palm.workshop");
         std::snprintf(
             consumer.displayName,
             sizeof(consumer.displayName),
-            "Wheel Config");
+            "PALM Config");
         consumer.requestedFeatures = state.api->featureBits;
         rpsui::sdk::ConsumerHandleV1 handle{};
         if (state.api->registerConsumer(
@@ -430,7 +430,7 @@ namespace devui::render
                 &handle) != rpsui::sdk::ResultV1::Ok ||
             handle.ownerToken == 0) {
             logger::critical(
-                "Wheel Config could not register with RPS UI Framework");
+                "PALM Config could not register with RPS UI Framework");
             state.api = nullptr;
             return false;
         }
@@ -440,11 +440,11 @@ namespace devui::render
         std::snprintf(
             panel.panelId,
             sizeof(panel.panelId),
-            "rock.wheel.workshop.main");
+            "robco.palm.workshop.main");
         std::snprintf(
             panel.displayName,
             sizeof(panel.displayName),
-            "Wheel Config");
+            "PALM Config");
         panel.pixelWidth = kPanelPixelWidth;
         panel.pixelHeight = kPanelPixelHeight;
         panel.defaultPhysicalWidth = kDefaultPanelPhysicalWidth;
@@ -467,13 +467,13 @@ namespace devui::render
             state.presentationSequence = 1;
             state.installed = false;
             logger::critical(
-                "Wheel Config could not register its panel with RPS UI Framework");
+                "PALM Config could not register its panel with RPS UI Framework");
             return false;
         }
 
         state.installed = true;
         logger::info(
-            "Wheel Config registered RPS UI panel {} as owner {}",
+            "PALM Config registered RPS UI panel {} as owner {}",
             state.panelHandle,
             state.ownerToken);
         return true;
@@ -528,7 +528,7 @@ namespace devui::render
             &presentation);
         if (result != rpsui::sdk::ResultV1::Ok) {
             logger::error(
-                "Wheel Config panel presentation was rejected ({})",
+                "PALM Config panel presentation was rejected ({})",
                 static_cast<std::uint32_t>(result));
             return false;
         }
@@ -536,14 +536,14 @@ namespace devui::render
             rpsui::sdk::PanelStateV1 accepted;
             const auto query = state.api->getPanelState(state.ownerToken, state.panelHandle, &accepted);
             if (query == rpsui::sdk::ResultV1::Ok) {
-                logger::info("Wheel Config accepted pose: requested=({:.2f},{:.2f},{:.2f}) actual=({:.2f},{:.2f},{:.2f}) shift=({:.2f},{:.2f},{:.2f}) open={}",
+                logger::info("PALM Config accepted pose: requested=({:.2f},{:.2f},{:.2f}) actual=({:.2f},{:.2f},{:.2f}) shift=({:.2f},{:.2f},{:.2f}) open={}",
                     presentation.pose.center[0], presentation.pose.center[1], presentation.pose.center[2],
                     accepted.pose.center[0], accepted.pose.center[1], accepted.pose.center[2],
                     accepted.pose.center[0]-presentation.pose.center[0],
                     accepted.pose.center[1]-presentation.pose.center[1],
                     accepted.pose.center[2]-presentation.pose.center[2], accepted.open);
             } else {
-                logger::warn("Wheel Config accepted-pose query failed ({})", static_cast<std::uint32_t>(query));
+                logger::warn("PALM Config accepted-pose query failed ({})", static_cast<std::uint32_t>(query));
             }
         }
         return true;

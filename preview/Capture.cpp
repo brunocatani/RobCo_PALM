@@ -51,8 +51,8 @@ int main(int argc, char** argv) {
   };
   const auto settle=[&]{for(int i=0;i<10;++i)frame();};
   const auto click=[&](float x,float y){io.AddMousePosEvent(x,y);frame();io.AddMouseButtonEvent(0,true);frame();io.AddMouseButtonEvent(0,false);settle();};
-  const auto save=[&](const wchar_t* name) {
-   io.AddMousePosEvent(-100,-100);settle();
+  const auto save=[&](const wchar_t* name,ImVec2 pointer={-100,-100}) {
+   io.AddMousePosEvent(pointer.x,pointer.y);settle();
    auto cpuDesc=desc;cpuDesc.BindFlags=0;cpuDesc.Usage=D3D11_USAGE_STAGING;cpuDesc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
    ComPtr<ID3D11Texture2D> cpu;check(device->CreateTexture2D(&cpuDesc,nullptr,&cpu));context->CopyResource(cpu.Get(),texture.Get());
    D3D11_MAPPED_SUBRESOURCE map{};check(context->Map(cpu.Get(),0,D3D11_MAP_READ,0,&map));
@@ -96,6 +96,7 @@ int main(int argc, char** argv) {
    {7,"Missile Launcher",1,false,"",0,wheel::Icon::MissileLauncher},
    {8,"Combat Knife",1,false,"",0,wheel::Icon::CombatKnife}
   };save(L"weapon-icons.png");
+  save(L"center-selected.png",{width*.5f,height*.5f});
   showWheel=false;settle();
   showAtlas=true;
   for(atlasSheet=0;atlasSheet<wheel::kIconSheetCount;++atlasSheet) {

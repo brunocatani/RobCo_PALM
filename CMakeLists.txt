@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 4.2)
 set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE FILEPATH "")
 set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "")
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "")
-project(ROCKWheelMenu VERSION 0.1.0 LANGUAGES CXX RC)
+project(RobCoPALM VERSION 0.1.0 LANGUAGES CXX RC)
 get_filename_component(WORKSPACE "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
 set(COMMON_LIB_F4VR_PATH "${WORKSPACE}/libraries_and_tools/CommonLibF4VR" CACHE PATH "")
 set(ENABLE_FALLOUT_VR ON CACHE BOOL "" FORCE)
@@ -35,26 +35,27 @@ foreach(target wheel_workshop wheel_workshop_preview)
 endforeach()
 target_link_libraries(wheel_workshop PUBLIC CommonLibF4::CommonLibF4)
 target_compile_definitions(wheel_workshop_preview PUBLIC WHEEL_DESKTOP_PREVIEW)
-add_library(ROCKWheelMenu SHARED src/Plugin.cpp src/Runtime.cpp src/Gestures.cpp src/Inventory.cpp src/Equipment.cpp src/Renderer.cpp
+add_library(RobCoPALM SHARED src/Plugin.cpp src/Runtime.cpp src/Gestures.cpp src/Inventory.cpp src/Equipment.cpp src/Renderer.cpp
  src/tools/render/FrameworkPanelRenderer.cpp src/exports.def src/IconResources.rc)
+set_target_properties(RobCoPALM PROPERTIES OUTPUT_NAME wheelmenu)
 set_source_files_properties(src/Gestures.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-target_include_directories(ROCKWheelMenu PRIVATE src
+target_include_directories(RobCoPALM PRIVATE src
  "${WORKSPACE}/main_projects/RPS_SDK/SDK/ROCK/include"
  "${WORKSPACE}/secondary_projects/RPS_UI_Framework/SDK/include")
-target_link_libraries(ROCKWheelMenu PRIVATE CommonLibF4::CommonLibF4 spdlog::spdlog wheel_view wheel_workshop shell32 version bcrypt)
-target_precompile_headers(ROCKWheelMenu PRIVATE src/PCH.h)
-target_compile_options(ROCKWheelMenu PRIVATE /MP2 /Zi /wd4715 /utf-8)
-target_link_options(ROCKWheelMenu PRIVATE /DEBUG:FULL)
-add_executable(ROCKWheelPreview WIN32 preview/Main.cpp preview/WorkshopAdapter.cpp src/IconResources.rc "${IMGUI}/backends/imgui_impl_win32.cpp")
-target_link_libraries(ROCKWheelPreview PRIVATE wheel_view wheel_workshop_preview shell32)
+target_link_libraries(RobCoPALM PRIVATE CommonLibF4::CommonLibF4 spdlog::spdlog wheel_view wheel_workshop shell32 version bcrypt)
+target_precompile_headers(RobCoPALM PRIVATE src/PCH.h)
+target_compile_options(RobCoPALM PRIVATE /MP2 /Zi /wd4715 /utf-8)
+target_link_options(RobCoPALM PRIVATE /DEBUG:FULL)
+add_executable(PALMPreview WIN32 preview/Main.cpp preview/WorkshopAdapter.cpp src/IconResources.rc "${IMGUI}/backends/imgui_impl_win32.cpp")
+target_link_libraries(PALMPreview PRIVATE wheel_view wheel_workshop_preview shell32)
 target_compile_options(wheel_view PRIVATE /utf-8)
-target_compile_options(ROCKWheelPreview PRIVATE /utf-8)
+target_compile_options(PALMPreview PRIVATE /utf-8)
 set(COPY_PLUGIN_BASE_PATH "" CACHE PATH "MO2 mod root for auto-deployment")
 if(NOT COPY_PLUGIN_BASE_PATH STREQUAL "")
- add_custom_command(TARGET ROCKWheelMenu POST_BUILD
+ add_custom_command(TARGET RobCoPALM POST_BUILD
  COMMAND ${CMAKE_COMMAND} -E make_directory "${COPY_PLUGIN_BASE_PATH}/F4SE/Plugins"
- COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:ROCKWheelMenu>" "${COPY_PLUGIN_BASE_PATH}/F4SE/Plugins/"
- COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_PDB_FILE:ROCKWheelMenu>" "${COPY_PLUGIN_BASE_PATH}/F4SE/Plugins/")
+ COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:RobCoPALM>" "${COPY_PLUGIN_BASE_PATH}/F4SE/Plugins/"
+ COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_PDB_FILE:RobCoPALM>" "${COPY_PLUGIN_BASE_PATH}/F4SE/Plugins/")
 endif()
 enable_testing()
 add_executable(WheelPolicyTests tests/PolicyTests.cpp)
@@ -100,6 +101,6 @@ add_executable(WheelSaveStateTests tests/WheelSaveStateTests.cpp preview/Worksho
 target_link_libraries(WheelSaveStateTests PRIVATE wheel_workshop_preview)
 add_test(NAME Wheel.SaveState COMMAND WheelSaveStateTests)
 
-add_executable(ROCKConfigCapture preview/Capture.cpp preview/WorkshopAdapter.cpp src/IconResources.rc)
-target_link_libraries(ROCKConfigCapture PRIVATE wheel_workshop_preview windowscodecs ole32)
-target_compile_definitions(ROCKConfigCapture PRIVATE WHEEL_DESKTOP_PREVIEW)
+add_executable(PALMCapture preview/Capture.cpp preview/WorkshopAdapter.cpp src/IconResources.rc)
+target_link_libraries(PALMCapture PRIVATE wheel_workshop_preview windowscodecs ole32)
+target_compile_definitions(PALMCapture PRIVATE WHEEL_DESKTOP_PREVIEW)

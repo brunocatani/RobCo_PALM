@@ -32,9 +32,9 @@ LRESULT CALLBACK windowProc(HWND hwnd,UINT message,WPARAM wparam,LPARAM lparam){
 }
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
  ImGui_ImplWin32_EnableDpiAwareness();
- WNDCLASSW wc{};wc.lpfnWndProc=windowProc;wc.hInstance=instance;wc.lpszClassName=L"ROCKWheelPreview";wc.hCursor=LoadCursor(nullptr,IDC_ARROW);
+ WNDCLASSW wc{};wc.lpfnWndProc=windowProc;wc.hInstance=instance;wc.lpszClassName=L"PALMPreview";wc.hCursor=LoadCursor(nullptr,IDC_ARROW);
  if(!RegisterClassW(&wc))return 1;
- const auto hwnd=CreateWindowW(wc.lpszClassName,L"ROCK Field Kit — Hold B, hover, release",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,1800,1000,nullptr,nullptr,instance,nullptr);
+ const auto hwnd=CreateWindowW(wc.lpszClassName,L"RobCo PALM — Personal Access & Loadout Manager",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,1800,1000,nullptr,nullptr,instance,nullptr);
  if(!hwnd)return 1;
  DXGI_SWAP_CHAIN_DESC desc{};desc.BufferCount=2;desc.BufferDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
  desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.OutputWindow=hwnd;desc.SampleDesc.Count=1;desc.Windowed=TRUE;
