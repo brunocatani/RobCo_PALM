@@ -48,7 +48,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
  wheel::IconAtlas icons;if(!icons.create(device.Get(),context.Get()))return 1;
  auto catalog=wheel::demoInventory();wheel::publishWheelInventory(catalog);
  auto model=wheel::selectedWheelInventory(catalog);wheel::View view;
- rock_configurator::initializePreview();wheel::HoldGesture gesture;bool wheelOpen=false;
+ rock_configurator::initializePreview();wheel::ChordGesture gesture;bool wheelOpen=false;
  ShowWindow(hwnd,show);UpdateWindow(hwnd);bool done=false;
  while(!done){
   MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);if(message.message==WM_QUIT)done=true;}
@@ -60,7 +60,9 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   const auto size=ImGui::GetIO().DisplaySize;auto* bg=ImGui::GetBackgroundDrawList();
   bg->AddRectFilled({0,0},size,IM_COL32(6,10,6,255));
   if(cancelGesture){gesture={};wheelOpen=false;cancelGesture=false;}
-  const auto edge=gesture.update(focused && !rock_configurator::isOpen(),ImGui::IsKeyDown(ImGuiKey_B),ImGui::GetTime());
+  // Keyboard B emulates the complete VR chord in the desktop preview.
+  const bool held=ImGui::IsKeyDown(ImGuiKey_B);
+  const auto edge=gesture.update(focused && !rock_configurator::isOpen(),held,held,ImGui::GetTime());
   if(!focused)wheelOpen=false;
   if(edge==wheel::HoldEdge::Open) {
    wheelOpen=true;view={};const auto gestures=model.gestures;
