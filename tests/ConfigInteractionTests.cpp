@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <fstream>
 #include <Windows.h>
+#include <ROCKConfigurationApi.h>
 
 namespace {
 void require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
@@ -39,6 +40,25 @@ void scroll(ImGuiWindow* target) {
     for (int i = 0; i < 30; ++i) { io.AddMouseWheelEvent(0, -0.1f); frame(); }
     require(target->Scroll.y > before, "hovered column did not scroll without a click");
 }
+std::string renderedText() {
+    ImGui::NewFrame();
+    ImGui::LogToBuffer();
+    (void)rock_configurator::drawImGui(0, 0, 1440, 540);
+    std::string result = ImGui::GetCurrentContext()->LogBuffer.c_str();
+    ImGui::LogFinish();
+    ImGui::Render();
+    rock_configurator::drainPreviewActions();
+    return result;
+}
+std::uint64_t fixtureRevision() noexcept { return 1; }
+bool fixtureVisit(rock::configuration_api::Group group, rock::configuration_api::VisitorV1 visitor, void* context) noexcept {
+    using namespace rock::configuration_api;
+    const SettingV1 consumer{"PhysicsInteraction", "bConsumerFixture", "true", "true", "Shared", "consumer-fixture", ValueType::Boolean, 0};
+    const SettingV1 developer{"PhysicsInteraction", "fMovedFixture", "4", "4", "Shared", "developer-fixture", ValueType::Float, 0};
+    visitor(group == Group::Consumer ? &consumer : &developer, context);
+    return true;
+}
+bool fixtureWrite(rock::configuration_api::Group, const char*, const char*, const char*, char*, std::uint32_t) noexcept { return false; }
 }
 
 int main() {
@@ -104,7 +124,22 @@ int main() {
             click(45.0f + count * 168.0f, 120);
             require(window("settings-rows")->ID == firstId, "hidden mod tab remained clickable");
         }
-        std::cout << "Config headless interaction and contextual scrolling passed\n";
+        const rock::configuration_api::ApiV1 configApi{1, sizeof(rock::configuration_api::ApiV1), fixtureRevision, fixtureVisit, fixtureWrite};
+        rock_configurator::initializeRpsPreview({path, {}, {}}, {true, false, false}, &configApi);
+        rock_configurator::setPreviewOpen(true); frame(); frame();
+        click(railWidth + 250, 50);
+        const auto consumerText = renderedText();
+        require(consumerText.find("consumer-fixture") != std::string::npos && consumerText.find("developer-fixture") == std::string::npos,
+            "ROCK page mixed consumer and developer controls");
+        const auto consumerWorkspace = window("settings-rows")->ID;
+        click(220, 120);
+        const auto developerText = renderedText();
+        require(developerText.find("developer-fixture") != std::string::npos && developerText.find("consumer-fixture") == std::string::npos,
+            "Developer tab is missing or does not expose moved non-debug options");
+        require(window("settings-rows")->ID != consumerWorkspace, "Developer page reused the consumer workspace");
+        click(45, 120);
+        require(window("settings-rows")->ID == consumerWorkspace, "ROCK tab did not restore the consumer workspace");
+        std::cout << "Config interaction, scrolling, and separate ROCK/Developer pages passed\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n'; ImGui::DestroyContext(); return 1;
     }

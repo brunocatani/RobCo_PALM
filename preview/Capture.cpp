@@ -59,6 +59,11 @@ int main(int argc, char** argv) {
   };
   const float rail=devui::visual::railWidth(static_cast<float>(width));
   settle();
+  const bool settingsOnly = argc > 3 && std::string_view(argv[3]) == "--settings-only";
+  if (settingsOnly) {
+   click(rail+250,55);save(L"rock-settings.png");
+   click(220,120);save(L"developer-settings.png");
+  } else {
   click(rail+60,344);click(rail+60,392);click(rail+60,440);
   save(L"wheel-items.png");
   click(100,367);click(rail+60,344);click(rail+60,392);save(L"weapon-favorites.png");
@@ -67,10 +72,12 @@ int main(int argc, char** argv) {
   showWheel=true;save(L"equipment-wheel.png");showWheel=false;settle();
   click(rail+250,55);save(L"rock-settings.png");
   click(100,385);save(L"rock-settings-controls.png");
-  click(220,120);save(L"paper-settings.png");
-  click(385,120);save(L"scissors-settings.png");
+  click(220,120);save(L"developer-settings.png");
+  click(385,120);save(L"paper-settings.png");
+  click(555,120);save(L"scissors-settings.png");
   click(rail+440,55);save(L"spawner.png");
   click(rail+100,335);save(L"item-actions.png");
+  }
   ImGui_ImplDX11_Shutdown();ImGui::DestroyContext();CoUninitialize();
   std::cout<<"Rendered Config views to "<<output.string()<<'\n';return 0;
  }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}

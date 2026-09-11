@@ -3,6 +3,7 @@
 #include <array>
 #include "PanelResizePolicy.h"
 #include "render/NativeRenderer.h"
+namespace rock::configuration_api { struct ApiV1; }
 namespace rock_configurator {
 void onGameDataReady();
 void onGameSessionReady();
@@ -18,7 +19,8 @@ void openAt(const devui::render::PanelPose& wheelPose);
 void onFrameworkPanelFrame(float physicalWidth, panel_resize::Handle hovered, panel_resize::Handle active) noexcept;
 #ifdef WHEEL_DESKTOP_PREVIEW
 void initializePreview(const std::filesystem::path& settingsPath = {});
-void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available);
+void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available,
+    const rock::configuration_api::ApiV1* rockApi = nullptr);
 void setPreviewOpen(bool open);
 void drainPreviewActions();
 #endif

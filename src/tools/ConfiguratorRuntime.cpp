@@ -1509,15 +1509,17 @@ namespace rock_configurator
         initializeRpsPreview(paths, {true, settingsPath.empty(), settingsPath.empty()});
     }
 
-    void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available)
+    void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available,
+        const rock::configuration_api::ApiV1* rockApi)
     {
         std::scoped_lock lock(s_runtimeMutex);
         invalidateQueuedRuntimeActions();
         s_modIndex = 0;
         s_activeTab = ConfiguratorTab::Wheel;
-        s_modSettings[3] = ModSettings{IniSettingsStore({}, RpsMod::RockDeveloper)};
+        s_modSettings[3] = ModSettings{IniSettingsStore({}, RpsMod::RockDeveloper, rockApi)};
+        s_modSettings[3].available = available[0] && (paths[0].empty() || rockApi != nullptr);
         for (std::size_t i = 0; i < paths.size(); ++i) {
-            s_modSettings[i] = ModSettings{IniSettingsStore(paths[i], kRpsMods[i].id)};
+            s_modSettings[i] = ModSettings{IniSettingsStore(paths[i], kRpsMods[i].id, i == 0 ? rockApi : nullptr)};
             s_modSettings[i].available = available[i];
         }
         s_providerInputReady.store(true);
