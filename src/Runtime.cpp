@@ -262,7 +262,12 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
   const bool usable=s.sessionReady.load() && frame->ready && frameworkReady() && !s.presentationFailed.load();
   s.inputReady=usable;rock_configurator::setAvailable(usable);
   const bool reset=s.sessionResetPending.exchange(false);
-  if(!usable || providerChanged || reset) {
+  if(providerChanged) {
+   s.handGestures.clear(s.owner);publishGestureState();cancelCommand();
+   s.world=s.rockFrame.worldGeneration;s.skeleton=s.rockFrame.skeletonGeneration;s.provider=s.rockFrame.providerGeneration;
+   refreshWheelInventory();
+  }
+  if(!usable || reset) {
    s.handGestures.clear(s.owner);publishGestureState();closeWheel();cancelCommand();clearSuppression();s.gesture={};s.clickRequested=false;
    s.world=s.rockFrame.worldGeneration;s.skeleton=s.rockFrame.skeletonGeneration;s.provider=s.rockFrame.providerGeneration;
    return;
@@ -363,7 +368,7 @@ bool startRuntime() {
   CoTaskMemFree(documents);initializeControls(path);if(takeControlsSaveRequest())persistControls();
  }else {spdlog::error("PALM Documents folder unavailable");return false;}
  s.controls=snapshotControls();setGestureIntegrationAvailable(false);
- constexpr auto requiredTableBytes=static_cast<std::uint32_t>(offsetof(RockProviderApi,getNativeInputContextV1)+sizeof(std::declval<RockProviderApi>().getNativeInputContextV1));
+ constexpr auto requiredTableBytes=static_cast<std::uint32_t>(offsetof(RockProviderApi,cancelInteractionCommandV1)+sizeof(std::declval<RockProviderApi>().cancelInteractionCommandV1));
  const auto initialized=RockProviderApi::initialize(ROCK_PROVIDER_API_VERSION,requiredTableBytes);
  auto* api=RockProviderApi::inst;
  if(!initialized && api && api->registerConsumerV1 && api->unregisterConsumerV1 && api->getFrameSnapshot &&
@@ -381,9 +386,8 @@ bool startRuntime() {
    s.owner=handle.ownerToken;if(gestures)s.handGestures.initialize();
   }else if(handle.ownerToken)(void)api->unregisterConsumerV1(handle.ownerToken);
  }
- if(GetModuleHandleW(L"ROCK.dll") && !s.owner) {
-  spdlog::error("Loaded ROCK could not register PALM's item integration; refusing unintended vanilla actions");return false;
- }
+ if(GetModuleHandleW(L"ROCK.dll") && !s.owner)
+  spdlog::warn("ROCK item/gesture integration unavailable; PALM continues with native controls and vanilla items");
  s.inputToken=s.inputApi->subscribe(onFrame,nullptr);
  if(!s.inputToken){if(s.owner)(void)api->unregisterConsumerV1(s.owner);s.owner=0;return false;}
  rollback.complete=true;
