@@ -2,10 +2,12 @@
 
 #include <ShlObj.h>
 
+#include <array>
 #include <charconv>
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 
 namespace rock_configurator
@@ -217,7 +219,7 @@ namespace rock_configurator
     {
         setting.selectedOptionIndex.reset();
         setting.numericValueValid = false;
-        setting.type = inferType(setting.value);
+        if (!setting.fromRockApi) setting.type = inferType(setting.value);
         setting.control = setting_control::build(
             controlValueType(setting.type),
             setting.key,
@@ -244,6 +246,93 @@ namespace rock_configurator
         }
     }
 
+    rock::configuration_api::Group IniSettingsStore::rockGroup() const noexcept
+    {
+        return _mod == RpsMod::RockDeveloper ? rock::configuration_api::Group::Developer : rock::configuration_api::Group::Consumer;
+    }
+
+    bool IniSettingsStore::connectRockApi()
+    {
+#ifdef WHEEL_DESKTOP_PREVIEW
+        // Production previews stay read-only; an injected API is only a test fixture.
+        if (!_configurationApi) { _useRockApi = false; return true; }
+#endif
+        if (!_configurationApi) {
+            const auto module = GetModuleHandleW(L"ROCK.dll");
+            const auto getApi = module ? reinterpret_cast<rock::configuration_api::GetApiV1>(
+                GetProcAddress(module, rock::configuration_api::kExportName)) : nullptr;
+            if (getApi) _configurationApi = getApi(rock::configuration_api::kVersion);
+        }
+        if (!_configurationApi || _configurationApi->version != rock::configuration_api::kVersion ||
+            _configurationApi->byteSize < sizeof(rock::configuration_api::ApiV1) ||
+            !_configurationApi->revision || !_configurationApi->visit || !_configurationApi->setValue) {
+            _configurationApi = nullptr;
+            _lastError = "ROCK's configuration interface is unavailable; load the matching ROCK version";
+            return false;
+        }
+        return true;
+    }
+
+    bool IniSettingsStore::needsReload() const noexcept
+    {
+        return _configurationApi && _configurationApi->revision() != _loadedRevision;
+    }
+
+    bool IniSettingsStore::reloadRockSnapshot()
+    {
+        struct Snapshot { IniSettingsStore* store; std::vector<SettingRecord> settings; bool failed = false; } snapshot{this, {}};
+        const auto visitor = [](const rock::configuration_api::SettingV1* entry, void* context) noexcept {
+            auto& snapshot = *static_cast<Snapshot*>(context);
+            if (snapshot.failed) return;
+            try {
+                auto& store = *snapshot.store;
+                SettingRecord setting;
+                setting.section = entry->section;
+                setting.key = entry->key;
+                setting.id = setting.section + "." + setting.key;
+                setting.value = entry->value;
+                setting.defaultValue = entry->defaultValue;
+                setting.category = entry->category;
+                setting.description = entry->description;
+                setting.fromRockApi = true;
+                setting.overridden = entry->overridden != 0;
+                setting.lineIndex = (std::numeric_limits<std::size_t>::max)();
+                switch (entry->type) {
+                case rock::configuration_api::ValueType::Boolean: setting.type = SettingType::Boolean; break;
+                case rock::configuration_api::ValueType::Integer: setting.type = SettingType::Integer; break;
+                case rock::configuration_api::ValueType::Float: setting.type = SettingType::Float; break;
+                case rock::configuration_api::ValueType::String: setting.type = SettingType::String; break;
+                }
+                // Retain the consumer file's category order and help. The developer
+                // page gets its complete help/catalog even when no file exists.
+                if (store._mod == RpsMod::Rock) {
+                    if (const auto old = store.indexForId(setting.id)) {
+                        const auto& previous = store._settings[*old];
+                        setting.category = previous.category;
+                        setting.description = previous.description;
+                        setting.lineIndex = previous.lineIndex;
+                    }
+                }
+                store.refreshControl(setting);
+                snapshot.settings.push_back(std::move(setting));
+            } catch (...) {
+                snapshot.failed = true;
+            }
+        };
+        if (!_configurationApi->visit(rockGroup(), visitor, &snapshot) || snapshot.failed) {
+            _lastError = "ROCK configuration is not ready";
+            return false;
+        }
+        if (_mod == RpsMod::Rock) {
+            std::stable_sort(snapshot.settings.begin(), snapshot.settings.end(), [](const auto& a, const auto& b) {
+                return a.lineIndex < b.lineIndex;
+            });
+        }
+        _settings = std::move(snapshot.settings);
+        _loadedRevision = _configurationApi->revision();
+        return true;
+    }
+
     bool IniSettingsStore::load()
     {
         if (_path.empty()) {
@@ -267,8 +356,12 @@ namespace rock_configurator
             return false;
         }
 
+        if (_useRockApi && !connectRockApi()) return false;
+        if (_useRockApi && _mod == RpsMod::RockDeveloper) return reloadRockSnapshot();
+
         std::ifstream input(_path);
         if (!input) {
+            if (_useRockApi) return reloadRockSnapshot();
             _lastError = std::format("Configuration INI is not readable: {}", _path.string());
             return false;
         }
@@ -354,7 +447,7 @@ namespace rock_configurator
             _settings.push_back(std::move(setting));
         }
 
-        return true;
+        return _useRockApi ? reloadRockSnapshot() : true;
     }
 
     std::optional<std::size_t> IniSettingsStore::indexForId(std::string_view id) const
@@ -709,6 +802,19 @@ namespace rock_configurator
                 .message = "value unchanged",
                 .setting = setting,
             };
+        }
+        if (setting.fromRockApi) {
+#ifndef WHEEL_DESKTOP_PREVIEW
+            std::array<char, 512> error{};
+            if (!_configurationApi || !_configurationApi->setValue(rockGroup(), setting.section.c_str(),
+                    setting.key.c_str(), normalizedValue->c_str(), error.data(), static_cast<std::uint32_t>(error.size()))) {
+                _lastError = error[0] ? error.data() : "ROCK configuration write failed";
+                return { .changed = false, .saved = false, .message = _lastError, .setting = setting };
+            }
+#endif
+            setting.value = *normalizedValue;
+            refreshControl(setting);
+            return { .changed = true, .saved = true, .message = "saved", .setting = setting };
         }
         if (setting.lineIndex >= _lines.size()) {
             return {

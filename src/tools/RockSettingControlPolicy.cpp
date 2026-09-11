@@ -377,7 +377,7 @@ namespace rock_configurator::setting_control
         std::string_view description,
         RpsMod mod)
     {
-        if (mod != RpsMod::Rock) {
+        if (mod != RpsMod::Rock && mod != RpsMod::RockDeveloper) {
             if (type == ValueType::Boolean) return { .kind = Kind::Checkbox };
             if (mod == RpsMod::Paper && key == "sMaximumMode")
                 return { .kind = Kind::Dropdown, .options = {{"User","User"},{"Observe","Observe"},{"Harvest","Harvest"},{"Capture","Capture"}} };

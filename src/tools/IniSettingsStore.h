@@ -2,6 +2,7 @@
 
 #include "RockSettingControlPolicy.h"
 #include "RpsMod.h"
+#include <ROCKConfigurationApi.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -29,6 +30,9 @@ namespace rock_configurator
         std::string value;
         std::string category;
         std::string description;
+        std::string defaultValue;
+        bool fromRockApi = false;
+        bool overridden = false;
         SettingType type{ SettingType::String };
         setting_control::Spec control;
         double numericValue{ 0.0 };
@@ -48,10 +52,14 @@ namespace rock_configurator
     class IniSettingsStore
     {
     public:
-        explicit IniSettingsStore(std::filesystem::path path = {}, RpsMod mod = RpsMod::Rock) : _path(std::move(path)), _mod(mod) {}
+        explicit IniSettingsStore(std::filesystem::path path = {}, RpsMod mod = RpsMod::Rock,
+            const rock::configuration_api::ApiV1* api = nullptr) :
+            _path(std::move(path)), _mod(mod), _configurationApi(api),
+            _useRockApi(api || (_path.empty() && (mod == RpsMod::Rock || mod == RpsMod::RockDeveloper))) {}
 
         [[nodiscard]] bool load();
         [[nodiscard]] bool reload();
+        [[nodiscard]] bool needsReload() const noexcept;
 
         [[nodiscard]] const std::vector<SettingRecord>& settings() const noexcept { return _settings; }
         [[nodiscard]] const std::filesystem::path& path() const noexcept { return _path; }
@@ -84,6 +92,9 @@ namespace rock_configurator
         [[nodiscard]] std::filesystem::path resolveProductionIniPath() const;
         [[nodiscard]] static SettingType inferType(std::string_view value);
         void refreshControl(SettingRecord& setting) const;
+        [[nodiscard]] bool connectRockApi();
+        [[nodiscard]] bool reloadRockSnapshot();
+        [[nodiscard]] rock::configuration_api::Group rockGroup() const noexcept;
         [[nodiscard]] static std::string cycleStringValue(const SettingRecord& setting, int direction);
         [[nodiscard]] static std::string adjustNumericValue(const SettingRecord& setting, int direction);
 
@@ -93,6 +104,9 @@ namespace rock_configurator
 
         std::filesystem::path _path;
         RpsMod _mod;
+        const rock::configuration_api::ApiV1* _configurationApi = nullptr;
+        bool _useRockApi = false;
+        std::uint64_t _loadedRevision = 0;
         std::vector<IniLine> _lines;
         std::vector<SettingRecord> _settings;
         std::string _lastError;

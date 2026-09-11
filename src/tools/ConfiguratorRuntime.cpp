@@ -52,6 +52,7 @@ namespace rock_configurator
             UiSetNumericRow,
             UiSetOptionRow,
             UiReload,
+            UiRefreshSettings,
             UiResetPanelSize,
             UiSpawnSelectPlugin,
             UiSpawnSelectCategory,
@@ -106,10 +107,11 @@ namespace rock_configurator
             SelectionAnchor anchor;
             std::size_t activeIndex = 0;
         };
-        std::array<ModSettings, 3> s_modSettings{
+        std::array<ModSettings, 4> s_modSettings{
             ModSettings{IniSettingsStore({}, RpsMod::Rock)},
             ModSettings{IniSettingsStore({}, RpsMod::Paper)},
-            ModSettings{IniSettingsStore({}, RpsMod::Scissors)}
+            ModSettings{IniSettingsStore({}, RpsMod::Scissors)},
+            ModSettings{IniSettingsStore({}, RpsMod::RockDeveloper)}
         };
         std::size_t s_modIndex = 0;
         ModSettings& activeSettings() { return s_modSettings[s_modIndex]; }
@@ -120,6 +122,7 @@ namespace rock_configurator
 
         std::atomic<ConfiguratorTab> s_activeTab{ ConfiguratorTab::Wheel };
         std::atomic_bool s_panelOpen = false;
+        std::atomic_bool s_settingsRefreshQueued = false;
         std::atomic_bool s_panelOpening = false;
         std::atomic<float> s_sessionPanelPhysicalWidth{
             devui::render::kDefaultPanelPhysicalWidth
@@ -285,6 +288,7 @@ namespace rock_configurator
             s_actionReadIndex = 0;
             s_actionWriteIndex = 0;
             s_actionCount = 0;
+            s_settingsRefreshQueued.store(false);
         }
 
         bool publishPanelToRenderer(const PanelPose& pose) noexcept
@@ -510,6 +514,12 @@ namespace rock_configurator
                 break;
             case RuntimeActionKind::UiSetOptionRow:
                 setOptionRowLocked(action);
+                break;
+            case RuntimeActionKind::UiRefreshSettings:
+                s_settingsRefreshQueued.store(false);
+                if (s_activeTab.load() == ConfiguratorTab::Settings) {
+                    (void)readActiveStoreLocked(true);
+                }
                 break;
             case RuntimeActionKind::UiReload:
                 reloadActiveLocked(action.tab);
@@ -874,6 +884,10 @@ namespace rock_configurator
                 ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30);
                 ImGui::TextUnformatted(setting.key.c_str());
                 if (!setting.description.empty()) ImGui::TextWrapped("%s", setting.description.c_str());
+                if (setting.fromRockApi) {
+                    ImGui::Text("Default: %s", setting.defaultValue.c_str());
+                    ImGui::TextUnformatted(setting.overridden ? "Saved override" : "Using default");
+                }
                 ImGui::TextDisabled("%s", setting.id.c_str());
                 ImGui::PopTextWrapPos();
                 ImGui::EndTooltip();
@@ -1218,7 +1232,7 @@ namespace rock_configurator
                 ImGui::BeginChild("rps-mod-tabs", {0, 64});
                 ImGui::SetCursorPos({18, 4});
                 bool first = true;
-                for (std::size_t i = 0; i < s_modSettings.size(); ++i) {
+                for (const std::size_t i : {0u, 3u, 1u, 2u}) {
                     if (!s_modSettings[i].available) continue;
                     if (!first) ImGui::SameLine(0, 12);
                     first = false;
@@ -1353,6 +1367,10 @@ namespace rock_configurator
         }
 
         try {
+            if (s_activeTab.load() == ConfiguratorTab::Settings && !s_pendingNumericEdit &&
+                activeSettings().store.needsReload() && !s_settingsRefreshQueued.exchange(true)) {
+                if (!queueUiAction({.kind = RuntimeActionKind::UiRefreshSettings})) s_settingsRefreshQueued.store(false);
+            }
             ScopedFont configFont(devui::render::FontRole::Body, 26);
             ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_Always);
             if (backRequested) {
@@ -1497,7 +1515,8 @@ namespace rock_configurator
         invalidateQueuedRuntimeActions();
         s_modIndex = 0;
         s_activeTab = ConfiguratorTab::Wheel;
-        for (std::size_t i = 0; i < s_modSettings.size(); ++i) {
+        s_modSettings[3] = ModSettings{IniSettingsStore({}, RpsMod::RockDeveloper)};
+        for (std::size_t i = 0; i < paths.size(); ++i) {
             s_modSettings[i] = ModSettings{IniSettingsStore(paths[i], kRpsMods[i].id)};
             s_modSettings[i].available = available[i];
         }
