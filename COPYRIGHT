@@ -1,0 +1,23 @@
+RobCo PALM
+Copyright (C) 2026 Bruno Catani
+
+SPDX-License-Identifier: GPL-3.0-or-later
+
+RobCo PALM is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+RobCo PALM is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with RobCo PALM. If not, see <https://www.gnu.org/licenses/>.
+
+This declaration applies to the original RobCo PALM source, public SDK
+headers, build files, documentation, and project assets in this repository.
+Third-party components, including the copied FRIK API header, retain their
+respective licenses and notices; see THIRD_PARTY_NOTICES.txt.
+The complete GNU General Public License version 3 is provided in LICENSE.

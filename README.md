@@ -2,7 +2,7 @@
 
 **Personal Access & Loadout Manager**
 
-RobCo P.A.L.M. is a wheel menu for Fallout 4 VR. Hold B, point at an item, and release to select it. It brings weapons, armor, consumables, hand gestures, and configuration into a green RobCo-style radial interface.
+RobCo P.A.L.M. is a wheel menu for Fallout 4 VR. Hold right trigger + grab, point at an item, and release either button to select it. It brings weapons, armor, consumables, hand gestures, and configuration into a green RobCo-style radial interface.
 
 ## Features
 
@@ -27,15 +27,15 @@ PAPER and SCISSORS are optional integrations for their corresponding configurati
 
 ## Controls
 
-1. Hold the physical right controller's **B** button for approximately 0.25 seconds.
+1. Hold the physical right controller's **trigger and grab buttons together** for approximately 0.25 seconds.
 2. Point at a category in the inner ring or an item in the outer ring.
-3. Release **B** to choose the highlighted item. Point at the center to cancel; **CANCEL** beneath the **P.A.L.M** branding grows when the center is highlighted.
+3. Release **either button** to choose the highlighted item. Release both before opening the wheel again. Point at the center to cancel; **CANCEL** beneath the **P.A.L.M** branding grows when the center is highlighted.
 
 Choose **Config** to set up your wheel items. The **Left Gestures** and **Right Gestures** entries choose which hand receives a pose. Selecting the active gesture again clears it.
 
 The **Items** tab chooses inventory entries. **PALM settings** controls visible sections. The inner ring supports up to **10 entries**, including Config; Gestures occupies two entries. Hiding sections keeps their item choices, and Config and Cancel always remain accessible.
 
-A short B tap keeps its native action. While PALM is available, it replaces ROCK's grenade quick draw; grenades remain accessible through the wheel.
+**B** remains available for VATS on a tap and grenades on a hold, using ROCK's immersive-grenades setting. The complete right trigger/grab chord belongs exclusively to PALM through both releases.
 
 ## Plugin and configuration
 
@@ -62,3 +62,22 @@ ctest --test-dir build-fast -C Release --output-on-failure --parallel 2
 ```
 
 The preset automatically deploys the DLL and PDB to `D:/FO4/mods/RobCo_PALM/F4SE/Plugins/`. `PALMPreview.exe` provides a desktop preview; `PALMCapture.exe` renders screenshots without opening a window. Desktop previews do not validate VR input or stereo presentation.
+
+## Source code and documentation
+
+- [GitHub repository and source code](https://github.com/brunocatani/RobCo_PALM)
+- [DevArtificial documentation](https://devartificial.pro/docs/rps-stack/wheel-menu)
+- [RPS UI Framework](https://github.com/brunocatani/RPS_UI_Framework)
+
+## Credits
+
+- [CommonLibF4VR](https://github.com/ArthurHub/CommonLibF4VR) and its contributors.
+- [Omar Cornut](https://github.com/ocornut) and the [Dear ImGui](https://github.com/ocornut/imgui) contributors.
+- [Arthur](https://github.com/ArthurHub), [RollingRock](https://github.com/rollingrock), and the FRIK contributors for FRIK and its public hand-pose API.
+
+## License
+
+Original RobCo PALM code is licensed under GNU General Public License version 3
+or later (`GPL-3.0-or-later`). See [COPYRIGHT](COPYRIGHT) and [LICENSE](LICENSE).
+Third-party components retain their respective licenses; their notices are in
+[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
