@@ -187,7 +187,7 @@ void openHeldWheel(const RockProviderFrameSnapshot& frame) {
    auto inventory=readInventory();auto& shared=sharedModel();
    {std::scoped_lock lock(shared.mutex);
     if(!s.sessionReady.load() || s.generation.load()!=ticket)return;
-    inventory.category=shared.model.category;inventory.gestures=shared.model.gestures;
+    inventory.category=Category::Weapons;inventory.gestures=shared.model.gestures;inventory.gestures.showing=false;
     if(!shared.lastAction.empty())inventory.status=shared.lastAction;
     shared.model=std::move(inventory);shared.view={};}
    std::scoped_lock presentationLock(s.presentationMutex);

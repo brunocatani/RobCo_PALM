@@ -66,7 +66,8 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   if(!focused)wheelOpen=false;
   if(edge==wheel::HoldEdge::Open) {
    wheelOpen=true;view={};const auto gestures=model.gestures;
-   model=wheel::selectedWheelInventory(catalog);model.gestures=gestures;
+   model=wheel::selectedWheelInventory(catalog);model.category=wheel::Category::Weapons;
+   model.gestures=gestures;model.gestures.showing=false;
    model.gestures.availability.fill(wheel::GestureAvailability::Free);
   }
   wheel::Action hover;
