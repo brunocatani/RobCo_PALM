@@ -1,62 +1,10 @@
 #include "WheelModel.h"
 #include "WheelSelectionState.h"
 #include "ItemIconPolicy.h"
-#include "physics-interaction/input/NativeVatsInputSuppressionPolicy.h"
-#include "physics-interaction/input/VatsGrenadeGesturePolicy.h"
 #include <stdexcept>
 #include <iostream>
 #include <limits>
 void check(bool b){if(!b)throw std::runtime_error("Wheel policy check failed");}
-void checkChord() {
- using namespace wheel;
- for(bool triggerFirst:{false,true})for(bool releaseTriggerFirst:{false,true}) {
-  ChordGesture gesture;
-  check(gesture.update(true,true,true,0)==HoldEdge::None && !gesture.ownsInput());
-  check(gesture.update(true,false,false,1)==HoldEdge::None && gesture.armed);
-  check(gesture.update(true,triggerFirst,!triggerFirst,2)==HoldEdge::None && !gesture.ownsInput());
-  check(gesture.update(true,true,true,3)==HoldEdge::None && gesture.pending && gesture.ownsInput());
-  check(gesture.update(true,true,true,3.249)==HoldEdge::None);
-  check(gesture.update(true,true,true,3.25)==HoldEdge::Open && gesture.down);
-  check(gesture.update(true,true,true,4)==HoldEdge::None && gesture.down);
-  check(gesture.update(true,!releaseTriggerFirst,releaseTriggerFirst,5)==HoldEdge::Release && gesture.ownsInput());
-  check(gesture.update(true,true,true,6)==HoldEdge::None && !gesture.down && gesture.ownsInput());
-  check(gesture.update(true,false,false,7)==HoldEdge::None && !gesture.ownsInput());
-  check(gesture.update(true,true,true,8)==HoldEdge::None && gesture.pending);
-  check(gesture.update(true,false,true,8.1)==HoldEdge::None && gesture.draining);
-  check(gesture.update(true,true,true,9)==HoldEdge::None && !gesture.down);
-  (void)gesture.update(true,false,false,10);
-  (void)gesture.update(true,true,true,11);
-  check(gesture.update(false,true,true,12)==HoldEdge::None && !gesture.ownsInput());
-  check(gesture.update(true,true,true,13)==HoldEdge::None && !gesture.pending);
-  (void)gesture.update(true,false,false,14);
-  (void)gesture.update(true,true,true,15);
-  check(gesture.update(true,true,true,14)==HoldEdge::None && !gesture.ownsInput());
-  (void)gesture.update(true,false,false,16);
-  (void)gesture.update(true,true,true,17);
-  check(gesture.update(true,true,true,std::numeric_limits<double>::quiet_NaN())==HoldEdge::None && !gesture.ownsInput());
- }
-}
-void checkBArbitration() {
- using namespace wheel;
- namespace native=rock::native_vats_input_suppression_policy;
- namespace grenade=rock::vats_grenade_gesture_policy;
- for(bool immersive:{false,true})for(bool suppressVats:{false,true}) {
-  ChordGesture wheel;
-  grenade::RuntimeState grenades;
-  native::RuntimeState vats;
-  (void)wheel.update(true,false,false,0);
-  for(float duration:{0.1f,0.5f}) {
-   (void)grenade::update(grenades,{.pressed=true,.held=true,.immersiveGrenades=immersive});
-   (void)native::update(vats,{.buttonDown=true,.justPressed=true,.suppressVats=suppressVats,.suppressVans=true,.reserveHoldGesture=true});
-   check(wheel.update(true,false,false,duration)==HoldEdge::None && !wheel.ownsInput());
-   const auto draw=grenade::update(grenades,{.released=true,.heldSeconds=duration,.immersiveGrenades=immersive});
-   const auto release=native::update(vats,{.released=true,.heldSeconds=duration});
-   check(draw.requestGrenade==(duration>=0.25f && immersive));
-   check(draw.requestNativeThrow==(duration>=0.25f && !immersive));
-   check(release.forwardNative==(duration<0.25f && !suppressVats));
-  }
- }
-}
 int main(){try {
  using namespace wheel;
  check(hitSlot(0,-250,180,336)==0);check(hitSlot(250,0,180,336)==2);
@@ -109,8 +57,6 @@ int main(){try {
  check(armorIcon((1u<<3)|(1u<<4)|(1u<<5),false)==Icon::Clothing);
  Item first{0x1234,"Rifle",1,false,"variant1",0}, second{0x1234,"Rifle",1,false,"variant2",3};
  check(selectionToken(first)!=selectionToken(second));
- checkChord();
- checkBArbitration();
  // An invisible wheel closes on release without waiting for a render callback.
  WheelSelectionState selection;
  selection.begin(41);
@@ -143,5 +89,5 @@ int main(){try {
  chosen=selection.release();
  check(chosen && chosen->configHovered && !chosen->hoveredItem);
  check(!selection.publish(46,{selectionToken(first),false}));
- std::cout<<"Wheel selection, center navigation, cancellation and B-hold policies passed\n";return 0;
+ std::cout<<"Wheel selection, center navigation, cancellation policies passed\n";return 0;
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

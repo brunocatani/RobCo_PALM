@@ -16,10 +16,11 @@ struct Preferences {
  std::array<std::vector<Favorite>,kCategoryCount> slots;
  unsigned enabledEntries() const {return 1+static_cast<unsigned>(std::count(enabled.begin(),enabled.end(),true))+(gesturesEnabled?2:0)+static_cast<unsigned>(sections.size());}
  bool sectionEnabled(std::string_view id) const {return std::find(sections.begin(),sections.end(),id)!=sections.end();}
- bool setSectionEnabled(std::string_view id,bool value) {
+ bool setSectionEnabled(std::string_view id,bool value,unsigned visibleCount=~0u) {
+  if(visibleCount==~0u)visibleCount=enabledEntries();
   const auto it=std::find(sections.begin(),sections.end(),id);
   if(!value){if(it==sections.end())return false;sections.erase(it);return true;}
-  if(it!=sections.end() || id.empty() || id.size()>=64 || enabledEntries()>=palm::api::kMaxVisibleEntries)return false;
+  if(it!=sections.end() || id.empty() || id.size()>=64 || sections.size()>=palm::api::kMaxSections || visibleCount>=palm::api::kMaxVisibleEntries)return false;
   sections.emplace_back(id);return true;
  }
  bool select(unsigned category,const Favorite& item,bool selected) {
@@ -70,7 +71,7 @@ inline bool readPreferences(std::istream& in,Preferences& prefs) {
  if(line!="PALMItems 1")return false;
  std::array<bool,kCategoryCount> categories{};unsigned lines=0;bool gesturesRead=false;
  while(std::getline(in,line)) {
-  if(++lines>kCategoryCount*(kSlots+1)+palm::api::kMaxVisibleEntries || line.size()>2048)return false;
+  if(++lines>kCategoryCount*(kSlots+1)+palm::api::kMaxSections+1 || line.size()>2048)return false;
   std::istringstream row(line);std::string kind;unsigned c;
   if(!(row>>kind))return false;
   if(kind=="section") {
@@ -90,7 +91,7 @@ inline bool readPreferences(std::istream& in,Preferences& prefs) {
   }else return false;
   row>>std::ws;if(!row.eof())return false;
  }
- if(in.bad() || parsed.enabledEntries()>palm::api::kMaxVisibleEntries || !std::all_of(categories.begin(),categories.end(),[](bool b){return b;}))return false;
+ if(in.bad() || !std::all_of(categories.begin(),categories.end(),[](bool b){return b;}))return false;
  prefs=std::move(parsed);return true;
 }
 }

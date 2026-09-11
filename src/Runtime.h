@@ -13,4 +13,5 @@ void finishGameLoad(bool success);
 // The renderer publishes the last drawn hover; the input callback owns release.
 std::uint64_t wheelDrawGeneration();
 void publishWheelSelection(std::uint64_t generation,const Action& hover);
+void requestWheelClick(std::uint64_t generation,const Action& action);
 }

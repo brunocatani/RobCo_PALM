@@ -160,6 +160,7 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
   }
  }
  const bool cancelHovered=navigation==static_cast<int>(kCancelNavigation);
+ action.cancelHovered=cancelHovered;
  draw->AddCircleFilled(center,54*scale,cancelHovered?green:surface,48);
  draw->AddCircle(center,54*scale,cancelHovered?green:boundary,48,scale);
  centered(draw,{center.x,center.y-10*scale},16*scale,cancelHovered?dark:green,"P.A.L.M");

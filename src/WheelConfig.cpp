@@ -1,4 +1,5 @@
 #include "WheelConfig.h"
+#include "PalmControls.h"
 #include <imgui.h>
 #include "tools/render/ConfigUi.h"
 #include <mutex>
@@ -10,9 +11,16 @@ struct State {
  std::mutex mutex;Preferences prefs;Model inventory;
  std::atomic_bool changed=false;
  std::string status="Preview — choices stay in memory";
- unsigned category{};char search[128]{};
+ unsigned category{};bool controlsPage{};char search[128]{};
 };
 State& state(){static State s;return s;}
+void limitSections(Model& model) {
+ unsigned used=1+static_cast<unsigned>(std::count(model.enabled.begin(),model.enabled.end(),true))+(model.gesturesEnabled?2:0);
+ for(unsigned i=0;i<model.sections.count;++i)if(model.sections.sections[i].enabled) {
+  model.sections.sections[i].enabled=used<palm::api::kMaxVisibleEntries;++used;
+ }
+ normalizeWheelSelection(model);
+}
 bool matches(std::string_view name,std::string_view needle) {
  const auto lower=[](char c){return c>='A' && c<='Z'?static_cast<char>(c+32):c;};
  return std::search(name.begin(),name.end(),needle.begin(),needle.end(),
@@ -30,30 +38,47 @@ void restoreWheelPreferences(Preferences prefs) {
 void publishWheelInventory(const Model& inventory){auto& s=state();std::scoped_lock lock(s.mutex);s.inventory=inventory;}
 Model selectedWheelInventory(const Model& inventory){
  auto& s=state();std::scoped_lock lock(s.mutex);auto result=curatedInventory(inventory,s.prefs);
+ result.gesturesEnabled &= gestureIntegrationAvailable();
  if(sectionRegistry().snapshot(result.sections))
   for(unsigned i=0;i<result.sections.count;++i)result.sections.sections[i].enabled=s.prefs.sectionEnabled(result.sections.sections[i].id);
- return result;
+ limitSections(result);return result;
 }
 void refreshWheelSections(Model& model) {
+ model.gesturesEnabled &= gestureIntegrationAvailable();
  if(model.sections.revision==sectionRegistry().revision())return;
  auto& s=state();std::unique_lock lock(s.mutex,std::try_to_lock);if(!lock.owns_lock())return;
  if(!sectionRegistry().snapshot(model.sections))return;
  for(unsigned i=0;i<model.sections.count;++i)model.sections.sections[i].enabled=s.prefs.sectionEnabled(model.sections.sections[i].id);
+ limitSections(model);
 }
 bool takeWheelConfigChange(){return state().changed.exchange(false);}
 void drawWheelSettings() {
  auto& s=state();std::unique_lock lock(s.mutex,std::try_to_lock);if(!lock.owns_lock())return;
  using namespace devui;
+ ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{20,24});
+ ImGui::BeginChild("palm-settings-nav",{visual::railWidth(ImGui::GetContentRegionAvail().x),0},ImGuiChildFlags_AlwaysUseWindowPadding);
+ visual::caption("PALM");ImGui::Dummy({0,12});
+ if(visual::navigation("Wheel sections",!s.controlsPage))s.controlsPage=false;
+ if(visual::navigation("Controls",s.controlsPage))s.controlsPage=true;
+ ImGui::EndChild();ImGui::PopStyleVar();ImGui::SameLine(0,0);
  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{26,24});
  ImGui::BeginChild("wheel-settings",{0,0},ImGuiChildFlags_AlwaysUseWindowPadding);
+ if(s.controlsPage){drawControls();ImGui::EndChild();ImGui::PopStyleVar();return;}
+ SectionCatalog catalog;if(!sectionRegistry().snapshot(catalog)){ImGui::EndChild();ImGui::PopStyleVar();return;}
+ const auto enabledCount=[&] {
+  unsigned count=1+static_cast<unsigned>(std::count(s.prefs.enabled.begin(),s.prefs.enabled.end(),true))+(s.prefs.gesturesEnabled && gestureIntegrationAvailable()?2:0);
+  for(unsigned i=0;i<catalog.count;++i)count+=s.prefs.sectionEnabled(catalog.sections[i].id)?1:0;
+  return count;
+ };
  visual::heading("Wheel sections","Choose which sections appear. Visible sections fill the ring.");
  {visual::Font font(render::FontRole::Body,18);
-  ImGui::TextColored(visual::muted(),"%u / %u slots enabled. Config and Cancel always stay available.",s.prefs.enabledEntries(),palm::api::kMaxVisibleEntries);
+  ImGui::TextColored(visual::muted(),"%u / %u slots enabled. Config and Cancel always stay available.",(std::min)(enabledCount(),palm::api::kMaxVisibleEntries),palm::api::kMaxVisibleEntries);
   ImGui::TextColored(visual::muted(),"Hiding a section keeps its item choices. Gestures uses two slots.");}
+ if(enabledCount()>palm::api::kMaxVisibleEntries)ImGui::TextWrapped("Some enabled mod sections are waiting for a free slot. Hide sections to make room.");
  ImGui::Dummy({0,16});
  const auto toggle=[&](const char* name,const char* detail,bool& enabled,unsigned cost) {
   ImGui::TableNextColumn();ImGui::PushID(name);
-  ImGui::BeginDisabled(!enabled && s.prefs.enabledEntries()+cost>palm::api::kMaxVisibleEntries);
+  ImGui::BeginDisabled(!enabled && enabledCount()+cost>palm::api::kMaxVisibleEntries);
   bool changed;
   {visual::Font font(render::FontRole::Medium,24);ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{4,4});
    changed=devui::visual::checkbox(name,&enabled);ImGui::PopStyleVar();}
@@ -66,11 +91,10 @@ void drawWheelSettings() {
    const auto c=static_cast<unsigned>(category);
    if(toggle(categoryName(category),"Inventory items",s.prefs.enabled[c],1))s.changed=true;
   }
-  if(toggle("Gestures","Left and right hand menus",s.prefs.gesturesEnabled,2))s.changed=true;
+  if(gestureIntegrationAvailable() && toggle("Gestures","Left and right hand menus",s.prefs.gesturesEnabled,2))s.changed=true;
   ImGui::EndTable();
  }
- SectionCatalog catalog;
- if(sectionRegistry().snapshot(catalog)) {
+ {
   visual::caption("MOD SECTIONS");ImGui::Dummy({0,12});
   if(catalog.count==0 && s.prefs.sections.empty()) {
    visual::Font font(render::FontRole::Body,20);ImGui::TextColored(visual::muted(),"No mod sections registered.");
@@ -78,10 +102,10 @@ void drawWheelSettings() {
    for(unsigned i=0;i<catalog.count;++i) {
     const auto& section=catalog.sections[i];bool enabled=s.prefs.sectionEnabled(section.id);
     ImGui::PushID(section.id);
-    if(toggle(section.name,section.modName,enabled,1) && s.prefs.setSectionEnabled(section.id,enabled))s.changed=true;
+    if(toggle(section.name,section.modName,enabled,1) && s.prefs.setSectionEnabled(section.id,enabled,enabledCount()))s.changed=true;
     ImGui::PopID();
    }
-   // Remembered unavailable sections remain removable instead of reserving slots forever.
+   // Preserve unavailable sections without charging them against the visible ring.
    for(std::size_t i=0;i<s.prefs.sections.size();) {
     const auto& id=s.prefs.sections[i];
     const bool present=std::any_of(catalog.sections.begin(),catalog.sections.begin()+catalog.count,[&](const auto& value){return id==value.id;});

@@ -19,7 +19,7 @@ struct RenderState {
  ComPtr<ID3D11Device> device;
  IconAtlas icons;
  std::unique_ptr<ImGuiContext,ContextDeleter> imgui;
- bool backend{};
+ bool backend{},primaryDown{};std::uint64_t clickGeneration{};
  ~RenderState(){release();}
  void release(){if(imgui){ImGui::SetCurrentContext(imgui.get());if(backend)ImGui_ImplDX11_Shutdown();imgui.reset();}backend=false;icons.clear();device.Reset();}
 };
@@ -59,6 +59,9 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
    if(modelLock.owns_lock()){refreshWheelSections(shared.model);action=drawWheel(shared.model,shared.view,{},{},render.icons.ids());}}
   ImGui::Render();ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
   publishWheelSelection(ticket,action);
+  const bool fresh=render.clickGeneration==ticket && !render.primaryDown && frame->primaryDown;
+  render.clickGeneration=ticket;render.primaryDown=frame->primaryDown!=0;
+  if(fresh && frame->pointerValid)requestWheelClick(ticket,action);
  } catch(const std::exception& e){spdlog::error("PALM render failed: {}",e.what());if(ticket)failWheelPresentation(ticket);}
  catch(...){if(ticket)failWheelPresentation(ticket);}
 }

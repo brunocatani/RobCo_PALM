@@ -482,7 +482,7 @@ namespace rock_configurator
                 openPanelLocked(action);
                 break;
             case RuntimeActionKind::ClosePanel:
-                closePanelLocked("Closed because ROCK provider input is unavailable");
+                closePanelLocked("Closed because gameplay input is unavailable");
                 break;
             case RuntimeActionKind::UiClose:
                 closePanelLocked("Closed by panel button");
@@ -760,8 +760,10 @@ namespace rock_configurator
             { ScopedFont font(devui::render::FontRole::Heading, 30); ImGui::TextUnformatted("Configuration"); }
             const float start = devui::visual::railWidth(width) + 14;
             const float tabStep = (std::min)(194.0f, (width - 342 - start) / tabs.size());
+            std::size_t visibleTab = 0;
             for (std::size_t i = 0; i < tabs.size(); ++i) {
-                ImGui::SetCursorPos({start + static_cast<float>(i) * tabStep, 28});
+                if(tabs[i] == ConfiguratorTab::Settings && std::none_of(s_modSettings.begin(),s_modSettings.end(),[](const auto& mod){return mod.available;})) continue;
+                ImGui::SetCursorPos({start + static_cast<float>(visibleTab++) * tabStep, 28});
                 if (tabChip(labels[i], tabs[i] == active, {tabStep - 10, 62})) queueTab(tabs[i]);
             }
             ImGui::SetCursorPos({width - 322, 20});

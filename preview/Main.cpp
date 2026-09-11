@@ -2,6 +2,7 @@
 #include "Fonts.h"
 #include "IconAtlas.h"
 #include "WheelConfig.h"
+#include "PalmControls.h"
 #include "ConfiguratorRuntime.h"
 #include "render/UiVisualStyle.h"
 #include <Windows.h>
@@ -48,7 +49,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
  wheel::IconAtlas icons;if(!icons.create(device.Get(),context.Get()))return 1;
  auto catalog=wheel::demoInventory();wheel::publishWheelInventory(catalog);
  auto model=wheel::selectedWheelInventory(catalog);wheel::View view;
- rock_configurator::initializePreview();wheel::ChordGesture gesture;bool wheelOpen=false;
+ rock_configurator::initializePreview();wheel::ControlGesture gesture;auto controls=wheel::snapshotControls();bool wheelOpen=false;
  ShowWindow(hwnd,show);UpdateWindow(hwnd);bool done=false;
  while(!done){
   MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);if(message.message==WM_QUIT)done=true;}
@@ -62,9 +63,10 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   if(cancelGesture){gesture={};wheelOpen=false;cancelGesture=false;}
   // Keyboard B emulates the complete VR chord in the desktop preview.
   const bool held=ImGui::IsKeyDown(ImGuiKey_B);
-  const auto edge=gesture.update(focused && !rock_configurator::isOpen(),held,held,ImGui::GetTime());
+  const auto currentControls=wheel::snapshotControls();if(currentControls!=controls){controls=currentControls;gesture={};wheelOpen=false;}
+  const auto edge=gesture.update(focused && !rock_configurator::isOpen(),controls,held,held,ImGui::IsMouseClicked(0),ImGui::GetTime());
   if(!focused)wheelOpen=false;
-  if(edge==wheel::HoldEdge::Open) {
+  if(edge==wheel::ControlEdge::Open) {
    wheelOpen=true;view={};const auto gestures=model.gestures;
    model=wheel::selectedWheelInventory(catalog);model.category=wheel::Category::Weapons;
    model.gestures=gestures;model.gestures.showing=false;
@@ -73,8 +75,8 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   wheel::Action hover;
   if(wheelOpen){wheel::refreshWheelSections(model);hover=wheel::drawWheel(model,view,{},{},icons.ids());}
   std::uint64_t selectedItem=0;
-  if(edge==wheel::HoldEdge::Release && wheelOpen) {
-   wheelOpen=false;
+  if(edge==wheel::ControlEdge::Select && wheelOpen) {
+   if(controls.mode==wheel::OpenMode::Hold || hover.cancelHovered || hover.configHovered){wheelOpen=false;gesture.cancel(held);}
    if(hover.configHovered)rock_configurator::setPreviewOpen(true);
    else if(hover.section)(void)wheel::sectionRegistry().dispatch(hover.section,hover.sectionItem);
    else if(hover.hoveredGesture) {

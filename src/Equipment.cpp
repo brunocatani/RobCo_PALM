@@ -35,7 +35,7 @@ const char* toggleEquipment(const Item& selected,std::uint64_t owner) noexcept {
   if(!player || !player->inventoryList)return "Inventory unavailable";
   auto* object=RE::TESForm::GetFormByID<RE::TESBoundObject>(selected.id);
   if(!object || (!object->Is(RE::ENUM_FORM_ID::kWEAP) && !object->Is(RE::ENUM_FORM_ID::kARMO)))return "Equipment no longer available";
-  if(object->Is(RE::ENUM_FORM_ID::kWEAP)) {
+  if(owner && object->Is(RE::ENUM_FORM_ID::kWEAP)) {
    using namespace rock::provider;
    for(const auto hand:{RockProviderHand::Left,RockProviderHand::Right}) {
     RockProviderHandInteractionStateV1 interaction;
@@ -87,5 +87,31 @@ const char* toggleEquipment(const Item& selected,std::uint64_t owner) noexcept {
   if(!accepted)return "The game refused that equipment change";
   return equipped?"Unequip requested":"Equip requested";
  }catch(...){spdlog::error("PALM equipment change failed");return "Equipment change failed";}
+}
+const char* useInventoryItem(std::uint32_t id) noexcept {
+ try {
+  if(!equipmentReady)return "Inventory actions unavailable";
+  auto* player=RE::PlayerCharacter::GetSingleton();
+  auto* object=RE::TESForm::GetFormByID<RE::TESBoundObject>(id);
+  if(!player || !player->inventoryList || !object ||
+     (!object->Is(RE::ENUM_FORM_ID::kALCH) && !object->Is(RE::ENUM_FORM_ID::kWEAP)))return "Item no longer available";
+  std::uint32_t index=0;bool found=false;
+  RE::BSTSmartPointer<RE::TBO_InstanceData> instance;
+  {
+   const RE::BSAutoReadLock lock{player->inventoryList->rwLock};
+   for(const auto& entry:player->inventoryList->data)if(entry.object==object) {
+    for(auto* stack=entry.stackData.get();stack && index<4096;stack=stack->nextStack.get(),++index)if(stack->GetCount()) {
+     found=true;if(stack->extra)if(auto* extra=stack->extra->GetByType<RE::ExtraInstanceData>())instance=extra->data;break;
+    }
+    break;
+   }
+  }
+  if(!found)return "Item is no longer carried";
+  auto* manager=RE::ActorEquipManager::GetSingleton();if(!manager)return "Equipment manager unavailable";
+  RE::BGSObjectInstance item(object,instance.get());
+  // Existing native inventory-use boundary, also used by ROCK's mouth consume.
+  const bool accepted=manager->EquipObject(player,item,index,1,nullptr,false,false,true,false,false);
+  return accepted?(object->Is(RE::ENUM_FORM_ID::kALCH)?"Use requested":"Grenade equip requested"):"The game refused that item action";
+ }catch(...){spdlog::error("PALM native item action failed");return "Item action failed";}
 }
 }

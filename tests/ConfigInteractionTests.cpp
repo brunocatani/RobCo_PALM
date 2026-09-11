@@ -83,23 +83,31 @@ int main() {
         const float railWidth = devui::visual::railWidth(1440);
         click(railWidth + 250, 50); // PALM's own settings
         require(window("wheel-settings") != nullptr, "PALM settings tab did not open");
-        click(42,294);
+        click(railWidth+42,294);
         require(!wheel::snapshotWheelPreferences().enabled[3] && wheel::takeWheelConfigChange(), "weapon visibility edit did not reach wheel preferences");
-        click(42,294);
-        click(754,470);
+        click(railWidth+42,294);
+        click(railWidth+600,470);
         require(!wheel::snapshotWheelPreferences().gesturesEnabled, "gesture visibility edit did not reach wheel preferences");
         auto wheelModel=wheel::selectedWheelInventory(wheel::Model{});
         require(wheel::navigationLayout(wheelModel).count==6, "hidden gestures left empty navigation slots");
-        click(754,470);
+        click(railWidth+600,470);
         const auto originalPreferences=wheel::snapshotWheelPreferences();
         auto full=originalPreferences;full.enabled.fill(false);full.gesturesEnabled=false;
         for(unsigned i=0;i<9;++i)require(full.setSectionEnabled("missing.section"+std::to_string(i),true), "visibility fixture could not reserve section slots");
-        wheel::restoreWheelPreferences(full);frame();click(42,294);click(754,470);
+        std::array<palm::api::SectionHandle,9> handles{};
+        for(unsigned i=0;i<handles.size();++i) {
+            palm::api::SectionV1 section;std::snprintf(section.id,sizeof(section.id),"missing.section%u",i);
+            std::strcpy(section.name,"Fixture");std::strcpy(section.modName,"Fixture");
+            section.onSelect=[](std::uint32_t,std::uint64_t,void*) noexcept {};
+            require(wheel::sectionRegistry().registerSection(&section,&handles[i])==palm::api::Result::Ok,"section fixture registration failed");
+        }
+        wheel::restoreWheelPreferences(full);frame();click(railWidth+42,294);click(railWidth+600,470);
         require(!wheel::snapshotWheelPreferences().enabled[3] && !wheel::snapshotWheelPreferences().gesturesEnabled,
             "settings controls exceeded the ten-entry limit");
-        full.sections.pop_back();wheel::restoreWheelPreferences(full);frame();click(42,294);click(754,470);
+        full.sections.pop_back();wheel::restoreWheelPreferences(full);frame();click(railWidth+42,294);click(railWidth+600,470);
         require(wheel::snapshotWheelPreferences().enabled[3] && !wheel::snapshotWheelPreferences().gesturesEnabled,
             "one free slot did not admit weapons or admitted both gesture entries");
+        for(auto handle:handles)(void)wheel::sectionRegistry().unregisterSection(handle);
         wheel::restoreWheelPreferences(originalPreferences);frame();
         frame(true); frame();
         require(window("wheel-category-content") != nullptr, "PALM settings back did not return to items");

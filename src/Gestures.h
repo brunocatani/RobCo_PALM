@@ -2,11 +2,12 @@
 #include "GesturePolicy.h"
 
 namespace wheel {
-// Owned exclusively by the ROCK game-thread frame callback. The renderer gets
+// Owned exclusively by PALM's game-thread input callback. The renderer gets
 // value snapshots only; ROCK owns publication, arbitration and lease cleanup.
 class Gestures {
 public:
  void initialize();
+ bool available() const {return _available;}
  void update(std::uint64_t owner,const rock::provider::RockProviderFrameSnapshot& frame,bool usable,bool wheelInputOwned=false);
  const char* select(std::uint64_t owner,unsigned choice,const rock::provider::RockProviderFrameSnapshot& frame);
  void clear(std::uint64_t owner);

@@ -294,3 +294,14 @@ FRIK authors include RollingRock, ArthurHub, and other contributors.
 src/api/FRIKApiV2.h is an unmodified copy of the public hFRIK API header.
 The upstream project licenses this code under GNU GPL version 3.
 The full GPL version 3 text is provided in LICENSE.
+
+========================================================================
+F4VR-CommonFramework input bindings
+========================================================================
+
+Upstream: https://github.com/ArthurHub/F4VR-CommonFramework
+Pinned source: e672668f46925024047c8a9763e31008a165309f
+Authors: ArthurHub and contributors; GNU GPL version 3.
+external/F4VR-Input contains the upstream binding parser and extracted value
+types. Include paths are adapted to this build. ORIGIN.txt records provenance;
+external/F4VR-Input/LICENSE contains the upstream license text.

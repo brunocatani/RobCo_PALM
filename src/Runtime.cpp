@@ -1,5 +1,8 @@
 #include "PCH.h"
 #include "Runtime.h"
+#include "PalmControls.h"
+#include "RPSUIInputApi.h"
+#include <ShlObj.h>
 #include "Inventory.h"
 #include "Equipment.h"
 #include "WheelConfig.h"
@@ -14,7 +17,6 @@
 namespace wheel {
 namespace {
 using namespace rock::provider;
-constexpr std::uint32_t kTriggerButton=33,kGrabButton=2;
 constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kSectionChoice=3,kItemChoice=std::uint64_t{1}<<63;
 struct RuntimeState {
  std::atomic_bool open{false},held{false},inputReady{false};
@@ -30,10 +32,16 @@ struct RuntimeState {
  std::mutex presentationMutex;
  WheelSelectionState selection;
  rpsui::sdk::PanelPoseV1 wheelPose;
- std::uint64_t owner{},callback{},command{};
- ChordGesture gesture;
+ std::uint64_t owner{},command{};
+ ControlGesture gesture;
+ Controls controls;
+ const rpsui::sdk::InputApiV1* inputApi{};
+ std::uint64_t inputToken{};
+ std::atomic_bool rockReady{false},clickRequested{false};
+ RockProviderFrameSnapshot rockFrame;
+ Action clickSelection;
  Gestures handGestures;
- bool suppression{},frameworkUnavailable{};
+ bool leftHanded{};
  std::uint32_t world{},skeleton{},provider{};
 };
 RuntimeState& state(){static RuntimeState s;return s;}
@@ -58,27 +66,20 @@ void publishGestureState() {
  const auto& view=state().handGestures.view();
  shared.model.gestures.active=view.active;shared.model.gestures.availability=view.availability;
 }
+
 void clearSuppression() {
- auto& s=state();
- if(s.suppression && RockProviderApi::inst)
-  (void)RockProviderApi::inst->clearHandInputSuppressionV1(s.owner,RockProviderHand::Right);
- s.suppression=false;
+ auto& s=state();if(s.inputApi && s.inputToken){rpsui::sdk::InputCaptureV1 capture;(void)s.inputApi->capture(s.inputToken,&capture);}
 }
-bool claimInput(const RockProviderFrameSnapshot& frame,bool gestureOwned) {
- auto& s=state();RockProviderHandInputSuppressionRequestV1 request;
- request.hand=RockProviderHand::Right;
- request.flags=static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::ReserveTriggerGripChord);
- if(gestureOwned)request.flags|=static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::SuppressOpenVrGameInput)|
-  static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::SuppressNativeVats)|
-  static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::SuppressConfigModeChord);
- request.leaseFrames=3;request.worldGeneration=frame.worldGeneration;
- request.skeletonGeneration=frame.skeletonGeneration;request.providerGeneration=frame.providerGeneration;
- const auto result=RockProviderApi::inst->setHandInputSuppressionV1(s.owner,&request);
- if(result!=RockProviderResultV1::Ok) {
-  spdlog::error("PALM could not reserve trigger/grab input: {}; wheel disabled until the next load",static_cast<unsigned>(result));
-  s.presentationFailed=true;clearSuppression();return false;
+bool claimInput(const rpsui::sdk::InputFrameV1& frame,bool owned) {
+ auto& s=state();const auto masks=controlMasks(s.controls,frame.leftHanded);
+ rpsui::sdk::InputCaptureV1 capture;
+ for(unsigned hand=0;hand<2;++hand) {
+  if(owned)capture.buttons[hand]=masks.buttons[hand];
+  else capture.chord[hand]=masks.buttons[hand];
  }
- s.suppression=true;return true;
+ const bool accepted=s.inputApi && s.inputApi->capture(s.inputToken,&capture);
+ if(!accepted){s.presentationFailed=true;clearSuppression();spdlog::error("PALM input capture unavailable");}
+ return accepted;
 }
 void cancelCommand() {
  auto& s=state();
@@ -98,16 +99,14 @@ void serviceCommand() {
  spdlog::info("PALM handoff {}: {} (query {}, failure {})",s.command,message,static_cast<unsigned>(query),static_cast<unsigned>(result.failure));
  if(query!=RockProviderResultV1::Ok)cancelCommand();else s.command=0;
 }
-bool ready(const RockProviderFrameSnapshot& f) {
- return f.providerReady && !f.menuBlocking && !f.configBlocking &&
-  hasLifecycleFlag(f.lifecycleFlags,RockProviderLifecycleFlag::WorldAvailable) &&
-  hasLifecycleFlag(f.lifecycleFlags,RockProviderLifecycleFlag::SkeletonReady);
-}
-std::optional<rpsui::sdk::PanelPoseV1> poseFor(const RockProviderFrameSnapshot& frame) {
- const auto& t=frame.rightHandTransform;float x=t.rotate[0],y=t.rotate[1];const float n=std::hypot(x,y);
+
+std::optional<rpsui::sdk::PanelPoseV1> poseFor(const rpsui::sdk::InputFrameV1& frame) {
+ const auto& t=frame.hands[physicalHand(state().controls.binding.hand,frame.leftHanded)];
+ if(!t.valid)return {};
+ float x=t.forward[0],y=t.forward[1];const float n=std::hypot(x,y);
  if(!std::isfinite(n) || n<.05f)return {};
  x/=n;y/=n;rpsui::sdk::PanelPoseV1 p;
- p.center[0]=t.translate[0]+x*85;p.center[1]=t.translate[1]+y*85;p.center[2]=t.translate[2]+9;
+ p.center[0]=t.position[0]+x*85;p.center[1]=t.position[1]+y*85;p.center[2]=t.position[2]+9;
  p.right[0]=y;p.right[1]=-x;p.right[2]=0;p.front[0]=-x;p.front[1]=-y;p.front[2]=0;
  p.physicalWidth=95;p.physicalHeight=95;
  for(float v:p.center)if(!std::isfinite(v) || std::fabs(v)>1.e8f)return {};
@@ -125,7 +124,7 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
   pose.front={p.front[0],p.front[1],p.front[2]};
   pose.physicalWidth=p.physicalWidth;pose.physicalHeight=p.physicalHeight;
   rock_configurator::openAt(pose);
-  spdlog::info("Chord release selected Config; replacing wheel at its anchor");
+  spdlog::info("Selected Config; replacing wheel at its anchor");
  }else if(choice==kSectionChoice) {
   s.handGestures.clear(s.owner);
   const auto selected=s.sectionChoice.load();
@@ -167,7 +166,7 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
     auto& runtime=state();
     struct Finish {RuntimeState& state;~Finish(){state.gameActionPending=false;}} finish{runtime};
     if(!runtime.sessionReady.load() || !runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
-    try { actionStatus(toggleEquipment(item,runtime.owner)); }
+    try { actionStatus(toggleEquipment(item,runtime.rockReady.load()?runtime.owner:0)); refreshWheelInventory(); }
     catch(...){spdlog::error("Equipment result publication failed");}
    }); } catch(...) {s.gameActionPending=false;throw;}
    return;
@@ -180,6 +179,18 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
     for(const auto& item:shared.model.items[c])takeToHand|=selectionToken(item)==token && item.count>0;
   }
   if(!takeToHand){actionStatus("Selection is no longer available");return;}
+
+  if(!s.rockReady.load()) {
+   const auto* tasks=F4SE::GetTaskInterface();
+   if(!tasks){actionStatus("Inventory task queue unavailable");return;}
+   s.gameActionPending=true;
+   try{tasks->AddTask([ticket,id=static_cast<std::uint32_t>(choice)] {
+    auto& runtime=state();struct Finish{RuntimeState& s;~Finish(){s.gameActionPending=false;}} finish{runtime};
+    if(!runtime.sessionReady.load() || !runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
+    actionStatus(useInventoryItem(id));refreshWheelInventory();
+   });}catch(...){s.gameActionPending=false;throw;}
+   return;
+  }
   RockProviderForceGrabRequestV1 request;
   request.flags=static_cast<std::uint32_t>(RockProviderForceGrabFlagV1::FromPlayerInventory);
   request.targetFormId=static_cast<std::uint32_t>(choice);
@@ -189,10 +200,10 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
   if(result!=RockProviderResultV1::RequestQueued) {
    s.command=0;actionStatus(result==RockProviderResultV1::HandBusy?"Hands are busy — try again":"Item handoff unavailable");
   }
-  spdlog::info("Chord release selected item {:08X}: queue result {}",request.targetFormId,static_cast<unsigned>(result));
+  spdlog::info("Selected item {:08X}: queue result {}",request.targetFormId,static_cast<unsigned>(result));
  }
 }
-void openHeldWheel(const RockProviderFrameSnapshot& frame) {
+void openHeldWheel(const rpsui::sdk::InputFrameV1& frame) {
  auto& s=state();const auto pose=poseFor(frame);const auto* tasks=F4SE::GetTaskInterface();
  if(!pose || !tasks){failWheelPresentation(0);return;}
  std::uint64_t ticket;
@@ -215,88 +226,75 @@ void openHeldWheel(const RockProviderFrameSnapshot& frame) {
     s.open=false;s.presentationFailed=true;++s.generation;(void)s.selection.release();
     spdlog::warn("PALM presentation failed; wheel input released until the next load");
    }
-   else spdlog::info("Trigger/grab wheel opened, generation {}",ticket);
+   else spdlog::info("PALM wheel opened, generation {}",ticket);
   }catch(...){failWheelPresentation(ticket);}
  });
 }
-void releaseHeldWheel() {
+
+void selectWheel(bool closeAfterSelect,const std::optional<Action>& clicked) {
  auto& s=state();std::scoped_lock lock(s.presentationMutex);
- const auto hover=s.selection.release();
- const auto ticket=++s.generation; // Also cancels a queued open and any in-flight draw.
- if(!s.open.exchange(false))return;
- (void)presentPanel(false);
+ const auto hover=closeAfterSelect?s.selection.drawn:clicked;
+ if(!closeAfterSelect && (!hover || (!hover->cancelHovered && !hover->configHovered && !hover->hoveredGesture && !hover->section && !hover->hoveredItem)))return;
+ const bool close=closeAfterSelect || (hover && (hover->configHovered || hover->cancelHovered));
+ auto ticket=s.generation.load();
+ if(close) {
+  ticket=++s.generation;(void)s.selection.release();
+  if(!s.open.exchange(false))return;
+  s.held=false;(void)presentPanel(false);s.gesture.cancel(true);
+ }
  s.choiceGeneration=ticket;
  if(hover && hover->section)s.sectionChoice=(static_cast<std::uint64_t>(hover->section)<<32)|hover->sectionItem;
  s.choice=hover?(hover->configHovered?kConfigChoice:hover->hoveredGesture?hover->hoveredGesture:
   hover->section?kSectionChoice:hover->hoveredItem?(kItemChoice|hover->hoveredItem):kCancelChoice):kCancelChoice;
- if(!hover){s.presentationFailed=true;spdlog::warn("PALM had no rendered frame; wheel input released until the next load; check RPS_UI_Framework.log");}
- else spdlog::info("Chord release closed wheel using its last drawn selection, generation {}",ticket);
+ if(!hover){s.presentationFailed=true;spdlog::warn("PALM had no rendered selection; input released until next load");}
 }
-void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) noexcept {
+void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
  try {
   if(!frame)return;auto& s=state();
+  if(takeControlsSaveRequest())if(const auto* tasks=F4SE::GetTaskInterface())tasks->AddTask([]{persistControls();});
+  const auto controls=snapshotControls();
+  if(controls!=s.controls || s.leftHanded!=frame->leftHanded){s.controls=controls;s.leftHanded=frame->leftHanded;s.gesture={};s.clickRequested=false;if(s.open.load() || s.held.load())closeWheel();}
   if(takeWheelConfigChange())refreshWheelInventory();
-  const bool gameplayReady=s.sessionReady.load() && ready(*frame);
-  const auto nativeContext=gameplayReady?RockProviderApi::inst->getNativeInputContextV1():0u;
-  const bool contextAvailable=(nativeContext&static_cast<std::uint32_t>(RockProviderNativeInputContextFlagV1::Available))!=0;
-  const bool nativeMenu=(nativeContext&static_cast<std::uint32_t>(RockProviderNativeInputContextFlagV1::MenuActive))!=0;
-  const bool wasOwning=s.open.load() || s.held.load() || rock_configurator::isOpen() || rock_configurator::isOpening();
-  const bool nativeReady=gameplayReady && contextAvailable && !nativeMenu;
-  const bool hostReady=nativeReady && frameworkReady();
-  const bool hostUnavailable=!hostReady;
-  if(nativeReady && s.frameworkUnavailable!=hostUnavailable) {
-   s.frameworkUnavailable=hostUnavailable;
-   if(hostReady)spdlog::info("RPS UI Framework readiness recovered");
-   else spdlog::warn("PALM input unavailable: RPS UI Framework is not ready; check RPS_UI_Framework.log");
-  }
-  const bool usable=nativeReady && hostReady && !s.presentationFailed.load();
+  const bool rockReady=s.owner && RockProviderApi::inst && RockProviderApi::inst->getFrameSnapshot(&s.rockFrame) && s.rockFrame.providerReady;
+  const bool providerChanged=s.rockReady.exchange(rockReady)!=rockReady ||
+   (rockReady && (s.world!=s.rockFrame.worldGeneration || s.skeleton!=s.rockFrame.skeletonGeneration || s.provider!=s.rockFrame.providerGeneration));
+  setGestureIntegrationAvailable(rockReady && s.handGestures.available());
+  const bool usable=s.sessionReady.load() && frame->ready && frameworkReady() && !s.presentationFailed.load();
   s.inputReady=usable;rock_configurator::setAvailable(usable);
-  const bool changed=s.sessionResetPending.exchange(false) || s.world!=frame->worldGeneration || s.skeleton!=frame->skeletonGeneration || s.provider!=frame->providerGeneration;
-  if(!usable || changed) {
-   if(wasOwning)spdlog::info("PALM input released: nativeMenu={}, contextAvailable={}, providerMenu={}, lifecycleChanged={}",nativeMenu,contextAvailable,frame->menuBlocking,changed);
-   s.handGestures.clear(s.owner);publishGestureState();
-   closeWheel();cancelCommand();clearSuppression();s.gesture={};
-   s.world=frame->worldGeneration;s.skeleton=frame->skeletonGeneration;s.provider=frame->providerGeneration;
+  const bool reset=s.sessionResetPending.exchange(false);
+  if(!usable || providerChanged || reset) {
+   s.handGestures.clear(s.owner);publishGestureState();closeWheel();cancelCommand();clearSuppression();s.gesture={};s.clickRequested=false;
+   s.world=s.rockFrame.worldGeneration;s.skeleton=s.rockFrame.skeletonGeneration;s.provider=s.rockFrame.providerGeneration;
    return;
   }
   serviceCommand();
   if(rock_configurator::takeInventoryRefreshRequest())refreshWheelInventory();
-  RockProviderRawWandButtonStateV1 trigger,grab;
-  if(!RockProviderApi::inst->getRawWandButtonStateV1(RockProviderHand::Right,kTriggerButton,&trigger) || !trigger.available ||
-   !RockProviderApi::inst->getRawWandButtonStateV1(RockProviderHand::Right,kGrabButton,&grab) || !grab.available) {
-   s.handGestures.clear(s.owner);publishGestureState();
-   closeWheel();cancelCommand();clearSuppression();s.gesture={};return;
-  }
   const bool eligible=!s.command && !s.gameActionPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening();
-  const double now=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+  const auto masks=controlMasks(s.controls,frame->leftHanded);
+  bool allDown=true,anyDown=false,valid=true;
+  for(unsigned hand=0;hand<2;++hand)if(masks.buttons[hand]) {
+   valid &= frame->hands[hand].valid;
+   allDown &= (frame->hands[hand].pressed&masks.buttons[hand])==masks.buttons[hand];
+   anyDown |= (frame->hands[hand].pressed&masks.buttons[hand])!=0;
+  }
   const bool ownedBefore=s.gesture.ownsInput();
-  const double heldSeconds=now-s.gesture.pressedAt;
-  const auto edge=s.gesture.update(eligible || s.gesture.draining,trigger.held!=0,grab.held!=0,now);
-  s.held=s.gesture.down;
-  if(s.open.load() && !s.gesture.down && edge!=HoldEdge::Release)closeWheel();
-  if(edge==HoldEdge::Open)
-   spdlog::info("Right trigger/grab hold qualified after {:.3f}s; wheel owns the chord through both releases",heldSeconds);
-  const bool chordOwned=ownedBefore || s.gesture.ownsInput();
-  // Idle reservation suppresses only a complete physical chord. Once captured,
-  // keep the claim through both releases so the remaining button cannot fire
-  // or start a grab when the wheel closes. B has no idle PALM claim.
-  if((eligible && s.gesture.armed) || chordOwned) {
-   if(!claimInput(*frame,chordOwned)) {
-   s.handGestures.clear(s.owner);publishGestureState();
-   s.inputReady=false;closeWheel();cancelCommand();s.gesture={};return;
-   }
+  std::optional<Action> clicked;
+  {std::scoped_lock lock(s.presentationMutex);if(s.clickRequested.exchange(false))clicked=s.clickSelection;}
+  const auto edge=s.gesture.update(valid && (eligible || s.gesture.open || s.gesture.draining),s.controls,allDown,anyDown,clicked.has_value() && eligible,frame->seconds);
+  s.held=s.gesture.open;
+  if(s.open.load() && !s.gesture.open && edge!=ControlEdge::Select)closeWheel();
+  if((eligible && s.gesture.armed) || ownedBefore || s.gesture.ownsInput()) {
+   if(!claimInput(*frame,ownedBefore || s.gesture.ownsInput())){closeWheel();s.gesture={};return;}
   }else clearSuppression();
-  s.handGestures.update(s.owner,*frame,eligible,chordOwned);
+  if(rockReady)s.handGestures.update(s.owner,s.rockFrame,eligible,ownedBefore || s.gesture.ownsInput());
   publishGestureState();
-  // Commands selected on the prior release use the chord-filtered hand state.
-  submitChoice(*frame);
-  if(edge==HoldEdge::Open)openHeldWheel(*frame);
-  else if(edge==HoldEdge::Release)releaseHeldWheel();
+  submitChoice(s.rockFrame);
+  if(edge==ControlEdge::Open)openHeldWheel(*frame);
+  else if(edge==ControlEdge::Select)selectWheel(s.controls.mode==OpenMode::Hold,clicked);
  }catch(...){
-  spdlog::error("PALM input failed; wheel input released until the next load");
+  spdlog::error("PALM input failed; input released until the next load");
   state().presentationFailed=true;state().inputReady=false;
-  state().handGestures.clear(state().owner);
-  cancelCommand();clearSuppression();state().gesture={};closeWheel();
+  state().handGestures.clear(state().owner);cancelCommand();clearSuppression();state().gesture={};closeWheel();
  }
 }
 }
@@ -309,11 +307,18 @@ void publishWheelSelection(std::uint64_t ticket,const Action& hover) {
  auto& s=state();std::scoped_lock lock(s.presentationMutex);
  if(s.open.load() && s.generation.load()==ticket)(void)s.selection.publish(ticket,hover);
 }
+
+void requestWheelClick(std::uint64_t ticket,const Action& action) {
+ auto& s=state();std::scoped_lock lock(s.presentationMutex);
+ if(s.open.load() && s.generation.load()==ticket && !s.clickRequested.load()) {
+  s.clickSelection=action;s.clickRequested=true;
+ }
+}
 void closeWheel(std::uint64_t expectedGeneration){
  auto& s=state();
  {std::scoped_lock lock(s.presentationMutex);
   if(expectedGeneration && s.generation.load()!=expectedGeneration)return;
-  s.open=false;s.held=false;s.choice=0;++s.generation;(void)s.selection.release();
+  s.open=false;s.held=false;s.choice=0;s.clickRequested=false;++s.generation;(void)s.selection.release();
   (void)presentPanel(false);}
  rock_configurator::close();
 }
@@ -348,36 +353,41 @@ bool startRuntime() {
  } rollback;
  devui::render::PrepareFonts();
  if(!devui::render::InstallFrameworkPanel())return false;
+
+ auto& s=state();
+ s.inputApi=rpsui::sdk::RequestInputApiV1();
+ if(!s.inputApi || !s.inputApi->subscribe || !s.inputApi->capture || !s.inputApi->unsubscribe)return false;
+ PWSTR documents{};
+ if(SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents,0,nullptr,&documents))) {
+  const auto path=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"RobCo_PALM"/"PALM.ini";
+  CoTaskMemFree(documents);initializeControls(path);if(takeControlsSaveRequest())persistControls();
+ }else {spdlog::error("PALM Documents folder unavailable");return false;}
+ s.controls=snapshotControls();setGestureIntegrationAvailable(false);
  constexpr auto requiredTableBytes=static_cast<std::uint32_t>(offsetof(RockProviderApi,getNativeInputContextV1)+sizeof(std::declval<RockProviderApi>().getNativeInputContextV1));
- const auto result=RockProviderApi::initialize(ROCK_PROVIDER_API_VERSION,requiredTableBytes);
+ const auto initialized=RockProviderApi::initialize(ROCK_PROVIDER_API_VERSION,requiredTableBytes);
  auto* api=RockProviderApi::inst;
- if(result || !api || !api->registerConsumerV1 || !api->unregisterConsumerV1 ||
-  !api->registerFrameCallbackForOwnerV1 || !api->getRawWandButtonStateV1 || !api->getNativeInputContextV1 ||
-  !api->setHandInputSuppressionV1 || !api->clearHandInputSuppressionV1 ||
-  !api->requestForceGrabV1 || !api->getInteractionCommandResultV1 || !api->cancelInteractionCommandV1 || !api->getHandInteractionStateV1)return false;
- if(!hasFeatureBitV1(RockProviderApi::negotiatedFeatureBits,RockProviderFeatureBitV1::InventoryForceGrab)) {
-  spdlog::error("PALM requires ROCK with inventory-to-hand support");return false;
+ if(!initialized && api && api->registerConsumerV1 && api->unregisterConsumerV1 && api->getFrameSnapshot &&
+    api->requestForceGrabV1 && api->getInteractionCommandResultV1 && api->cancelInteractionCommandV1 &&
+    api->getHandInteractionStateV1 && hasFeatureBitV1(RockProviderApi::negotiatedFeatureBits,RockProviderFeatureBitV1::InventoryForceGrab)) {
+  RockProviderConsumerRegistrationV1 registration;
+  std::snprintf(registration.modName,sizeof(registration.modName),"RobCo PALM");
+  registration.requestedCapabilities=static_cast<unsigned>(RockProviderConsumerCapabilityV1::FrameSnapshots)|
+   static_cast<unsigned>(RockProviderConsumerCapabilityV1::InteractionCommands)|static_cast<unsigned>(RockProviderConsumerCapabilityV1::HandInteractionState);
+  const bool gestures=api->setHandVisualAuthorityV1 && api->clearHandVisualAuthorityV1 && supportsHandVisualAuthorityV1();
+  if(gestures)registration.requestedCapabilities|=static_cast<unsigned>(RockProviderConsumerCapabilityV1::HandVisualAuthority);
+  RockProviderConsumerHandleV1 handle;
+  if(api->registerConsumerV1(&registration,&handle)==RockProviderResultV1::Ok &&
+     (handle.grantedCapabilities&registration.requestedCapabilities)==registration.requestedCapabilities) {
+   s.owner=handle.ownerToken;if(gestures)s.handGestures.initialize();
+  }else if(handle.ownerToken)(void)api->unregisterConsumerV1(handle.ownerToken);
  }
- RockProviderConsumerRegistrationV1 registration;
- std::snprintf(registration.modName,sizeof(registration.modName),"RobCo PALM");
- registration.requestedCapabilities=static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::FrameSnapshots)|
-  static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::HandInputSuppression)|
-  static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::InteractionCommands)|
-  static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::HandInteractionState);
- const bool gestureSupport=api->setHandVisualAuthorityV1 && api->clearHandVisualAuthorityV1 && supportsHandVisualAuthorityV1();
- if(gestureSupport)registration.requestedCapabilities|=static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::HandVisualAuthority);
- RockProviderConsumerHandleV1 handle;
- if(api->registerConsumerV1(&registration,&handle)!=RockProviderResultV1::Ok || !handle.ownerToken)return false;
- if((handle.grantedCapabilities&registration.requestedCapabilities)!=registration.requestedCapabilities) {
-  (void)api->unregisterConsumerV1(handle.ownerToken);return false;
+ if(GetModuleHandleW(L"ROCK.dll") && !s.owner) {
+  spdlog::error("Loaded ROCK could not register PALM's item integration; refusing unintended vanilla actions");return false;
  }
- auto& s=state();s.owner=handle.ownerToken;
- if(gestureSupport)s.handGestures.initialize();
- if(api->registerFrameCallbackForOwnerV1(s.owner,onFrame,nullptr,&s.callback)!=RockProviderResultV1::Ok || !s.callback) {
-  (void)api->unregisterConsumerV1(s.owner);s.owner=0;return false;
- }
+ s.inputToken=s.inputApi->subscribe(onFrame,nullptr);
+ if(!s.inputToken){if(s.owner)(void)api->unregisterConsumerV1(s.owner);s.owner=0;return false;}
  rollback.complete=true;
- spdlog::info("PALM registered with ROCK; hold right trigger + grab for {:.2f}s, release either to select; B remains VATS/grenades",kWheelHoldSeconds);
+ spdlog::info("PALM standalone input registered; optional ROCK owner={}, controls={}",s.owner,bindingText(s.controls));
  return true;
 }
 }

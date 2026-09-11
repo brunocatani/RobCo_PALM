@@ -43,7 +43,7 @@ void onMessage(F4SE::MessagingInterface::Message* message) noexcept {
   if(message->type!=F4SE::MessagingInterface::kGameDataReady)return;
   static bool started=false;if(started)return;started=true;
   wheel::prepareFonts();
-  if(!wheel::startRuntime())spdlog::critical("PALM initialization failed; check ROCK and RPS UI Framework are loaded");
+  if(!wheel::startRuntime())spdlog::critical("PALM initialization failed; check RPS UI Framework with independent input support is loaded");
   else {rock_configurator::onGameDataReady();spdlog::info("PALM and workshop ready for gameplay input");}
  }catch(const std::exception& e){spdlog::critical("PALM startup: {}",e.what());}
  catch(...){OutputDebugStringA("RobCoPALM startup failed\n");}

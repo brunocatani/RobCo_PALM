@@ -1,0 +1,6 @@
+F4VR-CommonFramework input binding parser and value types, by ArthurHub.
+https://github.com/ArthurHub/F4VR-CommonFramework
+Commit: e672668f46925024047c8a9763e31008a165309f
+GPL-3.0; see LICENSE.
+InputBinding.h extracts the value declarations from VRControllersManager.h; includes adapted for this build.
+The parser is used unchanged. PALM owns evaluation and input capture.

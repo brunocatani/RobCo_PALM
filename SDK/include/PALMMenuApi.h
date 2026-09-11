@@ -14,7 +14,8 @@ using SectionHandle=std::uint32_t;
 enum class Result : std::uint32_t { Ok, InvalidArgument, NotFound, DuplicateId, CapacityReached, CallbackBusy, ItemUnavailable, InternalError };
 enum class ItemFlag : std::uint32_t { Disabled=1, Equipped=2, ShowQuantity=4 };
 
-// Called on the F4SE game task thread, after the wheel closes, without PALM locks.
+// Called on the F4SE game task thread without PALM locks. In press/click mode
+// the wheel remains open; consumers must not depend on it closing before dispatch.
 // The mod owns the action: vanilla equipment, ROCK requests, or another feature.
 // Never throw across this callback. Keep the module and context alive until
 // unregisterSection succeeds. CallbackBusy means an invocation is still running;

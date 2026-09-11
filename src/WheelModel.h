@@ -38,7 +38,7 @@ struct Model {
  SectionCatalog sections;
  palm::api::SectionHandle activeSection{};
 };
-struct Action { std::uint64_t hoveredItem{}; bool configHovered{}; unsigned hoveredGesture{}; palm::api::SectionHandle section{}; std::uint32_t sectionItem{}; };
+struct Action { std::uint64_t hoveredItem{}; bool configHovered{}; unsigned hoveredGesture{}; palm::api::SectionHandle section{}; std::uint32_t sectionItem{}; bool cancelHovered{}; };
 struct NavigationLayout {
  std::array<unsigned,palm::api::kMaxVisibleEntries> entries{};
  unsigned count{};
@@ -111,32 +111,4 @@ inline int hitCenter(float x,float y,float scale,const NavigationLayout& layout)
  if(within<kNavigationGap || within>layout.step-kNavigationGap)return -1;
  return static_cast<int>(layout.entries[slot]);
 }
-enum class HoldEdge { None, Open, Release };
-inline constexpr double kWheelHoldSeconds=0.25;
-struct ChordGesture {
- bool armed{}, pending{}, down{}, draining{};
- double pressedAt{};
- bool ownsInput() const {return pending || down || draining;}
- HoldEdge update(bool eligible,bool trigger,bool grab,double nowSeconds) {
-  if(!eligible || !std::isfinite(nowSeconds)){*this={};return HoldEdge::None;}
-  if(!trigger && !grab){const bool released=down;*this={};armed=true;return released?HoldEdge::Release:HoldEdge::None;}
-  if(draining)return HoldEdge::None;
-  if(!trigger || !grab) {
-   const bool released=down;
-   if(pending || down){pending=false;down=false;draining=true;}
-   return released?HoldEdge::Release:HoldEdge::None;
-  }
-  // The complete chord owns both buttons immediately, including the hold
-  // qualification window. Neither button can rearm it until both are up.
-  if(!pending && !down) {
-   if(!armed)return HoldEdge::None;
-   armed=false;pending=true;pressedAt=nowSeconds;return HoldEdge::None;
-  }
-  if(pending) {
-   if(nowSeconds<pressedAt){*this={};return HoldEdge::None;}
-   if(nowSeconds-pressedAt>=kWheelHoldSeconds){pending=false;down=true;return HoldEdge::Open;}
-  }
-  return HoldEdge::None;
- }
-};
 }
