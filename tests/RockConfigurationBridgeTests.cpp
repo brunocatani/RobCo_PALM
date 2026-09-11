@@ -1,4 +1,5 @@
 #include "IniSettingsStore.h"
+#include "../src/GrenadeSelection.h"
 #include <array>
 #include <cstring>
 #include <filesystem>
@@ -13,6 +14,20 @@ namespace
     std::string configured = "false";
     std::string written;
     bool refuseWrite = false;
+    std::string grenadeMode = "false";
+    bool publishGrenade = true;
+    bool grenadeVisitSucceeds = true;
+    bool visitGrenade(Group group, VisitorV1 callback, void* context) noexcept
+    {
+        if (!grenadeVisitSucceeds || group != Group::Consumer) return false;
+        const SettingV1 unrelated{"RealisticWeapons", "bOther", "true", "true", "", "", ValueType::Boolean, 0};
+        callback(&unrelated, context);
+        if (publishGrenade) {
+            const SettingV1 setting{"RealisticWeapons", "bImmersiveGrenades", grenadeMode.c_str(), "true", "", "", ValueType::Boolean, 0};
+            callback(&setting, context);
+        }
+        return true;
+    }
     std::uint64_t currentRevision() noexcept { return revision; }
     bool visit(Group group, VisitorV1 callback, void* context) noexcept
     {
@@ -51,6 +66,17 @@ int main()
 {
     using namespace rock_configurator;
     try {
+        const rock::configuration_api::ApiV1 grenadeApi{1, sizeof(rock::configuration_api::ApiV1), currentRevision, visitGrenade, nullptr};
+        require(wheel::immersiveGrenadesEnabled(&grenadeApi) == false, "disabled immersive grenades did not select vanilla mode");
+        grenadeMode = "true";
+        require(wheel::immersiveGrenadesEnabled(&grenadeApi) == true, "enabled immersive grenades did not select handoff mode");
+        grenadeMode = "false";
+        require(wheel::immersiveGrenadesEnabled(&grenadeApi) == false, "mode change left a cached handoff selection");
+        publishGrenade = false;
+        require(!wheel::immersiveGrenadesEnabled(&grenadeApi).has_value(), "missing grenade setting used an unrelated boolean");
+        publishGrenade = true; grenadeVisitSucceeds = false;
+        require(!wheel::immersiveGrenadesEnabled(&grenadeApi).has_value(), "failed setting visit enabled handoff");
+        require(!wheel::immersiveGrenadesEnabled(nullptr).has_value(), "missing ROCK configuration API was accepted");
         const rock::configuration_api::ApiV1 api{1, sizeof(rock::configuration_api::ApiV1), currentRevision, visit, set};
         const auto absent = std::filesystem::temp_directory_path() / "ROCK-absent-developer-bridge.ini";
         require(!std::filesystem::exists(absent), "fixture path must not exist");

@@ -9,6 +9,7 @@
 #include "Renderer.h"
 #include "WheelSelectionState.h"
 #include "Gestures.h"
+#include "GrenadeSelection.h"
 #include "ROCKProviderApi.h"
 #include "tools/ConfiguratorRuntime.h"
 #include "tools/render/FrameworkPanelRenderer.h"
@@ -112,6 +113,19 @@ std::optional<rpsui::sdk::PanelPoseV1> poseFor(const rpsui::sdk::InputFrameV1& f
  for(float v:p.center)if(!std::isfinite(v) || std::fabs(v)>1.e8f)return {};
  return p;
 }
+void requestInventoryHandoff(std::uint32_t id,const RockProviderFrameSnapshot& frame) {
+ auto& s=state();
+ RockProviderForceGrabRequestV1 request;
+ request.flags=static_cast<std::uint32_t>(RockProviderForceGrabFlagV1::FromPlayerInventory);
+ request.targetFormId=id;
+ request.worldGeneration=frame.worldGeneration;request.skeletonGeneration=frame.skeletonGeneration;
+ request.providerGeneration=frame.providerGeneration;
+ const auto result=RockProviderApi::inst->requestForceGrabV1(s.owner,&request,&s.command);
+ if(result!=RockProviderResultV1::RequestQueued) {
+  s.command=0;actionStatus(result==RockProviderResultV1::HandBusy?"Hands are busy — try again":"Item handoff unavailable");
+ }
+ spdlog::info("Selected item {:08X}: queue result {}",request.targetFormId,static_cast<unsigned>(result));
+}
 void submitChoice(const RockProviderFrameSnapshot& frame) {
  auto& s=state();const auto choice=s.choice.exchange(0);
  const auto ticket=s.choiceGeneration.load();
@@ -172,35 +186,41 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
    return;
   }
   // Only an item in the current non-equipment snapshot may enter the handoff path.
-  bool takeToHand=false;
+  bool takeToHand=false,grenade=false;
   {
    auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
    for(unsigned c=0;c<static_cast<unsigned>(Category::Weapons);++c)
-    for(const auto& item:shared.model.items[c])takeToHand|=selectionToken(item)==token && item.count>0;
+    for(const auto& item:shared.model.items[c])if(selectionToken(item)==token && item.count>0) {
+     takeToHand=true;grenade=c==static_cast<unsigned>(Category::Grenades);
+    }
   }
   if(!takeToHand){actionStatus("Selection is no longer available");return;}
 
-  if(!s.rockReady.load()) {
+  if(!s.rockReady.load() || grenade) {
    const auto* tasks=F4SE::GetTaskInterface();
    if(!tasks){actionStatus("Inventory task queue unavailable");return;}
    s.gameActionPending=true;
-   try{tasks->AddTask([ticket,id=static_cast<std::uint32_t>(choice)] {
+   try{tasks->AddTask([ticket,id=static_cast<std::uint32_t>(choice),grenade] {
     auto& runtime=state();struct Finish{RuntimeState& s;~Finish(){s.gameActionPending=false;}} finish{runtime};
+    try {
     if(!runtime.sessionReady.load() || !runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
+    RockProviderFrameSnapshot current;
+    if(grenade && runtime.rockReady.load() && RockProviderApi::inst &&
+       RockProviderApi::inst->getFrameSnapshot(&current) && current.providerReady) {
+     const auto module=GetModuleHandleW(L"ROCK.dll");
+     const auto get=module?reinterpret_cast<rock::configuration_api::GetApiV1>(GetProcAddress(module,rock::configuration_api::kExportName)):nullptr;
+     const auto immersive=immersiveGrenadesEnabled(get?get(rock::configuration_api::kVersion):nullptr);
+     if(!immersive) {
+      actionStatus("ROCK grenade setting unavailable");spdlog::warn("PALM grenade selection could not read ROCK's applied Immersive Grenades setting");return;
+     }
+     if(*immersive){requestInventoryHandoff(id,current);return;}
+    }
     actionStatus(useInventoryItem(id));refreshWheelInventory();
+    }catch(...){spdlog::error("PALM item selection task failed");}
    });}catch(...){s.gameActionPending=false;throw;}
    return;
   }
-  RockProviderForceGrabRequestV1 request;
-  request.flags=static_cast<std::uint32_t>(RockProviderForceGrabFlagV1::FromPlayerInventory);
-  request.targetFormId=static_cast<std::uint32_t>(choice);
-  request.worldGeneration=frame.worldGeneration;request.skeletonGeneration=frame.skeletonGeneration;
-  request.providerGeneration=frame.providerGeneration;
-  const auto result=RockProviderApi::inst->requestForceGrabV1(s.owner,&request,&s.command);
-  if(result!=RockProviderResultV1::RequestQueued) {
-   s.command=0;actionStatus(result==RockProviderResultV1::HandBusy?"Hands are busy — try again":"Item handoff unavailable");
-  }
-  spdlog::info("Selected item {:08X}: queue result {}",request.targetFormId,static_cast<unsigned>(result));
+  requestInventoryHandoff(static_cast<std::uint32_t>(choice),frame);
  }
 }
 void openHeldWheel(const rpsui::sdk::InputFrameV1& frame) {
