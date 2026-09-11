@@ -5,12 +5,15 @@
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
+#include "GestureCatalog.h"
 
 namespace wheel {
 enum class Category : unsigned { Aid, Food, Grenades, Weapons, Armor };
 inline constexpr unsigned kCategoryCount = 5;
-inline constexpr unsigned kConfigNavigation = kCategoryCount;
-inline constexpr unsigned kCancelNavigation = kCategoryCount + 1;
+inline constexpr unsigned kGesturesNavigation = kCategoryCount;
+inline constexpr unsigned kConfigNavigation = kCategoryCount + 1;
+inline constexpr unsigned kNavigationCount = kCategoryCount + 2;
+inline constexpr unsigned kCancelNavigation = kNavigationCount;
 inline constexpr bool isEquipment(Category category) { return category == Category::Weapons || category == Category::Armor; }
 inline constexpr std::size_t kSlots = 8;
 inline constexpr std::size_t kMaxItems = 512;
@@ -22,8 +25,9 @@ struct Model {
  Category category{Category::Aid};
  std::array<bool,kCategoryCount> enabled{true,true,true,true,true};
  std::string status{"Select something to take"};
+ GestureViewState gestures;
 };
-struct Action { std::uint64_t hoveredItem{}; bool configHovered{}; };
+struct Action { std::uint64_t hoveredItem{}; bool configHovered{}; unsigned hoveredGesture{}; };
 inline const char* categoryName(Category c) {
  switch(c) {case Category::Aid: return "AID"; case Category::Food: return "FOOD"; case Category::Grenades: return "GRENADES"; case Category::Weapons: return "WEAPONS"; case Category::Armor: return "ARMOR";}
  return "";
@@ -40,12 +44,12 @@ inline int hitSlot(float x, float y, float inner, float outer) {
  if(fraction < 0.025f || fraction > 0.975f) return -1;
  return static_cast<int>(segment);
 }
-// Six inner sectors; the hold/hover/release gesture remains independent of category.
+// Inventory, gestures and Config share the same hold/hover/release navigation.
 inline int hitCenter(float x,float y,float scale) {
  const float radius=std::hypot(x,y)/scale;
  if(radius<55) return kCancelNavigation;
  if(radius<70 || radius>173) return -1;
- constexpr float step=2*kPi/(kCategoryCount+1);
+ constexpr float step=2*kPi/kNavigationCount;
  float angle=std::atan2(y,x)+kPi/2+step/2;
  if(angle<0)angle+=2*kPi;
  if(angle>=2*kPi)angle-=2*kPi;

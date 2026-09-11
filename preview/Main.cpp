@@ -62,13 +62,22 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   if(cancelGesture){gesture={};wheelOpen=false;cancelGesture=false;}
   const auto edge=gesture.update(focused && !rock_configurator::isOpen(),ImGui::IsKeyDown(ImGuiKey_B),ImGui::GetTime());
   if(!focused)wheelOpen=false;
-  if(edge==wheel::HoldEdge::Open) {wheelOpen=true;view={};model=wheel::selectedWheelInventory(catalog);}
+  if(edge==wheel::HoldEdge::Open) {
+   wheelOpen=true;view={};const auto gestures=model.gestures;
+   model=wheel::selectedWheelInventory(catalog);model.gestures=gestures;
+   model.gestures.availability.fill(wheel::GestureAvailability::Free);
+  }
   wheel::Action hover;
   if(wheelOpen)hover=wheel::drawWheel(model,view);
   std::uint64_t selectedItem=0;
   if(edge==wheel::HoldEdge::Release && wheelOpen) {
    wheelOpen=false;
    if(hover.configHovered)rock_configurator::setPreviewOpen(true);
+   else if(hover.hoveredGesture) {
+    const unsigned hand=wheel::gestureIsLeft(hover.hoveredGesture)?1:0;
+    auto& active=model.gestures.active[hand];active=active==hover.hoveredGesture?0:hover.hoveredGesture;
+    model.status=active?"PREVIEW: GESTURE SELECTED":"PREVIEW: GESTURE CLEARED";
+   }
    else selectedItem=hover.hoveredItem;
   }
   if(rock_configurator::isOpen())(void)rock_configurator::drawImGui(12,12,size.x-24,size.y-24);
@@ -84,7 +93,8 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   }
   if(inventoryChanged)wheel::publishWheelInventory(catalog);
   if(wheel::takeWheelConfigChange() || inventoryChanged) {
-   const auto category=model.category;model=wheel::selectedWheelInventory(catalog);model.category=category;view={};
+   const auto category=model.category;const auto gestures=model.gestures;
+   model=wheel::selectedWheelInventory(catalog);model.category=category;model.gestures=gestures;view={};
   }
   if(ImGui::IsKeyPressed(ImGuiKey_R)){catalog=wheel::demoInventory();wheel::publishWheelInventory(catalog);model=wheel::selectedWheelInventory(catalog);view={};}
   if(ImGui::IsKeyPressed(ImGuiKey_Escape))done=true;

@@ -69,7 +69,12 @@ int main(int argc, char** argv) {
   click(100,367);click(rail+60,344);click(rail+60,392);save(L"weapon-favorites.png");
   click(100,429);click(rail+60,344);save(L"armor-favorites.png");
   wheelModel=wheel::selectedWheelInventory(wheel::demoInventory());wheelModel.category=wheel::Category::Weapons;
-  showWheel=true;save(L"equipment-wheel.png");showWheel=false;settle();
+  showWheel=true;save(L"equipment-wheel.png");
+  wheelModel.gestures.showing=true;wheelModel.gestures.availability.fill(wheel::GestureAvailability::Free);
+  save(L"gestures-left.png");
+  wheelModel.gestures.left=false;wheelModel.gestures.availability[0]=wheel::GestureAvailability::Busy;
+  save(L"gestures-right-busy.png");
+  showWheel=false;settle();
   click(rail+250,55);save(L"rock-settings.png");
   click(100,385);save(L"rock-settings-controls.png");
   click(220,120);save(L"developer-settings.png");

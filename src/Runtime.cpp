@@ -5,9 +5,11 @@
 #include "WheelConfig.h"
 #include "Renderer.h"
 #include "WheelSelectionState.h"
+#include "Gestures.h"
 #include "ROCKProviderApi.h"
 #include "tools/ConfiguratorRuntime.h"
 #include "tools/render/FrameworkPanelRenderer.h"
+#include <RE/Bethesda/SendPapyrusEvent.h>
 
 namespace wheel {
 namespace {
@@ -29,6 +31,7 @@ struct RuntimeState {
  rpsui::sdk::PanelPoseV1 wheelPose;
  std::uint64_t owner{},callback{},command{};
  HoldGesture gesture;
+ Gestures handGestures;
  bool suppression{},frameworkUnavailable{};
  std::uint32_t world{},skeleton{},provider{};
 };
@@ -40,7 +43,7 @@ void refreshWheelInventory() {
   try {
    auto inventory=readInventory();auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
    if(!state().sessionReady.load() || state().generation.load()!=ticket)return;
-   inventory.category=shared.model.category;inventory.status=shared.lastAction;
+   inventory.category=shared.model.category;inventory.status=shared.lastAction;inventory.gestures=shared.model.gestures;
    shared.model=std::move(inventory);shared.view={};
   }catch(...){spdlog::error("Wheel inventory refresh failed");}
  });
@@ -48,6 +51,11 @@ void refreshWheelInventory() {
 void actionStatus(const char* message) {
  auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
  shared.lastAction=message;shared.model.status=message;
+}
+void publishGestureState() {
+ auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
+ const auto& view=state().handGestures.view();
+ shared.model.gestures.active=view.active;shared.model.gestures.availability=view.availability;
 }
 void clearSuppression() {
  auto& s=state();
@@ -108,6 +116,7 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
  auto& s=state();const auto choice=s.choice.exchange(0);
  if(!choice || s.choiceGeneration.load()!=s.generation.load())return;
  if(choice==kConfigChoice) {
+  s.handGestures.clear(s.owner);
   const auto& p=s.wheelPose;devui::render::PanelPose pose;
   pose.center={p.center[0],p.center[1],p.center[2]};
   pose.right={p.right[0],p.right[1],p.right[2]};pose.up={p.up[0],p.up[1],p.up[2]};
@@ -115,7 +124,16 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
   pose.physicalWidth=p.physicalWidth;pose.physicalHeight=p.physicalHeight;
   rock_configurator::openAt(pose);
   spdlog::info("B release selected Config; replacing wheel at its anchor");
+ }else if(isGestureChoice(choice)) {
+  const auto* message=s.handGestures.select(s.owner,static_cast<unsigned>(choice),frame);
+  actionStatus(message);
+  auto* vm=RE::BSScript::Internal::VirtualMachine::GetSingleton();
+  const RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback{};
+  if(!vm || !Papyrus::detail::DispatchStaticCall(vm,RE::BSFixedString{"Debug"},RE::BSFixedString{"Notification"},callback,RE::BSFixedString{message}))
+   spdlog::warn("Wheel gesture notification unavailable: {}",message);
+  publishGestureState();
  }else if(choice&kItemChoice) {
+  s.handGestures.clear(s.owner);
   const auto token=choice&~kItemChoice;
   std::optional<Item> equipment;
   {
@@ -169,7 +187,7 @@ void openHeldWheel(const RockProviderFrameSnapshot& frame) {
    auto inventory=readInventory();auto& shared=sharedModel();
    {std::scoped_lock lock(shared.mutex);
     if(!s.sessionReady.load() || s.generation.load()!=ticket)return;
-    inventory.category=shared.model.category;
+    inventory.category=shared.model.category;inventory.gestures=shared.model.gestures;
     if(!shared.lastAction.empty())inventory.status=shared.lastAction;
     shared.model=std::move(inventory);shared.view={};}
    std::scoped_lock presentationLock(s.presentationMutex);
@@ -190,7 +208,8 @@ void releaseHeldWheel() {
  if(!s.open.exchange(false))return;
  (void)presentPanel(false);
  s.choiceGeneration=ticket;
- s.choice=hover?(hover->configHovered?kConfigChoice:hover->hoveredItem?(kItemChoice|hover->hoveredItem):kCancelChoice):kCancelChoice;
+ s.choice=hover?(hover->configHovered?kConfigChoice:hover->hoveredGesture?hover->hoveredGesture:
+  hover->hoveredItem?(kItemChoice|hover->hoveredItem):kCancelChoice):kCancelChoice;
  if(!hover){s.presentationFailed=true;spdlog::warn("Wheel had no rendered frame; grenade mode restored until the next load; check RPS_UI_Framework.log");}
  else spdlog::info("B release closed wheel using its last drawn selection, generation {}",ticket);
 }
@@ -217,15 +236,20 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
   const bool changed=s.sessionResetPending.exchange(false) || s.world!=frame->worldGeneration || s.skeleton!=frame->skeletonGeneration || s.provider!=frame->providerGeneration;
   if(!usable || changed) {
    if(wasOwning)spdlog::info("Wheel input released: nativeMenu={}, contextAvailable={}, providerMenu={}, lifecycleChanged={}",nativeMenu,contextAvailable,frame->menuBlocking,changed);
+   s.handGestures.clear(s.owner);publishGestureState();
    closeWheel();cancelCommand();clearSuppression();s.gesture={};
    s.world=frame->worldGeneration;s.skeleton=frame->skeletonGeneration;s.provider=frame->providerGeneration;
    return;
   }
+  s.handGestures.update(s.owner,*frame,!s.command && !s.equipmentPending.load() &&
+   !rock_configurator::isOpen() && !rock_configurator::isOpening());
+  publishGestureState();
   serviceCommand();
   submitChoice(*frame);
   if(rock_configurator::takeInventoryRefreshRequest())refreshWheelInventory();
   RockProviderRawWandButtonStateV1 button;
   if(!RockProviderApi::inst->getRawWandButtonStateV1(RockProviderHand::Right,kBButton,&button) || !button.available) {
+   s.handGestures.clear(s.owner);publishGestureState();
    closeWheel();cancelCommand();clearSuppression();s.gesture={};return;
   }
   const bool eligible=!s.command && !s.equipmentPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening();
@@ -244,6 +268,7 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
   // gesture masks gameplay input, including its physical release so it cannot
   // become a native VATS tap.
   if(!claimInput(*frame,s.gesture.down || edge==HoldEdge::Release)) {
+   s.handGestures.clear(s.owner);publishGestureState();
    s.inputReady=false;closeWheel();cancelCommand();s.gesture={};return;
   }
   if(edge==HoldEdge::Open)openHeldWheel(*frame);
@@ -251,6 +276,7 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
  }catch(...){
   spdlog::error("Wheel input failed; grenade mode restored until the next load");
   state().presentationFailed=true;state().inputReady=false;
+  state().handGestures.clear(state().owner);
   cancelCommand();clearSuppression();state().gesture={};closeWheel();
  }
 }
@@ -318,12 +344,15 @@ bool startRuntime() {
   static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::HandInputSuppression)|
   static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::InteractionCommands)|
   static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::HandInteractionState);
+ const bool gestureSupport=api->setHandVisualAuthorityV1 && api->clearHandVisualAuthorityV1 && supportsHandVisualAuthorityV1();
+ if(gestureSupport)registration.requestedCapabilities|=static_cast<std::uint32_t>(RockProviderConsumerCapabilityV1::HandVisualAuthority);
  RockProviderConsumerHandleV1 handle;
  if(api->registerConsumerV1(&registration,&handle)!=RockProviderResultV1::Ok || !handle.ownerToken)return false;
  if((handle.grantedCapabilities&registration.requestedCapabilities)!=registration.requestedCapabilities) {
   (void)api->unregisterConsumerV1(handle.ownerToken);return false;
  }
  auto& s=state();s.owner=handle.ownerToken;
+ if(gestureSupport)s.handGestures.initialize();
  if(api->registerFrameCallbackForOwnerV1(s.owner,onFrame,nullptr,&s.callback)!=RockProviderResultV1::Ok || !s.callback) {
   (void)api->unregisterConsumerV1(s.owner);s.owner=0;return false;
  }

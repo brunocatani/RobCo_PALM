@@ -35,8 +35,9 @@ foreach(target wheel_workshop wheel_workshop_preview)
 endforeach()
 target_link_libraries(wheel_workshop PUBLIC CommonLibF4::CommonLibF4)
 target_compile_definitions(wheel_workshop_preview PUBLIC WHEEL_DESKTOP_PREVIEW)
-add_library(ROCKWheelMenu SHARED src/Plugin.cpp src/Runtime.cpp src/Inventory.cpp src/Equipment.cpp src/Renderer.cpp
+add_library(ROCKWheelMenu SHARED src/Plugin.cpp src/Runtime.cpp src/Gestures.cpp src/Inventory.cpp src/Equipment.cpp src/Renderer.cpp
  src/tools/render/FrameworkPanelRenderer.cpp src/exports.def)
+set_source_files_properties(src/Gestures.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_include_directories(ROCKWheelMenu PRIVATE src
  "${WORKSPACE}/main_projects/RPS_SDK/SDK/ROCK/include"
  "${WORKSPACE}/secondary_projects/RPS_UI_Framework/SDK/include")
@@ -60,6 +61,11 @@ add_executable(WheelPolicyTests tests/PolicyTests.cpp)
 target_include_directories(WheelPolicyTests PRIVATE src "${WORKSPACE}/main_projects/ROCK/src")
 target_compile_features(WheelPolicyTests PRIVATE cxx_std_23)
 add_test(NAME Wheel.Policy COMMAND WheelPolicyTests)
+add_executable(WheelGestureTests tests/GestureTests.cpp src/Gestures.cpp)
+target_include_directories(WheelGestureTests PRIVATE src "${WORKSPACE}/main_projects/RPS_SDK/SDK/ROCK/include")
+target_link_libraries(WheelGestureTests PRIVATE CommonLibF4::CommonLibF4 spdlog::spdlog wheel_view)
+target_compile_options(WheelGestureTests PRIVATE /MP2 /utf-8 /wd4715)
+add_test(NAME Wheel.Gestures COMMAND WheelGestureTests)
 add_executable(WheelPreferencesTests tests/WheelPreferencesTests.cpp)
 target_include_directories(WheelPreferencesTests PRIVATE src)
 target_compile_features(WheelPreferencesTests PRIVATE cxx_std_23)
