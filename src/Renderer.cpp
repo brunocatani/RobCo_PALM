@@ -2,6 +2,7 @@
 #include "Renderer.h"
 #include "Runtime.h"
 #include "Fonts.h"
+#include "WheelConfig.h"
 #include "IconAtlas.h"
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
@@ -55,7 +56,7 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
   ImGui_ImplDX11_NewFrame();ImGui::NewFrame();
   Action action;
   {auto& shared=sharedModel();std::unique_lock modelLock(shared.mutex,std::try_to_lock);
-   if(modelLock.owns_lock())action=drawWheel(shared.model,shared.view,{},{},render.icons.ids());}
+   if(modelLock.owns_lock()){refreshWheelSections(shared.model);action=drawWheel(shared.model,shared.view,{},{},render.icons.ids());}}
   ImGui::Render();ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
   publishWheelSelection(ticket,action);
  } catch(const std::exception& e){spdlog::error("PALM render failed: {}",e.what());if(ticket)failWheelPresentation(ticket);}

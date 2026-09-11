@@ -28,8 +28,74 @@ void restoreWheelPreferences(Preferences prefs) {
  s.status="Saved with your game";
 }
 void publishWheelInventory(const Model& inventory){auto& s=state();std::scoped_lock lock(s.mutex);s.inventory=inventory;}
-Model selectedWheelInventory(const Model& inventory){auto& s=state();std::scoped_lock lock(s.mutex);return curatedInventory(inventory,s.prefs);}
+Model selectedWheelInventory(const Model& inventory){
+ auto& s=state();std::scoped_lock lock(s.mutex);auto result=curatedInventory(inventory,s.prefs);
+ if(sectionRegistry().snapshot(result.sections))
+  for(unsigned i=0;i<result.sections.count;++i)result.sections.sections[i].enabled=s.prefs.sectionEnabled(result.sections.sections[i].id);
+ return result;
+}
+void refreshWheelSections(Model& model) {
+ if(model.sections.revision==sectionRegistry().revision())return;
+ auto& s=state();std::unique_lock lock(s.mutex,std::try_to_lock);if(!lock.owns_lock())return;
+ if(!sectionRegistry().snapshot(model.sections))return;
+ for(unsigned i=0;i<model.sections.count;++i)model.sections.sections[i].enabled=s.prefs.sectionEnabled(model.sections.sections[i].id);
+}
 bool takeWheelConfigChange(){return state().changed.exchange(false);}
+void drawWheelSettings() {
+ auto& s=state();std::unique_lock lock(s.mutex,std::try_to_lock);if(!lock.owns_lock())return;
+ using namespace devui;
+ ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{26,24});
+ ImGui::BeginChild("wheel-settings",{0,0},ImGuiChildFlags_AlwaysUseWindowPadding);
+ visual::heading("Wheel sections","Choose which sections appear. Visible sections fill the ring.");
+ {visual::Font font(render::FontRole::Body,18);
+  ImGui::TextColored(visual::muted(),"%u / %u slots enabled. Config and Cancel always stay available.",s.prefs.enabledEntries(),palm::api::kMaxVisibleEntries);
+  ImGui::TextColored(visual::muted(),"Hiding a section keeps its item choices. Gestures uses two slots.");}
+ ImGui::Dummy({0,16});
+ const auto toggle=[&](const char* name,const char* detail,bool& enabled,unsigned cost) {
+  ImGui::TableNextColumn();ImGui::PushID(name);
+  ImGui::BeginDisabled(!enabled && s.prefs.enabledEntries()+cost>palm::api::kMaxVisibleEntries);
+  bool changed;
+  {visual::Font font(render::FontRole::Medium,24);ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{4,4});
+   changed=ImGui::Checkbox(name,&enabled);ImGui::PopStyleVar();}
+  ImGui::EndDisabled();
+  {visual::Font font(render::FontRole::Body,18);ImGui::TextColored(visual::muted(),"%s",detail);}
+  ImGui::Dummy({0,14});ImGui::PopID();return changed;
+ };
+ if(ImGui::BeginTable("wheel-section-toggles",2,ImGuiTableFlags_SizingStretchSame)) {
+  for(const auto category:{Category::Weapons,Category::Armor,Category::Aid,Category::Food,Category::Grenades}) {
+   const auto c=static_cast<unsigned>(category);
+   if(toggle(categoryName(category),"Inventory items",s.prefs.enabled[c],1))s.changed=true;
+  }
+  if(toggle("Gestures","Left and right hand menus",s.prefs.gesturesEnabled,2))s.changed=true;
+  ImGui::EndTable();
+ }
+ SectionCatalog catalog;
+ if(sectionRegistry().snapshot(catalog)) {
+  visual::caption("MOD SECTIONS");ImGui::Dummy({0,12});
+  if(catalog.count==0 && s.prefs.sections.empty()) {
+   visual::Font font(render::FontRole::Body,20);ImGui::TextColored(visual::muted(),"No mod sections registered.");
+  }else if(ImGui::BeginTable("mod-section-toggles",2,ImGuiTableFlags_SizingStretchSame)) {
+   for(unsigned i=0;i<catalog.count;++i) {
+    const auto& section=catalog.sections[i];bool enabled=s.prefs.sectionEnabled(section.id);
+    ImGui::PushID(section.id);
+    if(toggle(section.name,section.modName,enabled,1) && s.prefs.setSectionEnabled(section.id,enabled))s.changed=true;
+    ImGui::PopID();
+   }
+   // Remembered unavailable sections remain removable instead of reserving slots forever.
+   for(std::size_t i=0;i<s.prefs.sections.size();) {
+    const auto& id=s.prefs.sections[i];
+    const bool present=std::any_of(catalog.sections.begin(),catalog.sections.begin()+catalog.count,[&](const auto& value){return id==value.id;});
+    if(present){++i;continue;}
+    bool enabled=true;
+    if(toggle(id.c_str(),"Mod not currently registered",enabled,1)) {
+     s.prefs.sections.erase(s.prefs.sections.begin()+i);s.changed=true;
+    }else ++i;
+   }
+   ImGui::EndTable();
+  }
+ }
+ ImGui::EndChild();ImGui::PopStyleVar();
+}
 void drawWheelConfig() {
  auto& s=state();std::unique_lock lock(s.mutex,std::try_to_lock);if(!lock.owns_lock())return;
  using namespace devui;
@@ -39,20 +105,15 @@ void drawWheelConfig() {
  visual::caption("QUICK ACCESS");ImGui::Dummy({0,12});
  for(unsigned c=0;c<kCategoryCount;++c) {
   ImGui::PushID(static_cast<int>(c));
-  if(visual::navigation(categoryName(static_cast<Category>(c)),s.category==c))s.category=c;
+  if(visual::navigation(categoryName(static_cast<Category>(c)),s.category==c,s.prefs.enabled[c]?nullptr:"OFF"))s.category=c;
   ImGui::PopID();
  }
  ImGui::EndChild();ImGui::SameLine(0,0);
  ImGui::PopStyleVar();
  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{26,24});
  ImGui::BeginChild("wheel-category-content",{0,0},ImGuiChildFlags_AlwaysUseWindowPadding);
- const float top=ImGui::GetCursorPosY();
  visual::heading(categoryName(static_cast<Category>(s.category)), "Choose up to eight items for this category.");
- const float afterHeading=ImGui::GetCursorPosY();
- ImGui::SetCursorPos({ImGui::GetWindowWidth()-230,top+6});
- ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{3,3});
- if(ImGui::Checkbox("Show in wheel",&s.prefs.enabled[s.category]))s.changed=true;
- ImGui::PopStyleVar();ImGui::SetCursorPos({26,afterHeading});
+ if(!s.prefs.enabled[s.category]){visual::Font font(render::FontRole::Body,18);ImGui::TextColored(visual::muted(),"Hidden from the wheel. Enable it in PALM settings.");ImGui::Dummy({0,8});}
  auto& favorites=s.prefs.slots[s.category];const auto& catalog=s.inventory.items[s.category];
  const float searchWidth=(std::max)(220.0f,ImGui::GetContentRegionAvail().x-280);
  ImGui::SetNextItemWidth(searchWidth);

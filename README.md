@@ -12,7 +12,9 @@ RobCo P.A.L.M. is a wheel menu for Fallout 4 VR. Hold B, point at an item, and r
 - **Physical item access:** Bring one aid item, food item, or grenade from your inventory into a free hand for use with ROCK.
 - **Eight hand gestures:** Thumbs up, middle finger, rock and roll, peace, pointing, fist, open hand, and shaka. Choose the left or right hand from the inner ring. A busy hand shows a warning; a pose clears when that hand starts another action or interaction.
 - **Fallout-specific outline icons:** Distinct icons for weapon types, equipment, consumables, and gestures.
+- **PALM settings:** Show or hide Aid, Food, Grenades, Weapons, Armor, and Gestures. Visible sections redistribute around the inner ring without empty gaps.
 - **In-game configuration:** Choose wheel items and access ROCK, ROCK developer, PAPER, and SCISSORS settings.
+- **Mod sections:** Other native mods can add named sections and up to eight items per section through PALM's API. Enable those sections in PALM settings.
 - **Item spawner:** Browse by plugin and category and add items to your inventory.
 
 ## Requirements
@@ -31,6 +33,8 @@ PAPER and SCISSORS are optional integrations for their corresponding configurati
 
 Choose **Config** to set up your wheel items. The **Left Gestures** and **Right Gestures** entries choose which hand receives a pose. Selecting the active gesture again clears it.
 
+The **Items** tab chooses inventory entries. **PALM settings** controls visible sections. The inner ring supports up to **10 entries**, including Config; Gestures occupies two entries. Hiding sections keeps their item choices, and Config and Cancel always remain accessible.
+
 A short B tap keeps its native action. While PALM is available, it replaces ROCK's grenade quick draw; grenades remain accessible through the wheel.
 
 ## Plugin and configuration
@@ -38,6 +42,14 @@ A short B tap keeps its native action. While PALM is available, it replaces ROCK
 The plugin is **`F4SE/Plugins/wheelmenu.dll`**. Its registration name is `RobCoPALM` and its log is `RobCoPALM.log` in the F4SE log directory.
 
 The configuration pages edit the owning mods' settings under `Documents\My Games\Fallout4VR\Mods_Config\`: `ROCK\ROCK.ini`, `ROCK\ROCK_Developer.ini`, `PAPER\PAPER.ini`, and `SCISSORS\SCISSORS.ini`. Changes follow each mod's own apply and reload rules.
+
+## Adding a mod section
+
+The public headers are in [`SDK/include/PALMMenuApi.h`](SDK/include/PALMMenuApi.h) and [`PALMIcons.h`](SDK/include/PALMIcons.h). Resolve `GetPALMMenuApi` from `wheelmenu.dll` and request API version 1. The [`physical magazine example`](SDK/examples/PhysicalMagazines.cpp) compiles as part of the local build.
+
+A mod registers a unique section ID, display name, icon, and selection callback, then publishes a copied snapshot of up to eight items. PALM supports up to ten registered mod sections. New mod sections start hidden until enabled in PALM settings.
+
+Selections run on the F4SE game task thread after the wheel closes. Your mod owns the action and its vanilla or ROCK integration; a magazine entry can represent your mod's physical object rather than an ammo form. Respect the owning API's thread rules when performing the action. PALM's item snapshots are cleared on a game load, and mods republish for the new session. Unregister successfully before freeing callback state; `CallbackBusy` requires a later retry.
 
 ## Local development
 

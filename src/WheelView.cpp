@@ -12,7 +12,7 @@ void centered(ImDrawList* draw, ImVec2 position, float size, ImU32 tint, const c
 }
 Icon categoryIcon(Category category){return static_cast<Icon>(static_cast<unsigned>(Icon::Aid)+static_cast<unsigned>(category));}
 void sector(ImDrawList* draw, ImVec2 center, float inner, float outer, float a, float b, ImU32 tint,ImU32 outline=0) {
- constexpr int pieces=20;
+ const int pieces=std::max(20,static_cast<int>((b-a)*24));
  // Antialias only the perimeter; AA on every tile creates visible radial seams.
  const auto flags=draw->Flags;draw->Flags&=~ImDrawListFlags_AntiAliasedFill;
  for(int k=0;k<pieces;++k) {
@@ -46,28 +46,56 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
  const ImVec2 center=point(512,510);
  const float inner=180*scale, outer=(326+10*view.animation)*scale;
  const float mx=io.MousePos.x-center.x, my=io.MousePos.y-center.y;
- const int navigation=hitCenter(mx,my,scale);
+ normalizeWheelSelection(model);
+ const auto layout=navigationLayout(model);
+ const int navigation=hitCenter(mx,my,scale,layout);
  const int hoveredCategory=navigationCategory(navigation);
  if(hoveredCategory>=0 && model.enabled[hoveredCategory]) {
-  model.category=static_cast<Category>(hoveredCategory);model.gestures.showing=false;
+  model.category=static_cast<Category>(hoveredCategory);model.gestures.showing=false;model.activeSection=0;
  }
  if(navigation==static_cast<int>(kLeftGesturesNavigation) || navigation==static_cast<int>(kRightGesturesNavigation)) {
-  model.gestures.showing=true;model.gestures.left=navigation==static_cast<int>(kLeftGesturesNavigation);
+  model.gestures.showing=true;model.gestures.left=navigation==static_cast<int>(kLeftGesturesNavigation);model.activeSection=0;
  }
- if(!model.enabled[static_cast<unsigned>(model.category)])
-  for(unsigned c=0;c<kCategoryCount;++c)if(model.enabled[c]){model.category=static_cast<Category>(c);break;}
+ if(navigation>=static_cast<int>(kExternalNavigation)) {
+  model.activeSection=model.sections.sections[navigation-kExternalNavigation].handle;model.gestures.showing=false;
+ }
+ const SectionSnapshot* external=nullptr;
+ for(unsigned i=0;i<model.sections.count;++i)
+  if(model.sections.sections[i].enabled && model.sections.sections[i].handle==model.activeSection)external=&model.sections.sections[i];
  const auto category=static_cast<unsigned>(model.category);
- auto& gestures=model.gestures;const bool showingGestures=gestures.showing;
+ auto& gestures=model.gestures;const bool showingGestures=!external && gestures.showing;
+ const bool showingItems=!external && !showingGestures && model.enabled[category];
  auto& items=model.items[category];
  const int hit=hitSlot(mx,my,inner,outer);
  const std::size_t index=hit>=0 ? hit : items.size();
- const Item* hovered=!showingGestures && index<items.size()? &items[index]:nullptr;
+ const Item* hovered=showingItems && index<items.size()? &items[index]:nullptr;
+ const auto* externalHover=external && hit>=0 && static_cast<unsigned>(hit)<external->count?&external->items[hit]:nullptr;
  const unsigned hand=gestures.left?1:0;
 
- for(std::size_t slot=0;slot<kSlots;++slot) {
+ for(std::size_t slot=0;(showingItems || showingGestures || external) && slot<kSlots;++slot) {
   const float mid=-kPi/2+static_cast<float>(slot)*kPi/4;
   const float start=mid-kPi/8+.021f, end=mid+kPi/8-.021f;
   const auto itemIndex=slot;
+  if(external) {
+   const auto* item=slot<external->count?&external->items[slot]:nullptr;
+   const bool available=item && !(item->flags&static_cast<unsigned>(palm::api::ItemFlag::Disabled));
+   const bool over=available && hit==static_cast<int>(slot);
+   sector(draw,center,inner,outer,start,end,over?green:surface,over?green:item?boundary:phosphor(alpha/8));
+   if(!item)continue;
+   const ImVec2 p{center.x+std::cos(mid)*258*scale,center.y+std::sin(mid)*258*scale};
+   const auto ink=over?dark:available?green:muted;
+   drawIcon(draw,{p.x,p.y-39*scale},46*scale,item->icon,ink,icons);
+   if(item->flags&static_cast<unsigned>(palm::api::ItemFlag::Equipped))centered(draw,{p.x,p.y+4*scale},16*scale,ink,"EQUIPPED");
+   else if(item->flags&static_cast<unsigned>(palm::api::ItemFlag::ShowQuantity)) {
+    char quantity[16];std::snprintf(quantity,sizeof(quantity),"%u",item->quantity);
+    centered(draw,{p.x,p.y+4*scale},22*scale,ink,quantity);
+   }
+   const float labelSize=16*scale,labelWidth=140*scale;
+   const auto extent=ImGui::GetFont()->CalcTextSizeA(labelSize,labelWidth,labelWidth,item->name);
+   draw->PushClipRect({p.x-labelWidth/2,p.y+22*scale},{p.x+labelWidth/2,p.y+62*scale},true);
+   draw->AddText(ImGui::GetFont(),labelSize,{p.x-extent.x/2,p.y+23*scale},ink,item->name,nullptr,labelWidth);
+   draw->PopClipRect();continue;
+  }
   if(showingGestures) {
    const auto& definition=kGestures[slot];const bool over=hit==static_cast<int>(slot);
    const bool selected=gestures.active[hand]==gestureChoice(static_cast<unsigned>(slot),gestures.left);
@@ -99,20 +127,28 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
    ink,item.name.c_str(),nullptr,labelWidth);
   draw->PopClipRect();
  }
- for(unsigned c=0;c<kNavigationCount;++c) {
+ for(unsigned slot=0;slot<layout.count;++slot) {
+  const unsigned c=layout.entries[slot];
+  const auto* section=c>=kExternalNavigation?&model.sections.sections[c-kExternalNavigation]:nullptr;
   const int itemCategory=navigationCategory(static_cast<int>(c));
   const bool gestureEntry=c==kLeftGesturesNavigation || c==kRightGesturesNavigation;
-  if(itemCategory>=0 && !model.enabled[itemCategory])continue;
-  const float mid=-kPi/2+c*(2*kPi/kNavigationCount);
+  const float mid=layout.angle(slot);
   const bool over=navigation==static_cast<int>(c);
   const auto ink=over?dark:green;
-  const bool selected=showingGestures?c==(gestures.left?kLeftGesturesNavigation:kRightGesturesNavigation):itemCategory==static_cast<int>(category);
-  sector(draw,center,70*scale,(inner-8*scale),mid-kPi/kNavigationCount+.035f,mid+kPi/kNavigationCount-.035f,
+  const bool selected=external?section && section->handle==external->handle:showingGestures?c==(gestures.left?kLeftGesturesNavigation:kRightGesturesNavigation):showingItems && itemCategory==static_cast<int>(category);
+  sector(draw,center,70*scale,(inner-8*scale),mid-layout.step/2+kNavigationGap,mid+layout.step/2-kNavigationGap,
    over?green:surface,selected || over?green:boundary);
   if(selected)
-   sector(draw,center,inner-11*scale,inner-8*scale,mid-kPi/kNavigationCount+.06f,mid+kPi/kNavigationCount-.06f,green);
+   sector(draw,center,inner-11*scale,inner-8*scale,mid-layout.step/2+.06f,mid+layout.step/2-.06f,green);
   const ImVec2 label{center.x+std::cos(mid)*119*scale,center.y+std::sin(mid)*119*scale};
-  if(gestureEntry) {
+  if(section) {
+   drawIcon(draw,{label.x,label.y-15*scale},20*scale,section->icon,over || selected?ink:muted,icons);
+   const float labelSize=(layout.count>8?12:13)*scale,labelWidth=layout.count>8?66*scale:78*scale;
+   const auto extent=ImGui::GetFont()->CalcTextSizeA(labelSize,labelWidth,labelWidth,section->name);
+   draw->PushClipRect({label.x-labelWidth/2,label.y+9*scale},{label.x+labelWidth/2,label.y+40*scale},true);
+   draw->AddText(ImGui::GetFont(),labelSize,{label.x-extent.x/2,label.y+9*scale},over || selected?ink:muted,section->name,nullptr,labelWidth);
+   draw->PopClipRect();
+  }else if(gestureEntry) {
    drawIcon(draw,{label.x,label.y-19*scale},19*scale,c==kLeftGesturesNavigation?Icon::LeftHand:Icon::RightHand,over || selected?ink:muted,icons);
    centered(draw,{label.x,label.y+10*scale},15*scale,over || selected?ink:muted,c==kLeftGesturesNavigation?"LEFT":"RIGHT");
    centered(draw,{label.x,label.y+27*scale},11*scale,over || selected?ink:muted,"GESTURES");
@@ -128,7 +164,14 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
  centered(draw,{center.x,center.y+16*scale},(cancelHovered?18:12)*scale,cancelHovered?dark:muted,"CANCEL");
  action.hoveredItem=hovered && hovered->count>0?selectionToken(*hovered):0;
  action.configHovered=navigation==static_cast<int>(kConfigNavigation);
- if(showingGestures) {
+ if(external) {
+  centered(draw,point(512,886),23*scale,green,externalHover?externalHover->name:external->name);
+  if(externalHover) {
+   const bool available=!(externalHover->flags&static_cast<unsigned>(palm::api::ItemFlag::Disabled));
+   if(available){action.section=external->handle;action.sectionItem=externalHover->id;}
+   centered(draw,point(512,920),16*scale,muted,available?"RELEASE B TO SELECT":"UNAVAILABLE");
+  }else if(!external->count)centered(draw,point(512,920),16*scale,muted,"No items available from this mod");
+ }else if(showingGestures) {
   if(hit>=0) {
    action.hoveredGesture=gestureChoice(static_cast<unsigned>(hit),gestures.left);
    centered(draw,point(512,886),23*scale,green,kGestures[hit].name);
@@ -141,7 +184,8 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
  }else if(hovered) {
   centered(draw,point(512,886),23*scale,green,hovered->name.c_str());
   centered(draw,point(512,920),16*scale,muted,!hovered->count?"NOT CURRENTLY CARRIED":isEquipment(model.category)?(hovered->equipped?"RELEASE B TO UNEQUIP":"RELEASE B TO EQUIP"):"RELEASE B TO TAKE ONE");
- }else if(items.empty())centered(draw,point(512,886),20*scale,muted,"Choose your items in Config");
+ }else if(!showingItems)centered(draw,point(512,886),20*scale,muted,"Enable wheel sections in Config");
+ else if(items.empty())centered(draw,point(512,886),20*scale,muted,"Choose your items in Config");
  centered(draw,point(512,960),14*scale,muted,model.status.c_str());
  ImGui::End();
  return action;

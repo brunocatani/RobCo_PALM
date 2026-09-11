@@ -8,5 +8,7 @@ void restoreWheelPreferences(Preferences prefs);
 void publishWheelInventory(const Model& inventory);
 Model selectedWheelInventory(const Model& inventory);
 bool takeWheelConfigChange();
+void refreshWheelSections(Model& model);
 void drawWheelConfig();
+void drawWheelSettings();
 }

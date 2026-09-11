@@ -69,11 +69,12 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
    model.gestures.availability.fill(wheel::GestureAvailability::Free);
   }
   wheel::Action hover;
-  if(wheelOpen)hover=wheel::drawWheel(model,view,{},{},icons.ids());
+  if(wheelOpen){wheel::refreshWheelSections(model);hover=wheel::drawWheel(model,view,{},{},icons.ids());}
   std::uint64_t selectedItem=0;
   if(edge==wheel::HoldEdge::Release && wheelOpen) {
    wheelOpen=false;
    if(hover.configHovered)rock_configurator::setPreviewOpen(true);
+   else if(hover.section)(void)wheel::sectionRegistry().dispatch(hover.section,hover.sectionItem);
    else if(hover.hoveredGesture) {
     const unsigned hand=wheel::gestureIsLeft(hover.hoveredGesture)?1:0;
     auto& active=model.gestures.active[hand];active=active==hover.hoveredGesture?0:hover.hoveredGesture;

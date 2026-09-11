@@ -124,6 +124,29 @@ void checkSelection() {
   (void)draw(512+std::cos(angle)*119,510+std::sin(angle)*119);
   require(!model.gestures.showing && static_cast<int>(model.category)==category,"inventory navigation changed its category meaning");
  }
+ // Hidden sections cannot retain an actionable gesture or stale category.
+ model.gesturesEnabled=false;model.gestures.showing=true;model.enabled.fill(false);
+ auto emptyAction=draw(512,252);
+ require(!emptyAction.hoveredItem && !emptyAction.hoveredGesture && !emptyAction.section,"hidden content remained selectable");
+ const auto emptyLayout=navigationLayout(model);const auto configAngle=emptyLayout.angle(0);
+ require(draw(512+std::cos(configAngle)*119,510+std::sin(configAngle)*119).configHovered,"all-hidden wheel lost Config");
+ // Mod items use their own action identity and the same drawn-selection lifetime.
+ model.enabled.fill(true);model.gesturesEnabled=true;model.sections.count=2;
+ for(unsigned i=0;i<2;++i) {
+  auto& section=model.sections.sections[i];section.handle=50+i;section.enabled=true;
+  std::strcpy(section.name,"Magazines");section.count=1;section.items[0].id=100+i;
+  std::strcpy(section.items[0].name,"10mm Magazine");
+ }
+ const auto customLayout=navigationLayout(model);require(customLayout.count==10,"mod sections did not extend the ring");
+ unsigned customSlot=0;while(customLayout.entries[customSlot]!=kExternalNavigation)++customSlot;
+ const auto customAngle=customLayout.angle(customSlot);
+ (void)draw(512+std::cos(customAngle)*119,510+std::sin(customAngle)*119);
+ const auto customAction=draw(512,252);
+ require(customAction.section==50 && customAction.sectionItem==100 && !customAction.hoveredItem && !customAction.hoveredGesture,"mod item used a built-in action path");
+ model.sections.sections[0].items[0].flags=static_cast<unsigned>(palm::api::ItemFlag::Disabled);
+ require(!draw(512,252).section,"disabled mod item remained selectable");
+ model.sections.sections[0].enabled=false;
+ require(!draw(512,252).section && model.activeSection==0,"removed mod section retained its active page");
  ImGui::DestroyContext();
 }
 }

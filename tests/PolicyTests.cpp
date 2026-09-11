@@ -49,12 +49,32 @@ int main(){try {
  using namespace wheel;
  check(hitSlot(0,-250,180,336)==0);check(hitSlot(250,0,180,336)==2);
  check(hitSlot(0,0,180,336)==-1);check(hitSlot(0,400,180,336)==-1);
- for(unsigned c=0;c<kNavigationCount;++c) {
-  const float angle=-kPi/2+c*2*kPi/kNavigationCount;
-  check(hitCenter(std::cos(angle)*120,std::sin(angle)*120,1)==static_cast<int>(c));
-  check(hitCenter(std::cos(angle)*60,std::sin(angle)*60,.5f)==static_cast<int>(c));
+ // Every built-in visibility combination, with zero through ten registered mod
+ // sections, keeps Config reachable and hits the same sectors that are drawn.
+ for(unsigned mask=0;mask<64;++mask)for(unsigned mods=0;mods<=palm::api::kMaxSections;++mods) {
+  Model model;for(unsigned c=0;c<kCategoryCount;++c)model.enabled[c]=(mask&(1u<<c))!=0;
+  model.gesturesEnabled=(mask&32)!=0;model.sections.count=mods;
+  for(unsigned i=0;i<mods;++i){model.sections.sections[i].handle=i+1;model.sections.sections[i].enabled=true;}
+  const auto layout=navigationLayout(model);
+  check(layout.count>=1 && layout.count<=palm::api::kMaxVisibleEntries);
+  check(layout.entries[layout.count-1]==kConfigNavigation);
+  for(unsigned slot=0;slot<layout.count;++slot) {
+   const float angle=layout.angle(slot);const auto id=layout.entries[slot];
+   check(hitCenter(std::cos(angle)*120,std::sin(angle)*120,1,layout)==static_cast<int>(id));
+   check(hitCenter(std::cos(angle)*60,std::sin(angle)*60,.5f,layout)==static_cast<int>(id));
+   const float gap=angle+layout.step/2;
+   check(hitCenter(std::cos(gap)*120,std::sin(gap)*120,1,layout)==-1);
+   if(id==kRightGesturesNavigation)check(std::cos(angle)>0);
+   if(id==kLeftGesturesNavigation)check(std::cos(angle)<0);
+   const auto category=navigationCategory(id);if(category>=0)check(model.enabled[category]);
+  }
+  check(hitCenter(0,0,1,layout)==kCancelNavigation);check(hitCenter(0,190,1,layout)==-1);
+  model.category=Category::Weapons;normalizeWheelSelection(model);
+  if(model.enabled[3])check(model.category==Category::Weapons);
+  else if(mask&31)check(model.enabled[static_cast<unsigned>(model.category)]);
+  else if(model.gesturesEnabled)check(model.gestures.showing);
+  else check(!mods || model.activeSection!=0);
  }
- check(hitCenter(0,0,1)==kCancelNavigation);check(hitCenter(0,190,1)==-1);
  check(isEquipment(Category::Weapons) && isEquipment(Category::Armor));
  check(!isEquipment(Category::Aid) && !isEquipment(Category::Grenades));
  check(knownItemIcon(true,0x00023736)==Icon::Stimpak);

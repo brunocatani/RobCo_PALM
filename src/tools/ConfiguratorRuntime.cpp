@@ -33,6 +33,7 @@ namespace rock_configurator
         enum class ConfiguratorTab : std::uint8_t
         {
             Wheel,
+            WheelSettings,
             Settings,
             Spawn,
         };
@@ -389,6 +390,7 @@ namespace rock_configurator
                 }
                 break;
             case ConfiguratorTab::Wheel:
+            case ConfiguratorTab::WheelSettings:
             case ConfiguratorTab::Spawn:
                 break;
             }
@@ -746,8 +748,8 @@ namespace rock_configurator
 
         void drawTopBar()
         {
-            constexpr std::array tabs{ConfiguratorTab::Wheel, ConfiguratorTab::Settings, ConfiguratorTab::Spawn};
-            constexpr std::array labels{"PALM items", "RPS configurator", "Spawner"};
+            constexpr std::array tabs{ConfiguratorTab::Wheel, ConfiguratorTab::WheelSettings, ConfiguratorTab::Settings, ConfiguratorTab::Spawn};
+            constexpr std::array labels{"Items", "PALM settings", "RPS mods", "Spawner"};
             const auto active = s_activeTab.load(std::memory_order_acquire);
             const auto p = ImGui::GetWindowPos();
             const float width = ImGui::GetWindowWidth();
@@ -759,9 +761,10 @@ namespace rock_configurator
             ImGui::SetCursorPos({28, 43});
             { ScopedFont font(devui::render::FontRole::Heading, 30); ImGui::TextUnformatted("Configuration"); }
             const float start = devui::visual::railWidth(width) + 14;
+            const float tabStep = (std::min)(194.0f, (width - 342 - start) / tabs.size());
             for (std::size_t i = 0; i < tabs.size(); ++i) {
-                ImGui::SetCursorPos({start + static_cast<float>(i) * 194, 28});
-                if (tabChip(labels[i], tabs[i] == active, {184, 62})) queueTab(tabs[i]);
+                ImGui::SetCursorPos({start + static_cast<float>(i) * tabStep, 28});
+                if (tabChip(labels[i], tabs[i] == active, {tabStep - 10, 62})) queueTab(tabs[i]);
             }
             ImGui::SetCursorPos({width - 322, 20});
             { ScopedFont font(devui::render::FontRole::Medium, 24);
@@ -1225,6 +1228,9 @@ namespace rock_configurator
         {
             if(s_activeTab.load(std::memory_order_acquire)==ConfiguratorTab::Wheel) {
                 wheel::drawWheelConfig(); return;
+            }
+            if(s_activeTab.load(std::memory_order_acquire)==ConfiguratorTab::WheelSettings) {
+                wheel::drawWheelSettings(); return;
             }
             const float railWidth = devui::visual::railWidth(ImGui::GetContentRegionAvail().x);
             const auto tab = s_activeTab.load(std::memory_order_acquire);

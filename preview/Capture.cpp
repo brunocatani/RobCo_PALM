@@ -13,6 +13,8 @@
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
+#include <cstdio>
+#include <cstring>
 
 using Microsoft::WRL::ComPtr;
 void check(HRESULT hr) { if (FAILED(hr)) throw std::runtime_error("Offscreen capture failed: " + std::to_string(hr)); }
@@ -65,14 +67,19 @@ int main(int argc, char** argv) {
    context->Unmap(cpu.Get(),0);
   };
   const float rail=devui::visual::railWidth(static_cast<float>(width));
+  const auto tab=[&](unsigned index) {
+   const float start=rail+14,step=(std::min)(194.f,(width-342-start)/4);
+   click(start+(index+.5f)*step,55);
+  };
   settle();
   const bool settingsOnly = argc > 3 && std::string_view(argv[3]) == "--settings-only";
   if (settingsOnly) {
-   click(rail+250,55);save(L"rock-settings.png");
+   tab(2);save(L"rock-settings.png");
    click(220,120);save(L"developer-settings.png");
   } else {
   click(rail+60,344);click(rail+60,392);click(rail+60,440);
   save(L"wheel-items.png");
+  tab(1);save(L"palm-settings.png");tab(0);
   click(100,367);click(rail+60,344);click(rail+60,392);save(L"weapon-favorites.png");
   click(100,429);click(rail+60,344);save(L"armor-favorites.png");
   wheelModel=wheel::selectedWheelInventory(wheel::demoInventory());wheelModel.category=wheel::Category::Weapons;
@@ -97,18 +104,45 @@ int main(int argc, char** argv) {
    {8,"Combat Knife",1,false,"",0,wheel::Icon::CombatKnife}
   };save(L"weapon-icons.png");
   save(L"center-selected.png",{width*.5f,height*.5f});
+  wheelModel.enabled={false,false,false,true,true};wheelModel.gesturesEnabled=false;
+  save(L"equipment-only.png");
+  wheelModel.enabled.fill(false);save(L"config-only.png");
+  // Exercise the same registration and snapshot code that a native mod uses.
+  std::array<palm::api::SectionHandle,2> modSections{};
+  auto preferences=wheel::snapshotWheelPreferences();
+  for(unsigned i=0;i<modSections.size();++i) {
+   palm::api::SectionV1 section;
+   std::snprintf(section.id,sizeof(section.id),"preview.section%u",i);
+   std::strcpy(section.name,i?"Tools":"Magazines");std::strcpy(section.modName,"Example mod");
+   section.icon=i?wheel::Icon::Config:wheel::Icon::CombatRifle;
+   section.onSelect=+[](std::uint32_t,std::uint64_t,void*) noexcept {};
+   if(wheel::sectionRegistry().registerSection(&section,&modSections[i])!=palm::api::Result::Ok)throw std::runtime_error("Preview section registration failed");
+   std::array<palm::api::ItemV1,2> entries;
+   for(unsigned item=0;item<entries.size();++item) {
+    entries[item].id=item+1;entries[item].quantity=3+item;
+    entries[item].icon=i?wheel::Icon::Config:item?wheel::Icon::CombatRifle:wheel::Icon::Pistol10mm;
+    entries[item].flags=i?0:static_cast<unsigned>(palm::api::ItemFlag::ShowQuantity);
+    std::strcpy(entries[item].name,i?(item?"Inspect object":"Mod action"):(item?"Combat Rifle Magazine":"10mm Magazine"));
+   }
+   if(wheel::sectionRegistry().setItems(modSections[i],entries.data(),static_cast<std::uint32_t>(entries.size()))!=palm::api::Result::Ok)throw std::runtime_error("Preview section items failed");
+   if(!preferences.setSectionEnabled(section.id,true))throw std::runtime_error("Preview section visibility failed");
+  }
+  wheel::restoreWheelPreferences(preferences);wheel::publishWheelInventory(wheel::demoInventory());
+  wheelModel=wheel::selectedWheelInventory(wheel::demoInventory());wheelModel.activeSection=modSections[0];
+  save(L"mod-sections.png");
+  showWheel=false;tab(1);save(L"palm-mod-settings.png");
   showWheel=false;settle();
   showAtlas=true;
   for(atlasSheet=0;atlasSheet<wheel::kIconSheetCount;++atlasSheet) {
    const auto name=L"icon-atlas-"+std::to_wstring(atlasSheet+1)+L".png";save(name.c_str());
   }
   showAtlas=false;
-  click(rail+250,55);save(L"rock-settings.png");
+  tab(2);save(L"rock-settings.png");
   click(100,385);save(L"rock-settings-controls.png");
   click(220,120);save(L"developer-settings.png");
   click(385,120);save(L"paper-settings.png");
   click(555,120);save(L"scissors-settings.png");
-  click(rail+440,55);save(L"spawner.png");
+  tab(3);save(L"spawner.png");
   click(rail+100,335);save(L"item-actions.png");
   }
   ImGui_ImplDX11_Shutdown();ImGui::DestroyContext();CoUninitialize();

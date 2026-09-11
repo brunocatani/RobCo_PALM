@@ -15,14 +15,15 @@ namespace wheel {
 namespace {
 using namespace rock::provider;
 constexpr std::uint32_t kBButton=1;
-constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kItemChoice=std::uint64_t{1}<<63;
+constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kSectionChoice=3,kItemChoice=std::uint64_t{1}<<63;
 struct RuntimeState {
  std::atomic_bool open{false},held{false},inputReady{false};
- std::atomic_bool equipmentPending{false};
+ std::atomic_bool gameActionPending{false};
  // A confirmed presentation failure yields to grenade mode until the next load.
  std::atomic_bool presentationFailed{false};
  std::atomic_bool sessionReady{false},sessionResetPending{true};
  std::atomic_uint64_t generation{1},choice{0},choiceGeneration{0};
+ std::atomic_uint64_t sectionChoice{0};
  // Serializes panel open/close on the game task and provider callback threads,
  // and short selection publication from the renderer. Never acquires the model
  // or render mutex while held; framework callbacks run outside its own lock.
@@ -43,7 +44,7 @@ void refreshWheelInventory() {
   try {
    auto inventory=readInventory();auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
    if(!state().sessionReady.load() || state().generation.load()!=ticket)return;
-   inventory.category=shared.model.category;inventory.status=shared.lastAction;inventory.gestures=shared.model.gestures;
+   inventory.category=shared.model.category;inventory.status=shared.lastAction;inventory.gestures=shared.model.gestures;inventory.activeSection=shared.model.activeSection;
    shared.model=std::move(inventory);shared.view={};
   }catch(...){spdlog::error("PALM inventory refresh failed");}
  });
@@ -114,7 +115,8 @@ std::optional<rpsui::sdk::PanelPoseV1> poseFor(const RockProviderFrameSnapshot& 
 }
 void submitChoice(const RockProviderFrameSnapshot& frame) {
  auto& s=state();const auto choice=s.choice.exchange(0);
- if(!choice || s.choiceGeneration.load()!=s.generation.load())return;
+ const auto ticket=s.choiceGeneration.load();
+ if(!choice || ticket!=s.generation.load())return;
  if(choice==kConfigChoice) {
   s.handGestures.clear(s.owner);
   const auto& p=s.wheelPose;devui::render::PanelPose pose;
@@ -124,6 +126,22 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
   pose.physicalWidth=p.physicalWidth;pose.physicalHeight=p.physicalHeight;
   rock_configurator::openAt(pose);
   spdlog::info("B release selected Config; replacing wheel at its anchor");
+ }else if(choice==kSectionChoice) {
+  s.handGestures.clear(s.owner);
+  const auto selected=s.sectionChoice.load();
+  const auto section=static_cast<palm::api::SectionHandle>(selected>>32),item=static_cast<std::uint32_t>(selected);
+  const auto* tasks=F4SE::GetTaskInterface();
+  if(!tasks){actionStatus("Mod action task queue unavailable");return;}
+  s.gameActionPending=true;
+  try {tasks->AddTask([ticket,section,item] {
+   auto& runtime=state();
+   struct Finish {RuntimeState& state;~Finish(){state.gameActionPending=false;}} finish{runtime};
+   if(!runtime.sessionReady.load() || !runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
+   try {
+    const auto result=sectionRegistry().dispatch(section,item);
+    if(result!=palm::api::Result::Ok){actionStatus("Mod selection is no longer available");spdlog::warn("PALM mod action rejected: section={}, item={}, result={}",section,item,static_cast<unsigned>(result));}
+   }catch(...){spdlog::error("PALM mod action dispatch failed");}
+  });}catch(...){s.gameActionPending=false;throw;}
  }else if(isGestureChoice(choice)) {
   const auto* message=s.handGestures.select(s.owner,static_cast<unsigned>(choice),frame);
   actionStatus(message);
@@ -144,14 +162,14 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
   if(equipment) {
    const auto* tasks=F4SE::GetTaskInterface();
    if(!tasks){actionStatus("Equipment task queue unavailable");return;}
-   const auto ticket=s.generation.load();s.equipmentPending=true;
+   s.gameActionPending=true;
    try { tasks->AddTask([ticket,item=*equipment] {
     auto& runtime=state();
-    struct Finish {RuntimeState& state;~Finish(){state.equipmentPending=false;}} finish{runtime};
+    struct Finish {RuntimeState& state;~Finish(){state.gameActionPending=false;}} finish{runtime};
     if(!runtime.sessionReady.load() || !runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
     try { actionStatus(toggleEquipment(item,runtime.owner)); }
     catch(...){spdlog::error("Equipment result publication failed");}
-   }); } catch(...) {s.equipmentPending=false;throw;}
+   }); } catch(...) {s.gameActionPending=false;throw;}
    return;
   }
   // Only an item in the current non-equipment snapshot may enter the handoff path.
@@ -208,8 +226,9 @@ void releaseHeldWheel() {
  if(!s.open.exchange(false))return;
  (void)presentPanel(false);
  s.choiceGeneration=ticket;
+ if(hover && hover->section)s.sectionChoice=(static_cast<std::uint64_t>(hover->section)<<32)|hover->sectionItem;
  s.choice=hover?(hover->configHovered?kConfigChoice:hover->hoveredGesture?hover->hoveredGesture:
-  hover->hoveredItem?(kItemChoice|hover->hoveredItem):kCancelChoice):kCancelChoice;
+  hover->section?kSectionChoice:hover->hoveredItem?(kItemChoice|hover->hoveredItem):kCancelChoice):kCancelChoice;
  if(!hover){s.presentationFailed=true;spdlog::warn("PALM had no rendered frame; grenade mode restored until the next load; check RPS_UI_Framework.log");}
  else spdlog::info("B release closed wheel using its last drawn selection, generation {}",ticket);
 }
@@ -241,7 +260,7 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
    s.world=frame->worldGeneration;s.skeleton=frame->skeletonGeneration;s.provider=frame->providerGeneration;
    return;
   }
-  s.handGestures.update(s.owner,*frame,!s.command && !s.equipmentPending.load() &&
+  s.handGestures.update(s.owner,*frame,!s.command && !s.gameActionPending.load() &&
    !rock_configurator::isOpen() && !rock_configurator::isOpening());
   publishGestureState();
   serviceCommand();
@@ -252,7 +271,7 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
    s.handGestures.clear(s.owner);publishGestureState();
    closeWheel();cancelCommand();clearSuppression();s.gesture={};return;
   }
-  const bool eligible=!s.command && !s.equipmentPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening();
+  const bool eligible=!s.command && !s.gameActionPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening();
   if(eligible && nativeTarget && button.held && s.gesture.armed && !s.gesture.down)
    spdlog::info("PALM B deferred to native activation target until physical release");
   const double now=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -312,6 +331,7 @@ void beginGameLoad() {
  auto& s=state();s.sessionReady=false;s.inputReady=false;s.sessionResetPending=true;
  rock_configurator::setAvailable(false);closeWheel();
  s.presentationFailed=false; // Old render tickets have now been invalidated.
+ sectionRegistry().clearItems();
  restoreWheelPreferences({});
  auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
  shared.model={};shared.view={};shared.lastAction.clear();

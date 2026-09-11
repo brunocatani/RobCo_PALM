@@ -1,4 +1,5 @@
 #include "ConfiguratorRuntime.h"
+#include "WheelConfig.h"
 #include "render/UiVisualStyle.h"
 #include "render/ConfigUi.h"
 #include <imgui.h>
@@ -80,7 +81,29 @@ int main() {
         rock_configurator::setPreviewOpen(true);
         frame(); frame();
         const float railWidth = devui::visual::railWidth(1440);
-        click(railWidth + 250, 50); // ROCK settings
+        click(railWidth + 250, 50); // PALM's own settings
+        require(window("wheel-settings") != nullptr, "PALM settings tab did not open");
+        click(42,294);
+        require(!wheel::snapshotWheelPreferences().enabled[3] && wheel::takeWheelConfigChange(), "weapon visibility edit did not reach wheel preferences");
+        click(42,294);
+        click(754,470);
+        require(!wheel::snapshotWheelPreferences().gesturesEnabled, "gesture visibility edit did not reach wheel preferences");
+        auto wheelModel=wheel::selectedWheelInventory(wheel::Model{});
+        require(wheel::navigationLayout(wheelModel).count==6, "hidden gestures left empty navigation slots");
+        click(754,470);
+        const auto originalPreferences=wheel::snapshotWheelPreferences();
+        auto full=originalPreferences;full.enabled.fill(false);full.gesturesEnabled=false;
+        for(unsigned i=0;i<9;++i)require(full.setSectionEnabled("missing.section"+std::to_string(i),true), "visibility fixture could not reserve section slots");
+        wheel::restoreWheelPreferences(full);frame();click(42,294);click(754,470);
+        require(!wheel::snapshotWheelPreferences().enabled[3] && !wheel::snapshotWheelPreferences().gesturesEnabled,
+            "settings controls exceeded the ten-entry limit");
+        full.sections.pop_back();wheel::restoreWheelPreferences(full);frame();click(42,294);click(754,470);
+        require(wheel::snapshotWheelPreferences().enabled[3] && !wheel::snapshotWheelPreferences().gesturesEnabled,
+            "one free slot did not admit weapons or admitted both gesture entries");
+        wheel::restoreWheelPreferences(originalPreferences);frame();
+        frame(true); frame();
+        require(window("wheel-category-content") != nullptr, "PALM settings back did not return to items");
+        click(railWidth + 440, 50); // ROCK settings
         require(window("settings-rows") != nullptr, "settings tab did not open");
         auto* rail = window("/rail_");
         auto* rows = window("settings-rows");
@@ -89,7 +112,7 @@ int main() {
         require(!rail || rail->Scroll.y == railBefore, "settings scroll moved the navigation column");
         frame(true); frame();
         require(rock_configurator::isOpen() && window("wheel-category-content"), "back did not return to Config home");
-        click(railWidth + 440, 50); // Spawner
+        click(railWidth + 634, 50); // Spawner
         require(window("spawn-items") != nullptr, "spawner tab did not open");
         scroll(window("spawn-items"));
         auto* items = window("spawn-items");
@@ -106,7 +129,7 @@ int main() {
             rock_configurator::initializeRpsPreview({path, path, path},
                 {(mask & 1) != 0, (mask & 2) != 0, (mask & 4) != 0});
             rock_configurator::setPreviewOpen(true);frame();frame();
-            click(railWidth + 250, 50);
+            click(railWidth + 440, 50);
             auto* firstRows = window("settings-rows");
             require((firstRows != nullptr) == (mask != 0), "unloaded mod exposed settings");
             if (!mask) continue;
@@ -127,7 +150,7 @@ int main() {
         const rock::configuration_api::ApiV1 configApi{1, sizeof(rock::configuration_api::ApiV1), fixtureRevision, fixtureVisit, fixtureWrite};
         rock_configurator::initializeRpsPreview({path, {}, {}}, {true, false, false}, &configApi);
         rock_configurator::setPreviewOpen(true); frame(); frame();
-        click(railWidth + 250, 50);
+        click(railWidth + 440, 50);
         const auto consumerText = renderedText();
         require(consumerText.find("consumer-fixture") != std::string::npos && consumerText.find("developer-fixture") == std::string::npos,
             "ROCK page mixed consumer and developer controls");
