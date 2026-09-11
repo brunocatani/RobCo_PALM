@@ -4,11 +4,20 @@
 #include <atomic>
 #include <mutex>
 #include <format>
+#include <cwchar>
 
 namespace wheel {
 namespace {
-struct State {std::mutex mutex;Controls controls;std::filesystem::path path;std::string status;bool dirty{};std::atomic_bool save{},gestures{true};};
+struct State {std::mutex mutex;Controls controls;PointerAim aim;std::filesystem::path path;std::string status;bool dirty{},aimDirty{};std::atomic_bool save{},aimChanged{},gestures{true};};
 State& state(){static State value;return value;}
+constexpr std::array pitchKeys{L"fLeftPitchDegrees",L"fRightPitchDegrees"};
+constexpr std::array yawKeys{L"fLeftYawDegrees",L"fRightYawDegrees"};
+bool readAngle(const std::filesystem::path& path,const wchar_t* key,float& value) {
+ std::array<wchar_t,64> text{};GetPrivateProfileStringW(L"Pointer",key,L"0",text.data(),static_cast<DWORD>(text.size()),path.c_str());
+ wchar_t* end{};const float parsed=std::wcstof(text.data(),&end);
+ if(end==text.data() || *end || !std::isfinite(parsed) || std::fabs(parsed)>90)return false;
+ value=parsed;return true;
+}
 constexpr std::array activationTypes{f4cf::vrcf::ActivationType::Press,f4cf::vrcf::ActivationType::Tap,f4cf::vrcf::ActivationType::DoublePress,f4cf::vrcf::ActivationType::HoldDown,f4cf::vrcf::ActivationType::LongPress,f4cf::vrcf::ActivationType::Release};
 constexpr std::array activationNames{"press","tap","double","hold","longpress","release"};
 constexpr std::array hands{"primary","offhand","right","left"};
@@ -42,7 +51,7 @@ bool parseControls(std::string_view mode,std::string_view text,Controls& out,std
 }
 Controls snapshotControls(){auto& s=state();std::scoped_lock lock(s.mutex);return s.controls;}
 void initializeControls(const std::filesystem::path& path) {
- auto& s=state();std::scoped_lock lock(s.mutex);s.path=path;
+ auto& s=state();std::scoped_lock lock(s.mutex);s.path=path;s.aim={};s.aimDirty=false;s.aimChanged=true;
  if(path.empty())return;
  if(!std::filesystem::exists(path)){s.save=true;return;}
  std::array<wchar_t,256> mode{},binding{};
@@ -52,6 +61,12 @@ void initializeControls(const std::filesystem::path& path) {
  const auto ascii=[](std::wstring_view wide){std::string text;for(wchar_t c:wide){if(c>127)return std::string{"invalid"};text.push_back(static_cast<char>(c));}return text;};
  Controls value;
  if(parseControls(ascii(m),ascii(b),value,s.status)){s.controls=value;s.status="Controls loaded";}
+ bool valid=true;
+ for(unsigned hand=0;hand<2;++hand) {
+  valid=readAngle(path,pitchKeys[hand],s.aim.pitch[hand]) && valid;
+  valid=readAngle(path,yawKeys[hand],s.aim.yaw[hand]) && valid;
+ }
+ if(!valid)s.status="Invalid pointer angle; that angle uses 0 degrees";
 }
 bool applyControls(const Controls& controls,bool queueSave) {
  Controls validated;std::string error;
@@ -65,11 +80,65 @@ void persistControls() {
  try {
   std::filesystem::create_directories(s.path.parent_path());
   const auto text=bindingText(s.controls);const std::wstring binding(text.begin(),text.end());
-  const bool written=WritePrivateProfileStringW(L"Controls",L"sMode",s.controls.mode==OpenMode::Hold?L"hold":L"press",s.path.c_str()) &&
+  bool written=WritePrivateProfileStringW(L"Controls",L"sMode",s.controls.mode==OpenMode::Hold?L"hold":L"press",s.path.c_str()) &&
    WritePrivateProfileStringW(L"Controls",L"sOpenMenu",binding.c_str(),s.path.c_str());
+  for(unsigned hand=0;hand<2;++hand) {
+   written=WritePrivateProfileStringW(L"Pointer",pitchKeys[hand],std::to_wstring(s.aim.pitch[hand]).c_str(),s.path.c_str()) && written;
+   written=WritePrivateProfileStringW(L"Pointer",yawKeys[hand],std::to_wstring(s.aim.yaw[hand]).c_str(),s.path.c_str()) && written;
+  }
   s.dirty=false;
-  s.status=written?"Controls saved to PALM.ini":"Could not save PALM.ini; controls apply to this session";
+  s.status=written?"Settings saved to PALM.ini":"Could not save PALM.ini; controls apply to this session";
  }catch(...){s.dirty=false;s.status="Could not save PALM.ini; controls apply to this session";}
+}
+PointerAim snapshotPointerAim(){auto& s=state();std::scoped_lock lock(s.mutex);return s.aim;}
+bool takePointerAimChange(){return state().aimChanged.exchange(false);}
+bool applyPointerAim(const PointerAim& aim,bool commit) {
+ for(unsigned side=0;side<2;++side)
+  if(!std::isfinite(aim.pitch[side]) || !std::isfinite(aim.yaw[side]) || std::fabs(aim.pitch[side])>90 || std::fabs(aim.yaw[side])>90)return false;
+ auto& s=state();std::scoped_lock lock(s.mutex);s.aim=aim;s.aimDirty=!commit;
+ if(commit){s.aimChanged=true;s.save=true;}
+ s.status=s.path.empty()?"Preview aim updated":commit?"Saving pointer aim...":"Release to apply";return true;
+}
+void drawPointerAim() {
+ using namespace devui;
+ auto value=snapshotPointerAim();bool changed=false;
+ visual::heading("Pointer aim","Fine-tune where each controller points.");
+ {visual::Font font(render::FontRole::Body,18);ImGui::TextWrapped("Negative pitch lowers the pointer. Positive yaw moves it right. Release a slider to apply its change.");}
+ ImGui::Dummy({0,14});
+ if(ImGui::BeginTable("pointer-aim",2,ImGuiTableFlags_SizingStretchSame)) {
+  for(unsigned hand=0;hand<2;++hand) {
+   ImGui::TableNextColumn();ImGui::PushID(static_cast<int>(hand));ImGui::BeginGroup();
+   {visual::Font font(render::FontRole::Medium,24);ImGui::TextUnformatted(hand?"RIGHT HAND":"LEFT HAND");}
+   const auto adjust=[&](const char* label,const char* minus,const char* plus,float& degrees) {
+    visual::caption(label);ImGui::PushID(label);ImGui::SetNextItemWidth(-1);
+    changed|=ImGui::SliderFloat("##angle",&degrees,-90,90,"%+.1f deg",ImGuiSliderFlags_AlwaysClamp);
+    const float width=(ImGui::GetContentRegionAvail().x-ImGui::GetStyle().ItemSpacing.x)/2;
+    if(visual::button(minus,{width,40})){degrees=std::max(-90.f,degrees-1);changed=true;}
+    ImGui::SameLine();if(visual::button(plus,{width,40})){degrees=std::min(90.f,degrees+1);changed=true;}
+    ImGui::PopID();ImGui::Dummy({0,10});
+   };
+   adjust("Pitch / up-down","Down 1","Up 1",value.pitch[hand]);
+   adjust("Yaw / left-right","Left 1","Right 1",value.yaw[hand]);
+   if(visual::button("Reset to native aim",{ImGui::GetContentRegionAvail().x,40})){value.pitch[hand]=value.yaw[hand]=0;changed=true;}
+   ImGui::EndGroup();ImGui::PopID();
+  }
+  ImGui::EndTable();
+ }
+ if(changed)(void)applyPointerAim(value,!ImGui::IsAnyItemActive());
+ {auto& s=state();std::scoped_lock lock(s.mutex);
+  if(s.aimDirty && !ImGui::IsAnyItemActive()){s.aimDirty=false;s.aimChanged=true;s.save=true;}
+  visual::Font font(render::FontRole::Body,18);ImGui::TextColored(visual::muted(),"%s",s.status.c_str());
+ }
+ ImGui::Dummy({0,14});visual::caption("AIM TEST - point at the center with either hand");
+ const auto start=ImGui::GetCursorScreenPos();const ImVec2 size{ImGui::GetContentRegionAvail().x,160};
+ const ImVec2 center{start.x+size.x*.5f,start.y+size.y*.5f};auto* draw=ImGui::GetWindowDrawList();
+ draw->AddRectFilled(start,{start.x+size.x,start.y+size.y},visual::color(visual::surface()));
+ const auto ink=visual::color(visual::muted());
+ draw->AddRect(start,{start.x+size.x,start.y+size.y},ink);
+ draw->AddLine({center.x-42,center.y},{center.x+42,center.y},ink);
+ draw->AddLine({center.x,center.y-42},{center.x,center.y+42},ink);
+ draw->AddCircle(center,25,ink,32);draw->AddCircle(center,4,visual::color(visual::accent()),16,2);
+ ImGui::Dummy(size);
 }
 void setGestureIntegrationAvailable(bool available){state().gestures=available;}
 bool gestureIntegrationAvailable(){return state().gestures.load();}

@@ -3,6 +3,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <Windows.h>
+#include <limits>
 
 void check(bool value,const char* message){if(!value)throw std::runtime_error(message);}
 int main(){try {
@@ -67,6 +68,19 @@ int main(){try {
  initializeControls(path);const auto loaded=snapshotControls();check(loaded.mode==OpenMode::Press && loaded.binding.hand==Hand::Left,"PALM did not load its own INI");
  check(applyControls(Controls{}) && takeControlsSaveRequest(),"edit did not queue persistence");persistControls();initializeControls(path);
  check(snapshotControls()==Controls{},"controls were not restored from disk");
+ check(snapshotPointerAim()==PointerAim{},"missing pointer keys did not use neutral calibration");
+ (void)takePointerAimChange();
+ PointerAim aim;aim.pitch={-75,-68};aim.yaw={-2,4};
+ check(applyPointerAim(aim,false) && !takePointerAimChange(),"dragging the calibration slider changed live aim before release");
+ check(applyPointerAim(aim) && takePointerAimChange() && takeControlsSaveRequest(),"released calibration edit did not apply and queue its save");
+ persistControls();initializeControls(path);
+ check(snapshotPointerAim()==aim && snapshotControls()==Controls{},"per-hand calibration did not persist independently of bindings");
+ auto invalidAim=aim;invalidAim.pitch[0]=91;
+ check(!applyPointerAim(invalidAim) && snapshotPointerAim()==aim,"out-of-range calibration changed pointer settings");
+ invalidAim=aim;invalidAim.yaw[1]=std::numeric_limits<float>::quiet_NaN();
+ check(!applyPointerAim(invalidAim),"non-finite calibration was accepted");
+ WritePrivateProfileStringW(L"Pointer",L"fLeftPitchDegrees",L"invalid",path.c_str());initializeControls(path);
+ check(snapshotPointerAim().pitch[0]==0 && snapshotPointerAim().pitch[1]==aim.pitch[1],"invalid pointer angle replaced the other hand's calibration");
  wchar_t preserved[32]{};GetPrivateProfileStringW(L"Other",L"untouched",L"",preserved,32,path.c_str());
  check(std::wstring_view(preserved)==L"hello","PALM rewrote unrelated INI values");
  initializeControls({});std::cout<<"Control gestures, binding validation, handedness, and isolated persistence passed\n";

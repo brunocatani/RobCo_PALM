@@ -68,6 +68,11 @@ void publishGestureState() {
  shared.model.gestures.active=view.active;shared.model.gestures.availability=view.availability;
 }
 
+bool publishPointerAim() {
+ const auto aim=snapshotPointerAim();rpsui::sdk::PointerAimV1 request;
+ for(unsigned side=0;side<2;++side){request.pitchDegrees[side]=aim.pitch[side];request.yawDegrees[side]=aim.yaw[side];}
+ return state().inputApi && state().inputApi->setPointerAim && state().inputApi->setPointerAim(&request);
+}
 void clearSuppression() {
  auto& s=state();if(s.inputApi && s.inputToken){rpsui::sdk::InputCaptureV1 capture;(void)s.inputApi->capture(s.inputToken,&capture);}
 }
@@ -271,6 +276,7 @@ void selectWheel(bool closeAfterSelect,const std::optional<Action>& clicked) {
 void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
  try {
   if(!frame)return;auto& s=state();
+  if(takePointerAimChange() && !publishPointerAim())spdlog::error("PALM pointer aim update rejected by UI framework");
   if(takeControlsSaveRequest())if(const auto* tasks=F4SE::GetTaskInterface())tasks->AddTask([]{persistControls();});
   const auto controls=snapshotControls();
   if(controls!=s.controls || s.leftHanded!=frame->leftHanded){s.controls=controls;s.leftHanded=frame->leftHanded;s.gesture={};s.clickRequested=false;if(s.open.load() || s.held.load())closeWheel();}
@@ -381,13 +387,14 @@ bool startRuntime() {
 
  auto& s=state();
  s.inputApi=rpsui::sdk::RequestInputApiV1();
- if(!s.inputApi || !s.inputApi->subscribe || !s.inputApi->capture || !s.inputApi->unsubscribe)return false;
+ if(!s.inputApi || !s.inputApi->subscribe || !s.inputApi->capture || !s.inputApi->unsubscribe || !s.inputApi->setPointerAim)return false;
  PWSTR documents{};
  if(SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents,0,nullptr,&documents))) {
   const auto path=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"RobCo_PALM"/"PALM.ini";
   CoTaskMemFree(documents);initializeControls(path);if(takeControlsSaveRequest())persistControls();
  }else {spdlog::error("PALM Documents folder unavailable");return false;}
  s.controls=snapshotControls();setGestureIntegrationAvailable(false);
+ (void)takePointerAimChange();if(!publishPointerAim())return false;
  constexpr auto requiredTableBytes=static_cast<std::uint32_t>(offsetof(RockProviderApi,cancelInteractionCommandV1)+sizeof(std::declval<RockProviderApi>().cancelInteractionCommandV1));
  const auto initialized=RockProviderApi::initialize(ROCK_PROVIDER_API_VERSION,requiredTableBytes);
  auto* api=RockProviderApi::inst;

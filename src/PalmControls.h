@@ -8,6 +8,10 @@
 
 namespace wheel {
 enum class OpenMode { Hold, Press };
+struct PointerAim {
+ std::array<float,2> pitch{},yaw{};
+ bool operator==(const PointerAim&) const=default;
+};
 struct Controls {
  OpenMode mode{OpenMode::Hold};
  f4cf::vrcf::InputBinding binding{.hand=f4cf::vrcf::Hand::Right,
@@ -86,6 +90,10 @@ bool applyControls(const Controls& controls,bool queueSave=true); // Memory only
 bool takeControlsSaveRequest();
 void persistControls();
 void drawControls();
+PointerAim snapshotPointerAim();
+bool applyPointerAim(const PointerAim& aim,bool commit=true);
+bool takePointerAimChange();
+void drawPointerAim();
 void setGestureIntegrationAvailable(bool available);
 bool gestureIntegrationAvailable();
 }
