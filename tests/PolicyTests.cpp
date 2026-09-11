@@ -1,5 +1,6 @@
 #include "WheelModel.h"
 #include "WheelSelectionState.h"
+#include "ItemIconPolicy.h"
 #include "physics-interaction/input/NativeVatsInputSuppressionPolicy.h"
 #include <stdexcept>
 #include <iostream>
@@ -56,6 +57,24 @@ int main(){try {
  check(hitCenter(0,0,1)==kCancelNavigation);check(hitCenter(0,190,1)==-1);
  check(isEquipment(Category::Weapons) && isEquipment(Category::Armor));
  check(!isEquipment(Category::Aid) && !isEquipment(Category::Grenades));
+ check(knownItemIcon(true,0x00023736)==Icon::Stimpak);
+ check(knownItemIcon(true,0x00023742)==Icon::RadAway);
+ check(knownItemIcon(false,0x00023736)==Icon::Automatic); // A mod's matching local ID is a different item.
+ const auto weaponArt=[](Icon known,std::uint8_t shape,std::initializer_list<std::uint32_t> keywords) {
+  return weaponIcon(known,shape,[&](std::uint32_t id){return std::find(keywords.begin(),keywords.end(),id)!=keywords.end();});
+ };
+ check(weaponArt(Icon::Automatic,9,{0x0004A0A0})==Icon::Pistol10mm);
+ check(weaponArt(Icon::Automatic,9,{0x0004A0A1})==Icon::CombatRifle);
+ check(weaponArt(Icon::Automatic,9,{0x0004A0A1,0x0004A0A3})==Icon::Minigun);
+ check(weaponArt(Icon::LaserRifle,9,{0x0004A0A0,0x00092A84})==Icon::LaserPistol);
+ check(weaponArt(Icon::LaserRifle,9,{0x0004A0A1,0x00092A84})==Icon::LaserRifle);
+ check(weaponArt(Icon::Automatic,9,{0x0004A0A1,0x00092A85})==Icon::PlasmaRifle);
+ check(weaponArt(Icon::Automatic,2,{})==Icon::CombatKnife);
+ check(weaponArt(Icon::Automatic,11,{})==Icon::Mine);
+ check(armorIcon(1u<<12,false)==Icon::LeftArm && armorIcon(1u<<13,false)==Icon::RightArm);
+ check(armorIcon(1u<<14,false)==Icon::LeftLeg && armorIcon(1u<<15,false)==Icon::RightLeg);
+ check(armorIcon(1u<<11,true)==Icon::PowerArmor);
+ check(armorIcon((1u<<3)|(1u<<4)|(1u<<5),false)==Icon::Clothing);
  Item first{0x1234,"Rifle",1,false,"variant1",0}, second{0x1234,"Rifle",1,false,"variant2",3};
  check(selectionToken(first)!=selectionToken(second));
  checkVatsArbitration();

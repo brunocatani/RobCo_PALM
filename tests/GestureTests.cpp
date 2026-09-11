@@ -106,11 +106,9 @@ void checkSelection() {
  unsigned char* pixels;int width,height;io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
  Model model;View view;model.gestures.availability.fill(GestureAvailability::Free);
  const auto draw=[&](float x,float y){io.AddMousePosEvent(x,y);ImGui::NewFrame();auto action=drawWheel(model,view);ImGui::Render();return action;};
- const auto angle=-kPi/2+kGesturesNavigation*2*kPi/kNavigationCount;
- (void)draw(512+std::cos(angle)*119,510+std::sin(angle)*119);
- require(model.gestures.showing,"gesture navigation did not open");
  for(bool left:{false,true}) {
-  (void)draw(left?400.f:624.f,123);require(model.gestures.left==left,"hand selection did not follow hover");
+  (void)draw(512+(left?-119.f:119.f),510);
+  require(model.gestures.showing && model.gestures.left==left,"physical-side gesture entry did not select its hand");
   for(unsigned slot=0;slot<kGestureCount;++slot) {
    const auto mid=-kPi/2+slot*kPi/4;
    const auto action=draw(512+std::cos(mid)*258,510+std::sin(mid)*258);
@@ -120,7 +118,12 @@ void checkSelection() {
   }
  }
  require(!draw(512,510).hoveredGesture,"cancel selected a gesture");
- (void)draw(512,391);require(!model.gestures.showing,"inventory navigation did not leave gestures");
+ for(unsigned navigation=0;navigation<kNavigationCount;++navigation) {
+  const int category=navigationCategory(navigation);if(category<0)continue;
+  const auto angle=-kPi/2+navigation*2*kPi/kNavigationCount;
+  (void)draw(512+std::cos(angle)*119,510+std::sin(angle)*119);
+  require(!model.gestures.showing && static_cast<int>(model.category)==category,"inventory navigation changed its category meaning");
+ }
  ImGui::DestroyContext();
 }
 }

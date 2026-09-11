@@ -2,6 +2,7 @@
 #include "WheelConfig.h"
 #include "WheelView.h"
 #include "Fonts.h"
+#include "IconAtlas.h"
 #include "render/ConfigUi.h"
 #include <Windows.h>
 #include <d3d11.h>
@@ -31,12 +32,18 @@ int main(int argc, char** argv) {
   ComPtr<ID3D11RenderTargetView> target;check(device->CreateRenderTargetView(texture.Get(),nullptr,&target));
   ImGui::CreateContext();wheel::prepareFonts();wheel::installFonts();devui::render::PrepareFonts();devui::visual::applyStyle();
   ImGui_ImplDX11_Init(device.Get(),context.Get());
+  wheel::IconAtlas icons;if(!icons.create(device.Get(),context.Get()))throw std::runtime_error("Embedded icon atlases unavailable");
   auto& io=ImGui::GetIO();io.DisplaySize={static_cast<float>(width),static_cast<float>(height)};io.DeltaTime=1.0f/90;
   wheel::publishWheelInventory(wheel::demoInventory());rock_configurator::initializePreview();rock_configurator::setPreviewOpen(true);
-  bool showWheel=false;wheel::Model wheelModel;wheel::View wheelView;
+  bool showWheel=false,showAtlas=false;unsigned atlasSheet=0;wheel::Model wheelModel;wheel::View wheelView;
   const auto frame=[&] {
    ImGui_ImplDX11_NewFrame();ImGui::NewFrame();
-   if(showWheel)(void)wheel::drawWheel(wheelModel,wheelView);
+   if(showAtlas) {
+    const float cell=height/4.f;
+    auto* draw=ImGui::GetBackgroundDrawList();
+    for(unsigned i=0;i<16;++i)wheel::drawIcon(draw,{(width-height)/2.f+(i%4+.5f)*cell,(i/4+.5f)*cell},cell*.45f,
+     static_cast<wheel::Icon>(atlasSheet*16+i),IM_COL32(225,235,240,255),icons.ids());
+   }else if(showWheel)(void)wheel::drawWheel(wheelModel,wheelView,{},{},icons.ids());
    else (void)rock_configurator::drawImGui(0,0,static_cast<float>(width),static_cast<float>(height));
    ImGui::Render();rock_configurator::drainPreviewActions();
    auto* view=target.Get();context->OMSetRenderTargets(1,&view,nullptr);
@@ -74,7 +81,27 @@ int main(int argc, char** argv) {
   save(L"gestures-left.png");
   wheelModel.gestures.left=false;wheelModel.gestures.availability[0]=wheel::GestureAvailability::Busy;
   save(L"gestures-right-busy.png");
+  wheelModel=wheel::demoInventory();wheelModel.category=wheel::Category::Aid;save(L"aid-icons.png");
+  wheelModel.category=wheel::Category::Food;save(L"food-icons.png");
+  wheelModel.category=wheel::Category::Grenades;save(L"grenade-icons.png");
+  wheelModel.category=wheel::Category::Armor;save(L"armor-icons.png");
+  wheelModel.category=wheel::Category::Weapons;
+  wheelModel.items[3]={
+   {1,"10mm Pistol",1,false,"",0,wheel::Icon::Pistol10mm},
+   {2,"Combat Rifle",1,false,"",0,wheel::Icon::CombatRifle},
+   {3,"Minigun",1,false,"",0,wheel::Icon::Minigun},
+   {4,"Super Sledge",1,false,"",0,wheel::Icon::SuperSledge},
+   {5,"Laser Rifle",1,false,"",0,wheel::Icon::LaserRifle},
+   {6,"Plasma Pistol",1,false,"",0,wheel::Icon::PlasmaPistol},
+   {7,"Missile Launcher",1,false,"",0,wheel::Icon::MissileLauncher},
+   {8,"Combat Knife",1,false,"",0,wheel::Icon::CombatKnife}
+  };save(L"weapon-icons.png");
   showWheel=false;settle();
+  showAtlas=true;
+  for(atlasSheet=0;atlasSheet<wheel::kIconSheetCount;++atlasSheet) {
+   const auto name=L"icon-atlas-"+std::to_wstring(atlasSheet+1)+L".png";save(name.c_str());
+  }
+  showAtlas=false;
   click(rail+250,55);save(L"rock-settings.png");
   click(100,385);save(L"rock-settings-controls.png");
   click(220,120);save(L"developer-settings.png");

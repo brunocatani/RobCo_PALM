@@ -1,5 +1,6 @@
 #include "WheelView.h"
 #include "Fonts.h"
+#include "IconAtlas.h"
 #include "WheelConfig.h"
 #include "ConfiguratorRuntime.h"
 #include "render/UiVisualStyle.h"
@@ -44,6 +45,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
  devui::render::PrepareFonts();
  devui::visual::applyStyle();
  ImGui_ImplWin32_Init(hwnd);ImGui_ImplDX11_Init(device.Get(),context.Get());
+ wheel::IconAtlas icons;if(!icons.create(device.Get(),context.Get()))return 1;
  auto catalog=wheel::demoInventory();wheel::publishWheelInventory(catalog);
  auto model=wheel::selectedWheelInventory(catalog);wheel::View view;
  rock_configurator::initializePreview();wheel::HoldGesture gesture;bool wheelOpen=false;
@@ -68,7 +70,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
    model.gestures.availability.fill(wheel::GestureAvailability::Free);
   }
   wheel::Action hover;
-  if(wheelOpen)hover=wheel::drawWheel(model,view);
+  if(wheelOpen)hover=wheel::drawWheel(model,view,{},{},icons.ids());
   std::uint64_t selectedItem=0;
   if(edge==wheel::HoldEdge::Release && wheelOpen) {
    wheelOpen=false;

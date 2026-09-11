@@ -6,19 +6,26 @@
 #include <cmath>
 #include <algorithm>
 #include "GestureCatalog.h"
+#include "IconCatalog.h"
 
 namespace wheel {
 enum class Category : unsigned { Aid, Food, Grenades, Weapons, Armor };
 inline constexpr unsigned kCategoryCount = 5;
-inline constexpr unsigned kGesturesNavigation = kCategoryCount;
-inline constexpr unsigned kConfigNavigation = kCategoryCount + 1;
-inline constexpr unsigned kNavigationCount = kCategoryCount + 2;
+inline constexpr unsigned kRightGesturesNavigation = 2;
+inline constexpr unsigned kLeftGesturesNavigation = 6;
+inline constexpr unsigned kConfigNavigation = 7;
+inline constexpr unsigned kNavigationCount = 8;
 inline constexpr unsigned kCancelNavigation = kNavigationCount;
+// Physical hand entries face their side of the player. Inventory category IDs
+// keep their saved meaning independently of their position in the inner ring.
+inline constexpr int navigationCategory(int navigation) {
+ switch(navigation) {case 0:return 0;case 1:return 1;case 3:return 2;case 4:return 3;case 5:return 4;default:return -1;}
+}
 inline constexpr bool isEquipment(Category category) { return category == Category::Weapons || category == Category::Armor; }
 inline constexpr std::size_t kSlots = 8;
 inline constexpr std::size_t kMaxItems = 512;
 inline constexpr float kPi = 3.14159265359f;
-struct Item { std::uint32_t id{}; std::string name; std::uint32_t count{}; bool equipped{}; std::string key; std::uint32_t stackIndex{}; };
+struct Item { std::uint32_t id{}; std::string name; std::uint32_t count{}; bool equipped{}; std::string key; std::uint32_t stackIndex{}; Icon icon{Icon::Automatic}; };
 inline std::uint64_t selectionToken(const Item& item) { return (static_cast<std::uint64_t>(item.stackIndex) << 32) | item.id; }
 struct Model {
  std::array<std::vector<Item>, kCategoryCount> items;

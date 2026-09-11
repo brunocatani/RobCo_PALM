@@ -2,6 +2,7 @@
 #include "Renderer.h"
 #include "Runtime.h"
 #include "Fonts.h"
+#include "IconAtlas.h"
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
 #include <wrl/client.h>
@@ -15,10 +16,11 @@ struct ContextDeleter {void operator()(ImGuiContext* context)const{if(context)Im
 struct RenderState {
  std::mutex mutex;
  ComPtr<ID3D11Device> device;
+ IconAtlas icons;
  std::unique_ptr<ImGuiContext,ContextDeleter> imgui;
  bool backend{};
  ~RenderState(){release();}
- void release(){if(imgui){ImGui::SetCurrentContext(imgui.get());if(backend)ImGui_ImplDX11_Shutdown();imgui.reset();}backend=false;device.Reset();}
+ void release(){if(imgui){ImGui::SetCurrentContext(imgui.get());if(backend)ImGui_ImplDX11_Shutdown();imgui.reset();}backend=false;icons.clear();device.Reset();}
 };
 RenderState& renderState(){static RenderState s;return s;}
 struct PanelState {
@@ -38,6 +40,7 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
    render.release();render.device=device;render.imgui.reset(ImGui::CreateContext());
    if(!render.imgui)throw std::runtime_error("ImGui context unavailable");
    ImGui::SetCurrentContext(render.imgui.get());installFonts();
+   if(!render.icons.create(device,context))throw std::runtime_error("Embedded wheel icon atlases unavailable");
    if(!ImGui_ImplDX11_Init(device,context))throw std::runtime_error("DX11 backend unavailable");
    render.backend=true;spdlog::info("Wheel renderer initialized");
   }
@@ -52,7 +55,7 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
   ImGui_ImplDX11_NewFrame();ImGui::NewFrame();
   Action action;
   {auto& shared=sharedModel();std::unique_lock modelLock(shared.mutex,std::try_to_lock);
-   if(modelLock.owns_lock())action=drawWheel(shared.model,shared.view);}
+   if(modelLock.owns_lock())action=drawWheel(shared.model,shared.view,{},{},render.icons.ids());}
   ImGui::Render();ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
   publishWheelSelection(ticket,action);
  } catch(const std::exception& e){spdlog::error("Wheel render failed: {}",e.what());if(ticket)failWheelPresentation(ticket);}

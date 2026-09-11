@@ -1,0 +1,8 @@
+#include <winres.h>
+201 RCDATA "../assets/icons/core.png"
+202 RCDATA "../assets/icons/firearms.png"
+203 RCDATA "../assets/icons/heavy-melee.png"
+204 RCDATA "../assets/icons/aid.png"
+205 RCDATA "../assets/icons/food-drink.png"
+206 RCDATA "../assets/icons/explosives-armor.png"
+207 RCDATA "../assets/icons/special-weapons.png"

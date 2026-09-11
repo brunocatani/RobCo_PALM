@@ -1,0 +1,147 @@
+Generated with the built-in image-generation tool.
+FallUI Icon Library supplied by the user was consulted for coverage only; no mod artwork is included.
+The PNGs are source masks; the native renderer multiplies luminance by the original alpha for tintable outlines.
+
+firearms.png final edit
+Keep the exact sixteen weapon designs, their row-major order, side views, scale and cell centers. Change only the line treatment: make every outer white contour about three times thicker and inner structural white strokes twice as thick, using rounded joins. These icons must read crisply at 64-pixel display size. Keep all interiors pure black, background pure black, no fills, no shadows, no texture, no grid lines, no text. Preserve the exact square 4x4 atlas and generous separation.
+
+heavy-melee.png final edit
+Keep all sixteen subjects and their exact cell positions and order. Change only line treatment: outer white contour strokes three times thicker, interior white detail strokes twice as thick. Remove gray interior shading so the interior and background are solid black; preserve the recognizable weapon outlines. Premium crisp outline pictograms for display at 64 pixels per icon, not shaded illustrations. Same exact square 4x4 atlas, no grid lines or extra marks.
+
+food-drink.png final edit
+Keep all sixteen food and drink pictograms, their order and their current positions and scale. Remove ALL horizontal and vertical grid lines and ALL marks outside the objects. The gutters and background must be perfectly plain black, and each object must be a clean white outline with black interior. Preserve white object contours and details. Do not add any text, border, texture, shadow, or decorations. Exactly the same square 4 by 4 sprite atlas.
+
+
+special-weapons.png
+Production image asset for a Fallout 4 VR radial menu. Create ONE perfectly square monochrome icon-mask atlas: exact 4 columns by 4 rows, exactly 16 icons, no extra marks. PURE SOLID BLACK opaque background, RGB 0 0 0, including every icon interior. WHITE OUTLINE LINE ART ONLY: clean white contour strokes and restrained structural inner lines, never solid white silhouettes. Crisp premium game HUD artwork, carefully recognizable forms, consistent medium stroke width with rounded joins, absolutely NO distress, scratches, speckles, paper texture, shadows, gradients, glow, grey background, checkerboard, borders, text, letters or numbers. Keep every shape wholly within the middle 68% of its own equal square cell, centered optically. Exact cell centers at x and y of 12.5%,37.5%,62.5%,87.5%. Full outer padding equals internal padding. Ideally 2048 by 2048. The black is the zero value of a game UI opacity mask, so it MUST be exactly solid black everywhere except the white icon strokes. The result is a sprite sheet, NOT a poster. Create original icon artwork using Fallout 4 object silhouettes as subject reference, not tracing any mod's artwork. Arrange subjects in this EXACT left-to-right, top-to-bottom order:
+Row 1, column 1: Grognak's double-headed battle axe.
+Row 1, column 2: Chinese officer sword with curved single-edged blade and guard.
+Row 1, column 3: broad straight machete.
+Row 1, column 4: folding switchblade knife.
+Row 2, column 1: Fallout Ripper compact handheld chainsaw.
+Row 2, column 2: Fallout Shishkebab sword with attached fuel tank and burner.
+Row 2, column 3: heavy adjustable pipe wrench.
+Row 2, column 4: short plain lead pipe with elbow fitting.
+Row 3, column 1: police security baton with side handle.
+Row 3, column 2: brass knuckles with four finger holes.
+Row 3, column 3: padded boxing glove.
+Row 3, column 4: crude wooden board with nails.
+Row 4, column 1: Fallout alien blaster retro raygun with smooth oval body and fins.
+Row 4, column 2: stubby break-action flare pistol.
+Row 4, column 3: Fallout syringer improvised rifle with injection chamber.
+Row 4, column 4: Fallout improvised pipe revolver with obvious cylinder.
+The outline strokes must be bold enough to remain readable when each cell is displayed at 64 pixels wide: use approximately 10px white strokes on a 2048px canvas. Preserve open black interiors. No text. No visible grid. Same consistent scale as a premium game icon atlas.
+
+core.png
+Production image asset for a Fallout 4 VR radial menu. Create ONE perfectly square monochrome icon-mask atlas: exact 4 columns by 4 rows, exactly 16 icons, no extra marks. PURE SOLID BLACK opaque background, RGB 0 0 0, including every icon interior. WHITE OUTLINE LINE ART ONLY: clean white contour strokes and restrained structural inner lines, never solid white silhouettes. Crisp premium game HUD artwork, carefully recognizable forms, consistent medium stroke width with rounded joins, absolutely NO distress, scratches, speckles, paper texture, shadows, gradients, glow, grey background, checkerboard, borders, text, letters or numbers. Keep every shape wholly within the middle 68% of its own equal square cell, centered optically. Exact cell centers at x and y of 12.5%,37.5%,62.5%,87.5%. Full outer padding equals internal padding. Ideally 2048 by 2048. The black is the zero value of a game UI opacity mask, so it MUST be exactly solid black everywhere except the white icon strokes. The result is a sprite sheet, NOT a poster. Create original icon artwork using Fallout 4 object silhouettes as subject reference, not tracing any mod's artwork. Arrange subjects in this EXACT left-to-right, top-to-bottom order:
+Row 1, column 1: thumbs-up hand (thumb points UP, four curled fingers, side view).
+Row 1, column 2: middle-finger gesture (only middle finger extended).
+Row 1, column 3: rock-and-roll horns (only index and little finger extended, thumb tucked).
+Row 1, column 4: peace hand (index and middle spread into V).
+Row 2, column 1: pointing hand (only index finger extended vertically).
+Row 2, column 2: closed fist (curled fingers and thumb clearly outlined).
+Row 2, column 3: open palm (five distinct fingers).
+Row 2, column 4: shaka (only thumb and little finger extended).
+Row 3, column 1: outlined medical cross for Aid.
+Row 3, column 2: apple with leaf for Food.
+Row 3, column 3: fragmentation grenade for Explosives.
+Row 3, column 4: compact pistol facing right for Weapons.
+Row 4, column 1: protective chest armor vest for Armor.
+Row 4, column 2: six-tooth settings gear with open center.
+Row 4, column 3: open LEFT palm with thumb on viewer's RIGHT.
+Row 4, column 4: open RIGHT palm with thumb on viewer's LEFT.
+
+firearms.png
+Production image asset for a Fallout 4 VR radial menu. Create ONE perfectly square monochrome icon-mask atlas: exact 4 columns by 4 rows, exactly 16 icons, no extra marks. PURE SOLID BLACK opaque background, RGB 0 0 0, including every icon interior. WHITE OUTLINE LINE ART ONLY: clean white contour strokes and restrained structural inner lines, never solid white silhouettes. Crisp premium game HUD artwork, carefully recognizable forms, consistent medium stroke width with rounded joins, absolutely NO distress, scratches, speckles, paper texture, shadows, gradients, glow, grey background, checkerboard, borders, text, letters or numbers. Keep every shape wholly within the middle 68% of its own equal square cell, centered optically. Exact cell centers at x and y of 12.5%,37.5%,62.5%,87.5%. Full outer padding equals internal padding. Ideally 2048 by 2048. The black is the zero value of a game UI opacity mask, so it MUST be exactly solid black everywhere except the white icon strokes. The result is a sprite sheet, NOT a poster. Create original icon artwork using Fallout 4 object silhouettes as subject reference, not tracing any mod's artwork. Arrange subjects in this EXACT left-to-right, top-to-bottom order:
+Row 1, column 1: Fallout 4 bulky 10mm pistol side profile.
+Row 1, column 2: Fallout .44 revolver with cylinder and long barrel.
+Row 1, column 3: improvised Fallout pipe pistol with crude receiver and pipe barrel.
+Row 1, column 4: Deliverer compact suppressed pistol.
+Row 2, column 1: Fallout combat rifle, wooden stock and box magazine.
+Row 2, column 2: bolt-action hunting rifle with telescopic scope.
+Row 2, column 3: Fallout large water-cooled assault rifle.
+Row 2, column 4: combat shotgun with drum magazine.
+Row 3, column 1: double-barrel break-action shotgun.
+Row 3, column 2: Thompson-style submachine gun with drum.
+Row 3, column 3: Fallout laser pistol, box receiver and energy cells, NO shoulder stock.
+Row 3, column 4: Fallout laser rifle, long shoulder stock and laser receiver.
+Row 4, column 1: Fallout plasma pistol, exposed plasma tubes, NO shoulder stock.
+Row 4, column 2: Fallout plasma rifle, shoulder stock and open coil barrel.
+Row 4, column 3: bulky angular Institute laser rifle.
+Row 4, column 4: Fallout Gauss rifle with exposed parallel electromagnetic coils.
+
+heavy-melee.png
+Production image asset for a Fallout 4 VR radial menu. Create ONE perfectly square monochrome icon-mask atlas: exact 4 columns by 4 rows, exactly 16 icons, no extra marks. PURE SOLID BLACK opaque background, RGB 0 0 0, including every icon interior. WHITE OUTLINE LINE ART ONLY: clean white contour strokes and restrained structural inner lines, never solid white silhouettes. Crisp premium game HUD artwork, carefully recognizable forms, consistent medium stroke width with rounded joins, absolutely NO distress, scratches, speckles, paper texture, shadows, gradients, glow, grey background, checkerboard, borders, text, letters or numbers. Keep every shape wholly within the middle 68% of its own equal square cell, centered optically. Exact cell centers at x and y of 12.5%,37.5%,62.5%,87.5%. Full outer padding equals internal padding. Ideally 2048 by 2048. The black is the zero value of a game UI opacity mask, so it MUST be exactly solid black everywhere except the white icon strokes. The result is a sprite sheet, NOT a poster. Create original icon artwork using Fallout 4 object silhouettes as subject reference, not tracing any mod's artwork. Arrange subjects in this EXACT left-to-right, top-to-bottom order:
+Row 1, column 1: multi-barrel minigun with carry handle.
+Row 1, column 2: Fallout Gatling laser with rotary laser barrels and power pack.
+Row 1, column 3: shoulder-fired missile launcher.
+Row 1, column 4: Fallout Fat Man miniature-nuke launcher, open launching rails and carrying frame.
+Row 2, column 1: flamethrower with fuel tank, hoses and nozzle.
+Row 2, column 2: Fallout Cryolator with cylindrical reservoir and freezing nozzle.
+Row 2, column 3: Fallout gamma gun with large circular dish emitter.
+Row 2, column 4: Fallout laser musket with wooden stock, crank and laser mechanism.
+Row 3, column 1: Fallout railway rifle with pressure gauge and bulky industrial receiver.
+Row 3, column 2: Broadsider handheld naval cannon.
+Row 3, column 3: Fallout Junk Jet with wide improvised loading hopper.
+Row 3, column 4: combat knife with straight pointed blade and grip.
+Row 4, column 1: wooden baseball bat.
+Row 4, column 2: Fallout Super Sledge with large powered hammer head.
+Row 4, column 3: Fallout powered mechanical fist gauntlet.
+Row 4, column 4: Deathclaw gauntlet with THREE long curved claws attached to wrist harness.
+
+aid.png
+Production image asset for a Fallout 4 VR radial menu. Create ONE perfectly square monochrome icon-mask atlas: exact 4 columns by 4 rows, exactly 16 icons, no extra marks. PURE SOLID BLACK opaque background, RGB 0 0 0, including every icon interior. WHITE OUTLINE LINE ART ONLY: clean white contour strokes and restrained structural inner lines, never solid white silhouettes. Crisp premium game HUD artwork, carefully recognizable forms, consistent medium stroke width with rounded joins, absolutely NO distress, scratches, speckles, paper texture, shadows, gradients, glow, grey background, checkerboard, borders, text, letters or numbers. Keep every shape wholly within the middle 68% of its own equal square cell, centered optically. Exact cell centers at x and y of 12.5%,37.5%,62.5%,87.5%. Full outer padding equals internal padding. Ideally 2048 by 2048. The black is the zero value of a game UI opacity mask, so it MUST be exactly solid black everywhere except the white icon strokes. The result is a sprite sheet, NOT a poster. Create original icon artwork using Fallout 4 object silhouettes as subject reference, not tracing any mod's artwork. Arrange subjects in this EXACT left-to-right, top-to-bottom order:
+Row 1, column 1: Fallout Stimpak injector with round pressure gauge and two finger rings.
+Row 1, column 2: RadAway IV bag with hanging tab, tube and small radiation emblem.
+Row 1, column 3: Rad-X medicine bottle with small radiation shield emblem.
+Row 1, column 4: Med-X long medical syringe.
+Row 2, column 1: Psycho injector with two small chemical cylinders.
+Row 2, column 2: Jet rectangular asthma-style inhaler with mouthpiece.
+Row 2, column 3: Buffout squat medicine bottle with large cap and dumbbell emblem.
+Row 2, column 4: Mentats small flat rounded rectangular pill tin, open lid and tablets.
+Row 3, column 1: Addictol upright rounded inhaler with curved nozzle.
+Row 3, column 2: antibiotics blister strip with four capsules.
+Row 3, column 3: blood pack IV pouch with simple blood-drop symbol.
+Row 3, column 4: Fallout Stealth Boy retro belt device, antenna and single dial.
+Row 4, column 1: serum narrow glass ampoule.
+Row 4, column 2: herbal remedy tea sachet with leaf.
+Row 4, column 3: refreshing beverage small clear bottle with sparkle symbol.
+Row 4, column 4: generic medicine two crossed capsule pills.
+
+food-drink.png
+Production image asset for a Fallout 4 VR radial menu. Create ONE perfectly square monochrome icon-mask atlas: exact 4 columns by 4 rows, exactly 16 icons, no extra marks. PURE SOLID BLACK opaque background, RGB 0 0 0, including every icon interior. WHITE OUTLINE LINE ART ONLY: clean white contour strokes and restrained structural inner lines, never solid white silhouettes. Crisp premium game HUD artwork, carefully recognizable forms, consistent medium stroke width with rounded joins, absolutely NO distress, scratches, speckles, paper texture, shadows, gradients, glow, grey background, checkerboard, borders, text, letters or numbers. Keep every shape wholly within the middle 68% of its own equal square cell, centered optically. Exact cell centers at x and y of 12.5%,37.5%,62.5%,87.5%. Full outer padding equals internal padding. Ideally 2048 by 2048. The black is the zero value of a game UI opacity mask, so it MUST be exactly solid black everywhere except the white icon strokes. The result is a sprite sheet, NOT a poster. Create original icon artwork using Fallout 4 object silhouettes as subject reference, not tracing any mod's artwork. Arrange subjects in this EXACT left-to-right, top-to-bottom order:
+Row 1, column 1: Nuka-Cola retro glass soda bottle with distinctive rocket fins at base.
+Row 1, column 2: Nuka-Cola Cherry rocket soda bottle with two-cherry emblem.
+Row 1, column 3: Nuka-Cola Quantum rocket soda bottle with small atom emblem.
+Row 1, column 4: purified water rectangular sealed carton with water drop.
+Row 2, column 1: dirty water dented tin can with droplet.
+Row 2, column 2: beer long-neck bottle with plain oval label.
+Row 2, column 3: spirits squat square whiskey bottle.
+Row 2, column 4: wine tall slender bottle with long neck.
+Row 3, column 1: raw meat steak cut with bone and simple marbling.
+Row 3, column 2: grilled steak with diagonal grill lines and two steam curls.
+Row 3, column 3: vegetables carrot beside corn cob.
+Row 3, column 4: mutfruit round irregular fruit with leaf.
+Row 4, column 1: packaged food upright cereal or snack carton with open folded top.
+Row 4, column 2: canned food cylindrical pull-tab food tin.
+Row 4, column 3: Fallout sweetroll pastry with dripped icing.
+Row 4, column 4: soup in small bowl with spoon and steam.
+
+explosives-armor.png
+Production image asset for a Fallout 4 VR radial menu. Create ONE perfectly square monochrome icon-mask atlas: exact 4 columns by 4 rows, exactly 16 icons, no extra marks. PURE SOLID BLACK opaque background, RGB 0 0 0, including every icon interior. WHITE OUTLINE LINE ART ONLY: clean white contour strokes and restrained structural inner lines, never solid white silhouettes. Crisp premium game HUD artwork, carefully recognizable forms, consistent medium stroke width with rounded joins, absolutely NO distress, scratches, speckles, paper texture, shadows, gradients, glow, grey background, checkerboard, borders, text, letters or numbers. Keep every shape wholly within the middle 68% of its own equal square cell, centered optically. Exact cell centers at x and y of 12.5%,37.5%,62.5%,87.5%. Full outer padding equals internal padding. Ideally 2048 by 2048. The black is the zero value of a game UI opacity mask, so it MUST be exactly solid black everywhere except the white icon strokes. The result is a sprite sheet, NOT a poster. Create original icon artwork using Fallout 4 object silhouettes as subject reference, not tracing any mod's artwork. Arrange subjects in this EXACT left-to-right, top-to-bottom order:
+Row 1, column 1: fragmentation grenade, oval segmented shell, pin ring and lever.
+Row 1, column 2: Molotov cocktail bottle with burning cloth wick.
+Row 1, column 3: Fallout plasma grenade, spherical cage around a core.
+Row 1, column 4: Fallout pulse grenade, cylindrical capacitor with lightning emblem.
+Row 2, column 1: Fallout cryogenic grenade, cylindrical canister with snowflake emblem.
+Row 2, column 2: Fallout Nuka grenade, improvised soda-bottle bomb with radiation emblem.
+Row 2, column 3: round flat land mine with pressure plate and small arming prongs.
+Row 2, column 4: bottlecap mine built in rectangular metal lunchbox with attached detonator.
+Row 3, column 1: protective combat helmet with chin strap.
+Row 3, column 2: Fallout power armor upper torso with bulky pauldrons and central chest plate.
+Row 3, column 3: Vault jumpsuit full outfit with zipper and belt, no number.
+Row 3, column 4: combat chest armor vest.
+Row 4, column 1: LEFT arm armor sleeve, shoulder and forearm plates, bent elbow opening to viewer's right.
+Row 4, column 2: RIGHT arm armor sleeve mirrored from previous.
+Row 4, column 3: LEFT leg armor plates from thigh to boot, boot pointing left.
+Row 4, column 4: RIGHT leg armor plates mirrored, boot pointing right.

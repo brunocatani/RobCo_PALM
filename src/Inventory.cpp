@@ -2,10 +2,29 @@
 #include "Inventory.h"
 #include "WheelConfig.h"
 #include "EquipmentIdentity.h"
+#include "ItemIconPolicy.h"
 #include <array>
 
 namespace wheel {
 namespace {
+Icon inventoryIcon(RE::TESBoundObject* object,const RE::TBO_InstanceData* instance=nullptr) {
+ const auto* file=object->GetFile(0);
+ const auto known=knownItemIcon(file && _stricmp(file->filename,"Fallout4.esm")==0,object->GetFormID()&0xffffffu);
+ if(object->Is(RE::ENUM_FORM_ID::kWEAP)) {
+  const auto* weapon=static_cast<RE::TESObjectWEAP*>(object);
+  return weaponIcon(known,static_cast<std::uint8_t>(*weapon->weaponData.type),[&](std::uint32_t id) {
+   const auto* keyword=RE::TESForm::GetFormByID<RE::BGSKeyword>(id);
+   return keyword && weapon->HasKeyword(keyword,instance);
+  });
+ }
+ if(object->Is(RE::ENUM_FORM_ID::kARMO)) {
+  const auto* armor=static_cast<RE::TESObjectARMO*>(object);
+  const auto* power=RE::TESForm::GetFormByID<RE::BGSKeyword>(0x0004D8A1);
+  return armorIcon(armor->GetSlotMask(),power && armor->HasKeyword(power,instance));
+ }
+ if(known!=Icon::Automatic)return known;
+ return static_cast<RE::AlchemyItem*>(object)->IsFood()?Icon::Food:Icon::Chems;
+}
 std::optional<Category> classify(RE::TESBoundObject* object) {
  if(!object || !object->GetPlayable(object->GetBaseInstanceData())) return {};
  if(object->Is(RE::ENUM_FORM_ID::kALCH)) {
@@ -74,11 +93,13 @@ Model readInventory() {
      if(!stack->GetCount() || items.size()>=kMaxItems)continue;
      auto item=detail::equipmentItem(entry,*stack,index);
      if(item.key.empty() || item.name.empty())continue;
+     const auto* extra=stack->extra?stack->extra->GetByType<RE::ExtraInstanceData>():nullptr;
+     item.icon=inventoryIcon(entry.object,extra?extra->data.get():nullptr);
      const auto duplicate=std::find_if(items.begin(),items.end(),[&](const Item& other){return other.key==item.key;});
      if(duplicate==items.end())items.push_back(std::move(item));
      else {
       duplicate->count=static_cast<std::uint32_t>((std::min)(static_cast<std::uint64_t>(duplicate->count)+item.count,static_cast<std::uint64_t>(UINT32_MAX)));
-      if(item.equipped){duplicate->equipped=true;duplicate->stackIndex=item.stackIndex;}
+      if(item.equipped){duplicate->equipped=true;duplicate->stackIndex=item.stackIndex;duplicate->icon=item.icon;}
      }
     }
     continue;
@@ -95,7 +116,7 @@ Model readInventory() {
    if(name.empty()) continue;
    const auto* owner=entry.object->GetFile(0);
    const auto key=owner?stableItemKey(owner->filename,entry.object->GetFormID()):std::string{};
-   items.push_back({entry.object->GetFormID(),std::string(name),static_cast<std::uint32_t>(std::min<std::uint64_t>(count,UINT32_MAX)),equipped,key});
+   items.push_back({entry.object->GetFormID(),std::string(name),static_cast<std::uint32_t>(std::min<std::uint64_t>(count,UINT32_MAX)),equipped,key,0,inventoryIcon(entry.object)});
   }
  }
  for(auto& items:result.items) std::sort(items.begin(),items.end(),[](const Item& a,const Item& b){return a.name==b.name?a.id<b.id:a.name<b.name;});
