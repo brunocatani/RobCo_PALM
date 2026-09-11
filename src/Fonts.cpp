@@ -10,7 +10,7 @@ void prepareFonts() {
  if(!bytes.empty()) return;
  wchar_t directory[MAX_PATH]{};
  if(!GetWindowsDirectoryW(directory, MAX_PATH)) return;
- const auto path=std::filesystem::path(directory)/"Fonts"/"segoeui.ttf";
+ const auto path=std::filesystem::path(directory)/"Fonts"/"consola.ttf";
  std::ifstream input(path,std::ios::binary|std::ios::ate);
  if(!input) return;
  const auto size=input.tellg();

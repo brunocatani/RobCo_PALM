@@ -31,7 +31,7 @@ struct Model {
  std::array<std::vector<Item>, kCategoryCount> items;
  Category category{Category::Aid};
  std::array<bool,kCategoryCount> enabled{true,true,true,true,true};
- std::string status{"Select something to take"};
+ std::string status;
  GestureViewState gestures;
 };
 struct Action { std::uint64_t hoveredItem{}; bool configHovered{}; unsigned hoveredGesture{}; };

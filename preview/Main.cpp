@@ -58,9 +58,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
    if(FAILED(swap->ResizeBuffers(0,width,height,DXGI_FORMAT_UNKNOWN,0)) || !createTarget())break;width=height=0;}
   ImGui_ImplDX11_NewFrame();ImGui_ImplWin32_NewFrame();ImGui::NewFrame();
   const auto size=ImGui::GetIO().DisplaySize;auto* bg=ImGui::GetBackgroundDrawList();
-  bg->AddRectFilledMultiColor({0,0},size,IM_COL32(26,40,49,255),IM_COL32(24,37,40,255),IM_COL32(8,18,24,255),IM_COL32(12,24,29,255));
-  for(float x=0;x<size.x;x+=48)bg->AddLine({x,0},{x,size.y},IM_COL32(135,175,175,9));
-  for(float y=0;y<size.y;y+=48)bg->AddLine({0,y},{size.x,y},IM_COL32(135,175,175,9));
+  bg->AddRectFilled({0,0},size,IM_COL32(6,10,6,255));
   if(cancelGesture){gesture={};wheelOpen=false;cancelGesture=false;}
   const auto edge=gesture.update(focused && !rock_configurator::isOpen(),ImGui::IsKeyDown(ImGuiKey_B),ImGui::GetTime());
   if(!focused)wheelOpen=false;
