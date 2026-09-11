@@ -68,6 +68,18 @@ void checkRuntime() {
   activate(true);f.buttons[1][button]=true;tick();require(!gestures.view().active[1],"hand action did not cancel");f.buttons[1][button]=false;
  }
  gestures.clear(42);
+ f.buttons[0][2]=true;f.buttons[0][33]=true;
+ gestures.update(42,f.frame,true,true);
+ require(gestures.view().availability[0]==GestureAvailability::Free,"owned wheel chord blocked right-hand pose selection");
+ (void)gestures.select(42,gestureChoice(1,false),f.frame);
+ require(gestures.view().active[0]!=0,"wheel chord could not select a right-hand pose");
+ f.buttons[0][33]=false;
+ gestures.update(42,f.frame,true,true);
+ require(gestures.view().active[0]!=0,"remaining wheel grab cancelled the selected pose");
+ f.buttons[0][2]=false;tick();
+ f.buttons[0][1]=true;tick();
+ require(!gestures.view().active[0],"B gameplay input did not cancel a right-hand pose");
+ f.buttons[0][1]=false;gestures.clear(42);
  f.poses[1]=Frik::HandPoseKind::ThumbsUp;activate(true);gestures.clear(42);
  for(auto pose:{Frik::HandPoseKind::HoldingWeapon,Frik::HandPoseKind::HoldingGun,Frik::HandPoseKind::HoldingMelee,
   Frik::HandPoseKind::OffhandGrip,Frik::HandPoseKind::Custom}) {

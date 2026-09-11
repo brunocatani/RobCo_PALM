@@ -49,7 +49,7 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
   io.DisplaySize={static_cast<float>(frame->pixelWidth),static_cast<float>(frame->pixelHeight)};
   io.DeltaTime=std::clamp(frame->deltaSeconds,1.f/240,.1f);io.MouseDrawCursor=true;
   io.AddMousePosEvent(frame->pointerValid?frame->pointerPixelX:-FLT_MAX,frame->pointerValid?frame->pointerPixelY:-FLT_MAX);
-  io.AddMouseButtonEvent(0,false); // The wheel selects on B release, never pointer clicks.
+  io.AddMouseButtonEvent(0,false); // The wheel selects on chord release, never pointer clicks.
   io.AddMouseWheelEvent(0,frame->scrollAxisY*5.5f*io.DeltaTime);
   auto* target=static_cast<ID3D11RenderTargetView*>(frame->renderTargetView);
   context->OMSetRenderTargets(1,&target,nullptr);

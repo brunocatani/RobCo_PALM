@@ -7,7 +7,7 @@ namespace wheel {
 class Gestures {
 public:
  void initialize();
- void update(std::uint64_t owner,const rock::provider::RockProviderFrameSnapshot& frame,bool usable);
+ void update(std::uint64_t owner,const rock::provider::RockProviderFrameSnapshot& frame,bool usable,bool wheelInputOwned=false);
  const char* select(std::uint64_t owner,unsigned choice,const rock::provider::RockProviderFrameSnapshot& frame);
  void clear(std::uint64_t owner);
  const GestureViewState& view() const {return _view;}

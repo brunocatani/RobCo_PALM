@@ -39,7 +39,7 @@ bool Gestures::publish(std::uint64_t owner,unsigned hand,const RockProviderFrame
  spdlog::warn("PALM gesture publication rejected: hand={}, result={}",hand?"left":"right",static_cast<unsigned>(result));
  clearHand(owner,hand,"publication rejected");return false;
 }
-void Gestures::update(std::uint64_t owner,const RockProviderFrameSnapshot& frame,bool usable) {
+void Gestures::update(std::uint64_t owner,const RockProviderFrameSnapshot& frame,bool usable,bool wheelInputOwned) {
  if(!usable || !_available || !frame.frikSkeletonReady || !Frik::inst->isSkeletonReady()) {clear(owner);return;}
  const bool uiBusy=Frik::inst->isConfigOpen() || Frik::inst->isWristPipboyOpen();
  for(unsigned hand=0;hand<2;++hand) {
@@ -47,10 +47,10 @@ void Gestures::update(std::uint64_t owner,const RockProviderFrameSnapshot& frame
   const bool queryOk=RockProviderApi::inst->getHandInteractionStateV1(owner,physicalHand(hand),&interaction)==RockProviderResultV1::Ok &&
    interaction.hand==physicalHand(hand);
   bool inputAvailable=true,actionHeld=false;
-  // Grip, trigger, A/X, B/Y and stick click. The right B wheel hold is UI
-  // input while selecting, but its next press cancels an already active pose.
+  // The wheel's captured right trigger/grab chord is UI input through both
+  // releases. It must not mark a free pose hand busy or cancel a new pose.
   for(const unsigned button:{2u,33u,7u,1u,32u}) {
-   if(button==1 && hand==0 && !_view.active[hand])continue;
+   if(hand==0 && wheelInputOwned && (button==2 || button==33))continue;
    RockProviderRawWandButtonStateV1 raw;
    inputAvailable&=RockProviderApi::inst->getRawWandButtonStateV1(physicalHand(hand),button,&raw) && raw.available;
    actionHeld|=raw.held!=0;

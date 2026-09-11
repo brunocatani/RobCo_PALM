@@ -14,12 +14,12 @@
 namespace wheel {
 namespace {
 using namespace rock::provider;
-constexpr std::uint32_t kBButton=1;
+constexpr std::uint32_t kTriggerButton=33,kGrabButton=2;
 constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kSectionChoice=3,kItemChoice=std::uint64_t{1}<<63;
 struct RuntimeState {
  std::atomic_bool open{false},held{false},inputReady{false};
  std::atomic_bool gameActionPending{false};
- // A confirmed presentation failure yields to grenade mode until the next load.
+ // A confirmed presentation failure releases wheel input until the next load.
  std::atomic_bool presentationFailed{false};
  std::atomic_bool sessionReady{false},sessionResetPending{true};
  std::atomic_uint64_t generation{1},choice{0},choiceGeneration{0};
@@ -31,7 +31,7 @@ struct RuntimeState {
  WheelSelectionState selection;
  rpsui::sdk::PanelPoseV1 wheelPose;
  std::uint64_t owner{},callback{},command{};
- HoldGesture gesture;
+ ChordGesture gesture;
  Gestures handGestures;
  bool suppression{},frameworkUnavailable{};
  std::uint32_t world{},skeleton{},provider{};
@@ -67,7 +67,7 @@ void clearSuppression() {
 bool claimInput(const RockProviderFrameSnapshot& frame,bool gestureOwned) {
  auto& s=state();RockProviderHandInputSuppressionRequestV1 request;
  request.hand=RockProviderHand::Right;
- request.flags=static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::SuppressGrenadeQuickDraw);
+ request.flags=static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::ReserveTriggerGripChord);
  if(gestureOwned)request.flags|=static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::SuppressOpenVrGameInput)|
   static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::SuppressNativeVats)|
   static_cast<std::uint32_t>(RockProviderHandInputSuppressionFlagV1::SuppressConfigModeChord);
@@ -75,7 +75,7 @@ bool claimInput(const RockProviderFrameSnapshot& frame,bool gestureOwned) {
  request.skeletonGeneration=frame.skeletonGeneration;request.providerGeneration=frame.providerGeneration;
  const auto result=RockProviderApi::inst->setHandInputSuppressionV1(s.owner,&request);
  if(result!=RockProviderResultV1::Ok) {
-  spdlog::error("PALM could not claim grenade-mode input: {}; grenade mode restored until the next load",static_cast<unsigned>(result));
+  spdlog::error("PALM could not reserve trigger/grab input: {}; wheel disabled until the next load",static_cast<unsigned>(result));
   s.presentationFailed=true;clearSuppression();return false;
  }
  s.suppression=true;return true;
@@ -125,7 +125,7 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
   pose.front={p.front[0],p.front[1],p.front[2]};
   pose.physicalWidth=p.physicalWidth;pose.physicalHeight=p.physicalHeight;
   rock_configurator::openAt(pose);
-  spdlog::info("B release selected Config; replacing wheel at its anchor");
+  spdlog::info("Chord release selected Config; replacing wheel at its anchor");
  }else if(choice==kSectionChoice) {
   s.handGestures.clear(s.owner);
   const auto selected=s.sectionChoice.load();
@@ -189,7 +189,7 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
   if(result!=RockProviderResultV1::RequestQueued) {
    s.command=0;actionStatus(result==RockProviderResultV1::HandBusy?"Hands are busy — try again":"Item handoff unavailable");
   }
-  spdlog::info("B release selected item {:08X}: queue result {}",request.targetFormId,static_cast<unsigned>(result));
+  spdlog::info("Chord release selected item {:08X}: queue result {}",request.targetFormId,static_cast<unsigned>(result));
  }
 }
 void openHeldWheel(const RockProviderFrameSnapshot& frame) {
@@ -213,9 +213,9 @@ void openHeldWheel(const RockProviderFrameSnapshot& frame) {
    s.open=true;
    if(!presentPanel(true,&p)){
     s.open=false;s.presentationFailed=true;++s.generation;(void)s.selection.release();
-    spdlog::warn("PALM presentation failed; grenade mode restored until the next load");
+    spdlog::warn("PALM presentation failed; wheel input released until the next load");
    }
-   else spdlog::info("B-held wheel opened, generation {}",ticket);
+   else spdlog::info("Trigger/grab wheel opened, generation {}",ticket);
   }catch(...){failWheelPresentation(ticket);}
  });
 }
@@ -229,8 +229,8 @@ void releaseHeldWheel() {
  if(hover && hover->section)s.sectionChoice=(static_cast<std::uint64_t>(hover->section)<<32)|hover->sectionItem;
  s.choice=hover?(hover->configHovered?kConfigChoice:hover->hoveredGesture?hover->hoveredGesture:
   hover->section?kSectionChoice:hover->hoveredItem?(kItemChoice|hover->hoveredItem):kCancelChoice):kCancelChoice;
- if(!hover){s.presentationFailed=true;spdlog::warn("PALM had no rendered frame; grenade mode restored until the next load; check RPS_UI_Framework.log");}
- else spdlog::info("B release closed wheel using its last drawn selection, generation {}",ticket);
+ if(!hover){s.presentationFailed=true;spdlog::warn("PALM had no rendered frame; wheel input released until the next load; check RPS_UI_Framework.log");}
+ else spdlog::info("Chord release closed wheel using its last drawn selection, generation {}",ticket);
 }
 void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) noexcept {
  try {
@@ -240,7 +240,6 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
   const auto nativeContext=gameplayReady?RockProviderApi::inst->getNativeInputContextV1():0u;
   const bool contextAvailable=(nativeContext&static_cast<std::uint32_t>(RockProviderNativeInputContextFlagV1::Available))!=0;
   const bool nativeMenu=(nativeContext&static_cast<std::uint32_t>(RockProviderNativeInputContextFlagV1::MenuActive))!=0;
-  const bool nativeTarget=(nativeContext&static_cast<std::uint32_t>(RockProviderNativeInputContextFlagV1::PrimaryActivationTarget))!=0;
   const bool wasOwning=s.open.load() || s.held.load() || rock_configurator::isOpen() || rock_configurator::isOpening();
   const bool nativeReady=gameplayReady && contextAvailable && !nativeMenu;
   const bool hostReady=nativeReady && frameworkReady();
@@ -260,40 +259,41 @@ void ROCK_PROVIDER_CALL onFrame(const RockProviderFrameSnapshot* frame,void*) no
    s.world=frame->worldGeneration;s.skeleton=frame->skeletonGeneration;s.provider=frame->providerGeneration;
    return;
   }
-  s.handGestures.update(s.owner,*frame,!s.command && !s.gameActionPending.load() &&
-   !rock_configurator::isOpen() && !rock_configurator::isOpening());
-  publishGestureState();
   serviceCommand();
-  submitChoice(*frame);
   if(rock_configurator::takeInventoryRefreshRequest())refreshWheelInventory();
-  RockProviderRawWandButtonStateV1 button;
-  if(!RockProviderApi::inst->getRawWandButtonStateV1(RockProviderHand::Right,kBButton,&button) || !button.available) {
+  RockProviderRawWandButtonStateV1 trigger,grab;
+  if(!RockProviderApi::inst->getRawWandButtonStateV1(RockProviderHand::Right,kTriggerButton,&trigger) || !trigger.available ||
+   !RockProviderApi::inst->getRawWandButtonStateV1(RockProviderHand::Right,kGrabButton,&grab) || !grab.available) {
    s.handGestures.clear(s.owner);publishGestureState();
    closeWheel();cancelCommand();clearSuppression();s.gesture={};return;
   }
   const bool eligible=!s.command && !s.gameActionPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening();
-  if(eligible && nativeTarget && button.held && s.gesture.armed && !s.gesture.down)
-   spdlog::info("PALM B deferred to native activation target until physical release");
   const double now=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
-  const bool wasPending=s.gesture.pending;
+  const bool ownedBefore=s.gesture.ownsInput();
   const double heldSeconds=now-s.gesture.pressedAt;
-  const auto edge=s.gesture.update(eligible,button.held!=0,now,nativeTarget);
+  const auto edge=s.gesture.update(eligible || s.gesture.draining,trigger.held!=0,grab.held!=0,now);
   s.held=s.gesture.down;
-  if(eligible && wasPending && !button.held)
-   spdlog::info("B tap left to native input: held {:.3f}s; wheel did not claim input",heldSeconds);
+  if(s.open.load() && !s.gesture.down && edge!=HoldEdge::Release)closeWheel();
   if(edge==HoldEdge::Open)
-   spdlog::info("B hold qualified after {:.3f}s; wheel owns input through release",heldSeconds);
-  // Renew grenade-mode suppression while usable. Only a qualified wheel
-  // gesture masks gameplay input, including its physical release so it cannot
-  // become a native VATS tap.
-  if(!claimInput(*frame,s.gesture.down || edge==HoldEdge::Release)) {
+   spdlog::info("Right trigger/grab hold qualified after {:.3f}s; wheel owns the chord through both releases",heldSeconds);
+  const bool chordOwned=ownedBefore || s.gesture.ownsInput();
+  // Idle reservation suppresses only a complete physical chord. Once captured,
+  // keep the claim through both releases so the remaining button cannot fire
+  // or start a grab when the wheel closes. B has no idle PALM claim.
+  if((eligible && s.gesture.armed) || chordOwned) {
+   if(!claimInput(*frame,chordOwned)) {
    s.handGestures.clear(s.owner);publishGestureState();
    s.inputReady=false;closeWheel();cancelCommand();s.gesture={};return;
-  }
+   }
+  }else clearSuppression();
+  s.handGestures.update(s.owner,*frame,eligible,chordOwned);
+  publishGestureState();
+  // Commands selected on the prior release use the chord-filtered hand state.
+  submitChoice(*frame);
   if(edge==HoldEdge::Open)openHeldWheel(*frame);
   else if(edge==HoldEdge::Release)releaseHeldWheel();
  }catch(...){
-  spdlog::error("PALM input failed; grenade mode restored until the next load");
+  spdlog::error("PALM input failed; wheel input released until the next load");
   state().presentationFailed=true;state().inputReady=false;
   state().handGestures.clear(state().owner);
   cancelCommand();clearSuppression();state().gesture={};closeWheel();
@@ -323,7 +323,7 @@ void failWheelPresentation(std::uint64_t expectedGeneration) {
   if(expectedGeneration && s.generation.load()!=expectedGeneration)return;
   s.presentationFailed=true;s.inputReady=false;
  }
- spdlog::error("PALM presentation unavailable; grenade mode restored until the next load");
+ spdlog::error("PALM presentation unavailable; wheel input released until the next load");
  closeWheel(expectedGeneration);
  // The owning input callback clears the claim, or its three-frame lease expires.
 }
@@ -377,7 +377,7 @@ bool startRuntime() {
   (void)api->unregisterConsumerV1(s.owner);s.owner=0;return false;
  }
  rollback.complete=true;
- spdlog::info("PALM registered with ROCK; tap right B for native input, hold {:.2f}s for the wheel, release over an item or Config",kWheelHoldSeconds);
+ spdlog::info("PALM registered with ROCK; hold right trigger + grab for {:.2f}s, release either to select; B remains VATS/grenades",kWheelHoldSeconds);
  return true;
 }
 }

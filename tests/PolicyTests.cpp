@@ -2,47 +2,59 @@
 #include "WheelSelectionState.h"
 #include "ItemIconPolicy.h"
 #include "physics-interaction/input/NativeVatsInputSuppressionPolicy.h"
+#include "physics-interaction/input/VatsGrenadeGesturePolicy.h"
 #include <stdexcept>
 #include <iostream>
 #include <limits>
 void check(bool b){if(!b)throw std::runtime_error("Wheel policy check failed");}
-void checkVatsArbitration() {
+void checkChord() {
+ using namespace wheel;
+ for(bool triggerFirst:{false,true})for(bool releaseTriggerFirst:{false,true}) {
+  ChordGesture gesture;
+  check(gesture.update(true,true,true,0)==HoldEdge::None && !gesture.ownsInput());
+  check(gesture.update(true,false,false,1)==HoldEdge::None && gesture.armed);
+  check(gesture.update(true,triggerFirst,!triggerFirst,2)==HoldEdge::None && !gesture.ownsInput());
+  check(gesture.update(true,true,true,3)==HoldEdge::None && gesture.pending && gesture.ownsInput());
+  check(gesture.update(true,true,true,3.249)==HoldEdge::None);
+  check(gesture.update(true,true,true,3.25)==HoldEdge::Open && gesture.down);
+  check(gesture.update(true,true,true,4)==HoldEdge::None && gesture.down);
+  check(gesture.update(true,!releaseTriggerFirst,releaseTriggerFirst,5)==HoldEdge::Release && gesture.ownsInput());
+  check(gesture.update(true,true,true,6)==HoldEdge::None && !gesture.down && gesture.ownsInput());
+  check(gesture.update(true,false,false,7)==HoldEdge::None && !gesture.ownsInput());
+  check(gesture.update(true,true,true,8)==HoldEdge::None && gesture.pending);
+  check(gesture.update(true,false,true,8.1)==HoldEdge::None && gesture.draining);
+  check(gesture.update(true,true,true,9)==HoldEdge::None && !gesture.down);
+  (void)gesture.update(true,false,false,10);
+  (void)gesture.update(true,true,true,11);
+  check(gesture.update(false,true,true,12)==HoldEdge::None && !gesture.ownsInput());
+  check(gesture.update(true,true,true,13)==HoldEdge::None && !gesture.pending);
+  (void)gesture.update(true,false,false,14);
+  (void)gesture.update(true,true,true,15);
+  check(gesture.update(true,true,true,14)==HoldEdge::None && !gesture.ownsInput());
+  (void)gesture.update(true,false,false,16);
+  (void)gesture.update(true,true,true,17);
+  check(gesture.update(true,true,true,std::numeric_limits<double>::quiet_NaN())==HoldEdge::None && !gesture.ownsInput());
+ }
+}
+void checkBArbitration() {
  using namespace wheel;
  namespace native=rock::native_vats_input_suppression_policy;
- for(bool wheelFirst:{false,true})for(bool suppressVats:{false,true}) {
-  HoldGesture gesture;native::RuntimeState vats;
-  bool suppressed=false,previousHeld=false;double pressedAt=0;
-  HoldEdge edge=HoldEdge::None;
-  const auto sample=[&](bool held,double now) {
-   if(held && !previousHeld)pressedAt=now;
-   const auto updateWheel=[&] {
-    edge=gesture.update(true,held,now);
-    suppressed=gesture.down || edge==HoldEdge::Release;
-   };
-   if(wheelFirst)updateWheel();
-   const auto decision=native::update(vats,{
-    .buttonDown=held,.justPressed=held && !previousHeld,.released=!held && previousHeld,
-    .heldSeconds=static_cast<float>(now-pressedAt),
-    .suppressVats=suppressVats,.suppressVans=true,.reserveHoldGesture=true,.suppressAll=suppressed});
-   if(!wheelFirst)updateWheel();
-   previousHeld=held;return decision;
-  };
-  (void)sample(false,0);
-  for(double press:{1.0,1.125,1.25}) { // Repeated short taps never claim wheel input.
-   (void)sample(true,press);check(edge==HoldEdge::None && !suppressed);
-   const auto release=sample(false,press+.0625);
-   check(edge==HoldEdge::None && !suppressed);
-   check(release.forwardNative==!suppressVats && release.vatsSuppressed==suppressVats);
+ namespace grenade=rock::vats_grenade_gesture_policy;
+ for(bool immersive:{false,true})for(bool suppressVats:{false,true}) {
+  ChordGesture wheel;
+  grenade::RuntimeState grenades;
+  native::RuntimeState vats;
+  (void)wheel.update(true,false,false,0);
+  for(float duration:{0.1f,0.5f}) {
+   (void)grenade::update(grenades,{.pressed=true,.held=true,.immersiveGrenades=immersive});
+   (void)native::update(vats,{.buttonDown=true,.justPressed=true,.suppressVats=suppressVats,.suppressVans=true,.reserveHoldGesture=true});
+   check(wheel.update(true,false,false,duration)==HoldEdge::None && !wheel.ownsInput());
+   const auto draw=grenade::update(grenades,{.released=true,.heldSeconds=duration,.immersiveGrenades=immersive});
+   const auto release=native::update(vats,{.released=true,.heldSeconds=duration});
+   check(draw.requestGrenade==(duration>=0.25f && immersive));
+   check(draw.requestNativeThrow==(duration>=0.25f && !immersive));
+   check(release.forwardNative==(duration<0.25f && !suppressVats));
   }
-  (void)sample(true,2.0);check(edge==HoldEdge::None && !suppressed);
-  (void)sample(true,2.125);check(edge==HoldEdge::None && !suppressed);
-  (void)sample(true,2.25);check(edge==HoldEdge::Open && suppressed);
-  (void)sample(true,2.5);check(edge==HoldEdge::None && suppressed);
-  const auto release=sample(false,2.625);
-  check(edge==HoldEdge::Release && release.vatsSuppressed && !release.forwardNative);
-  (void)sample(false,2.75);check(edge==HoldEdge::None && !suppressed);
-  (void)sample(true,3.0);check(edge==HoldEdge::None && !suppressed);
-  check(sample(false,3.125).forwardNative==!suppressVats); // Hold ownership cannot swallow the next tap.
  }
 }
 int main(){try {
@@ -97,35 +109,8 @@ int main(){try {
  check(armorIcon((1u<<3)|(1u<<4)|(1u<<5),false)==Icon::Clothing);
  Item first{0x1234,"Rifle",1,false,"variant1",0}, second{0x1234,"Rifle",1,false,"variant2",3};
  check(selectionToken(first)!=selectionToken(second));
- checkVatsArbitration();
- HoldGesture gesture;
- check(gesture.update(true,true,0)==HoldEdge::None); // Held on load must release first.
- check(gesture.update(true,true,1)==HoldEdge::None && !gesture.pending && !gesture.down);
- check(gesture.update(true,false,2)==HoldEdge::None);
- check(gesture.update(true,true,3)==HoldEdge::None && gesture.pending && !gesture.down);
- check(gesture.update(true,true,3.249)==HoldEdge::None && !gesture.down);
- check(gesture.update(true,true,3.25)==HoldEdge::Open && gesture.down);
- check(gesture.update(true,true,4)==HoldEdge::None && gesture.down);
- check(gesture.update(true,false,5)==HoldEdge::Release);
- check(gesture.update(true,false,6)==HoldEdge::None);
-
- check(gesture.update(true,true,7,true)==HoldEdge::None); // Native activation owns this press.
- check(gesture.update(true,true,8,false)==HoldEdge::None && !gesture.down && !gesture.pending);
- check(gesture.update(true,false,9)==HoldEdge::None);
- check(gesture.update(true,true,10)==HoldEdge::None);
- check(gesture.update(true,true,10.25,true)==HoldEdge::Open); // Moving onto a target cannot reclassify a pending hold.
- check(gesture.update(false,true,11)==HoldEdge::None && !gesture.down); // Menu/provider loss cancels.
- check(gesture.update(true,true,12)==HoldEdge::None); // Still held after the menu; must release.
- check(gesture.update(true,false,13)==HoldEdge::None);
- check(gesture.update(true,true,14)==HoldEdge::None);
- check(gesture.update(false,true,14.125)==HoldEdge::None && !gesture.pending); // Cancellation before qualification.
- check(gesture.update(true,true,15)==HoldEdge::None && !gesture.down);
- check(gesture.update(true,false,16)==HoldEdge::None);
- check(gesture.update(true,true,17)==HoldEdge::None);
- check(gesture.update(true,true,16)==HoldEdge::None && !gesture.pending); // Invalid clock sample fails closed.
- check(gesture.update(true,false,18)==HoldEdge::None);
- check(gesture.update(true,true,19)==HoldEdge::None);
- check(gesture.update(true,true,std::numeric_limits<double>::quiet_NaN())==HoldEdge::None && !gesture.pending);
+ checkChord();
+ checkBArbitration();
  // An invisible wheel closes on release without waiting for a render callback.
  WheelSelectionState selection;
  selection.begin(41);

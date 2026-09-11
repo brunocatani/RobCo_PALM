@@ -113,21 +113,27 @@ inline int hitCenter(float x,float y,float scale,const NavigationLayout& layout)
 }
 enum class HoldEdge { None, Open, Release };
 inline constexpr double kWheelHoldSeconds=0.25;
-struct HoldGesture {
- bool armed{}, pending{}, down{};
+struct ChordGesture {
+ bool armed{}, pending{}, down{}, draining{};
  double pressedAt{};
- HoldEdge update(bool eligible,bool held,double nowSeconds,bool nativeActivationTarget=false) {
+ bool ownsInput() const {return pending || down || draining;}
+ HoldEdge update(bool eligible,bool trigger,bool grab,double nowSeconds) {
   if(!eligible || !std::isfinite(nowSeconds)){*this={};return HoldEdge::None;}
-  if(!held){const bool released=down;*this={};armed=true;return released?HoldEdge::Release:HoldEdge::None;}
-  // Classify at press time. A native-owned hold cannot become a wheel hold
-  // by moving the ray off the target; an existing candidate keeps its owner.
+  if(!trigger && !grab){const bool released=down;*this={};armed=true;return released?HoldEdge::Release:HoldEdge::None;}
+  if(draining)return HoldEdge::None;
+  if(!trigger || !grab) {
+   const bool released=down;
+   if(pending || down){pending=false;down=false;draining=true;}
+   return released?HoldEdge::Release:HoldEdge::None;
+  }
+  // The complete chord owns both buttons immediately, including the hold
+  // qualification window. Neither button can rearm it until both are up.
   if(!pending && !down) {
-   if(!armed || nativeActivationTarget){armed=false;return HoldEdge::None;}
+   if(!armed)return HoldEdge::None;
    armed=false;pending=true;pressedAt=nowSeconds;return HoldEdge::None;
   }
   if(pending) {
    if(nowSeconds<pressedAt){*this={};return HoldEdge::None;}
-   // Pending presses remain native. Only a qualified hold may claim game input.
    if(nowSeconds-pressedAt>=kWheelHoldSeconds){pending=false;down=true;return HoldEdge::Open;}
   }
   return HoldEdge::None;

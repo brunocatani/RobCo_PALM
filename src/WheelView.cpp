@@ -169,7 +169,7 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
   if(externalHover) {
    const bool available=!(externalHover->flags&static_cast<unsigned>(palm::api::ItemFlag::Disabled));
    if(available){action.section=external->handle;action.sectionItem=externalHover->id;}
-   centered(draw,point(512,920),16*scale,muted,available?"RELEASE B TO SELECT":"UNAVAILABLE");
+   centered(draw,point(512,920),16*scale,muted,available?"RELEASE TRIGGER OR GRAB TO SELECT":"UNAVAILABLE");
   }else if(!external->count)centered(draw,point(512,920),16*scale,muted,"No items available from this mod");
  }else if(showingGestures) {
   if(hit>=0) {
@@ -179,11 +179,11 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
   const bool clearing=action.hoveredGesture && gestures.active[hand]==action.hoveredGesture;
   const bool free=gestures.availability[hand]==GestureAvailability::Free;
   if(hit>=0 || !free)centered(draw,point(512,920),16*scale,free || clearing?muted:green,
-   clearing?"RELEASE B TO CLEAR GESTURE":!free?gestureAvailabilityText(gestures.availability[hand]):
-   gestures.left?"RELEASE B TO POSE LEFT HAND":"RELEASE B TO POSE RIGHT HAND");
+   clearing?"RELEASE TRIGGER OR GRAB TO CLEAR GESTURE":!free?gestureAvailabilityText(gestures.availability[hand]):
+   gestures.left?"RELEASE TRIGGER OR GRAB TO POSE LEFT HAND":"RELEASE TRIGGER OR GRAB TO POSE RIGHT HAND");
  }else if(hovered) {
   centered(draw,point(512,886),23*scale,green,hovered->name.c_str());
-  centered(draw,point(512,920),16*scale,muted,!hovered->count?"NOT CURRENTLY CARRIED":isEquipment(model.category)?(hovered->equipped?"RELEASE B TO UNEQUIP":"RELEASE B TO EQUIP"):"RELEASE B TO TAKE ONE");
+  centered(draw,point(512,920),16*scale,muted,!hovered->count?"NOT CURRENTLY CARRIED":isEquipment(model.category)?(hovered->equipped?"RELEASE TRIGGER OR GRAB TO UNEQUIP":"RELEASE TRIGGER OR GRAB TO EQUIP"):"RELEASE TRIGGER OR GRAB TO TAKE ONE");
  }else if(!showingItems)centered(draw,point(512,886),20*scale,muted,"Enable wheel sections in Config");
  else if(items.empty())centered(draw,point(512,886),20*scale,muted,"Choose your items in Config");
  centered(draw,point(512,960),14*scale,muted,model.status.c_str());
