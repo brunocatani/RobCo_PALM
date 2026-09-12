@@ -1,5 +1,4 @@
 #include "PalmControls.h"
-#include "PalmInputPriority.h"
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
@@ -12,13 +11,13 @@ int main(){try {
  Controls controls;ControlGesture gesture;
  const auto update=[&](bool all,bool any,double time,bool click=false,bool usable=true){return gesture.update(usable,controls,all,any,click,time);};
  check(update(true,true,0)==ControlEdge::None,"a held binding opened across a context change");
- update(false,false,1);check(update(true,true,2)==ControlEdge::None && gesture.pending && !gesture.ownsInput(),"unqualified hold captured gameplay input");
+ update(false,false,1);check(update(true,true,2)==ControlEdge::None && gesture.pending,"chord was not captured immediately");
  check(update(true,true,2.2)==ControlEdge::None,"hold threshold ignored");
  check(update(true,true,2.26)==ControlEdge::Open,"qualified hold did not open");
  check(update(false,true,2.3)==ControlEdge::Select && gesture.draining,"partial release did not select and drain");
  check(update(true,true,2.4)==ControlEdge::None,"remaining button reopened the wheel");
  update(false,false,3);update(true,true,4);update(false,true,4.1);
- check(gesture.draining && !gesture.open && !gesture.ownsInput(),"short chord captured input during release");
+ check(gesture.draining && !gesture.open,"short chord activated instead of draining");
  update(false,false,5);controls.mode=OpenMode::Press;controls.binding.type=ActivationType::Press;
  check(update(true,true,6)==ControlEdge::Open,"press did not open immediately");
  check(update(true,true,6.1,true)==ControlEdge::None,"opening press selected an item");
@@ -61,86 +60,6 @@ int main(){try {
  check(update(false,false,4)==ControlEdge::Open,"release binding failed after a long hold");
  controls.binding.duration=.2f;gesture={};update(false,false,0);update(true,true,1);
  check(update(false,false,1.3)==ControlEdge::None,"release binding ignored its maximum hold");
- // Exercise real physical masks: either button order, both controllers and
- // cross-hand chords must use the same hold qualification/ownership policy.
- for(const auto binding:{"left hold grip 0.25","right longpress b 0.4","right hold trigger 0.25 +grip",
-                         "left longpress trigger 0.4 +grip","left hold a 0.25 +right:grip"}) {
-  check(parseControls("hold",binding,controls,error),"hold test binding rejected");
-  for(const bool modifierFirst:{false,true}) {
-   gesture={};const auto required=controlMasks(controls,false);
-   std::array<std::uint64_t,2> down{};
-   const auto press=[&](bool modifier) {
-    const auto& b=controls.binding;
-    if(modifier && b.modifier)down[physicalHand(b.modifier->hand.value_or(b.hand),false)]|=1ull<<static_cast<unsigned>(b.modifier->button);
-    else down[physicalHand(b.hand,false)]|=1ull<<static_cast<unsigned>(b.button);
-   };
-   const auto tick=[&](double now,bool busy=false) {
-    bool all=true,any=false;
-    for(unsigned side=0;side<2;++side){all&=(down[side]&required.buttons[side])==required.buttons[side];any|=(down[side]&required.buttons[side])!=0;}
-    const bool ownedBefore=gesture.ownsInput();
-    const auto edge=gesture.update(true,controls,all,any,false,now,busy);
-    return std::pair{edge,gesture.captureMode(controls,true,ownedBefore)};
-   };
-   check(tick(0).second==ControlCapture::None,"idle hold reserved a raw input chord");
-   press(modifierFirst);check(tick(1).second==ControlCapture::None,"first button captured before qualification");
-   press(!modifierFirst);check(tick(1.1).second==ControlCapture::None,"complete chord captured before qualification");
-   const double qualified=1.1+holdDuration(controls)+.01;
-   check(tick(qualified)==std::pair{ControlEdge::Open,ControlCapture::Buttons},"fresh qualified hold failed to acquire input");
-   down[physicalHand(controls.binding.hand,false)]&=~(1ull<<static_cast<unsigned>(controls.binding.button));
-   check(tick(qualified+.1)==std::pair{ControlEdge::Select,ControlCapture::Buttons},"qualified release leaked its selection frame to gameplay");
-   if(controls.binding.modifier) {
-    check(tick(qualified+.2).second==ControlCapture::Buttons,"remaining chord button lost capture");
-    press(false);check(tick(qualified+.3).first==ControlEdge::None,"partial release rearmed the menu");
-   }
-   down={};tick(qualified+.4);check(tick(qualified+.5).second==ControlCapture::None,"neutral input retained capture");
-   gesture={};down={};tick(0);press(modifierFirst);press(!modifierFirst);tick(1);
-   down={};check(tick(1.02).second==ControlCapture::None && !gesture.open,"short press was suppressed");
-   // ROCK's trigger action may finish before the hold timer. Do not turn the
-   // same still-held buttons into a menu opening once that action is finished.
-   gesture={};down={};tick(0);press(modifierFirst);press(!modifierFirst);
-   check(tick(1,true).second==ControlCapture::None && gesture.rejection==HoldRejection::Interaction,"existing ROCK action did not retain input");
-   check(tick(3).first==ControlEdge::None && !gesture.ownsInput(),"completed action reopened PALM without a release");
-   down={};tick(4);press(modifierFirst);press(!modifierFirst);tick(5);
-   check(tick(5+holdDuration(controls)+.01).first==ControlEdge::Open,"fresh hold after gameplay failed to rearm");
-   // An interaction can acquire the hand during the qualification interval.
-   gesture={};down={};tick(0);press(modifierFirst);press(!modifierFirst);tick(1);
-   check(tick(1.1,true).second==ControlCapture::None && !gesture.pending,"interaction did not cancel pending hold");
-   check(tick(3).first==ControlEdge::None,"interrupted hold opened after interaction ended");
-   if(controls.binding.modifier) {
-    gesture={};down={};tick(0);press(modifierFirst);tick(1);
-    // No intervening frame is required to detect an old first button.
-    press(!modifierFirst);
-    check(tick(2).second==ControlCapture::None && gesture.rejection==HoldRejection::ExistingButton,"adding a button to an old hold captured input");
-    check(tick(4).first==ControlEdge::None,"old combination eventually opened the wheel");
-    down={};tick(5);press(modifierFirst);tick(6);press(!modifierFirst);tick(6.1);
-    check(tick(6.1+holdDuration(controls)+.01).first==ControlEdge::Open,"release did not rearm a rejected chord");
-   }
-  }
- }
- controls=Controls{};controls.mode=OpenMode::Press;controls.binding.duration=0;gesture={};
- update(false,false,0);check(update(true,true,1)==ControlEdge::None && !gesture.ownsInput(),"zero-duration hold bypassed qualification");
- check(update(true,true,1.26)==ControlEdge::Open,"hold in click-to-select mode failed");
- check(update(false,false,1.3)==ControlEdge::None && gesture.open,"hold opening gesture closed a latched wheel on release");
- controls.binding.type=ActivationType::Press;gesture={};update(false,false,0);
- check(gesture.captureMode(controls,true,false)==ControlCapture::Chord,"immediate binding lost its chord reservation");
- {
-  using namespace rock::provider;
-  using Phase=RockProviderHandInteractionPhaseV1;using Flag=RockProviderHandInteractionFlagV1;
-  RockProviderHandInteractionStateV1 hand;
-  check(interactionBlocksOpeningHold(hand),"unavailable hand state was treated as free");
-  hand.flags=static_cast<unsigned>(Flag::Valid)|static_cast<unsigned>(Flag::LooseObject)|static_cast<unsigned>(Flag::FiringGrip);
-  for(const auto phase:{Phase::Idle,Phase::Touching,Phase::Selecting}) {
-   hand.phase=phase;check(!interactionBlocksOpeningHold(hand),"highlight or equipped firing grip blocked menu use");
-  }
-  for(const auto phase:{Phase::Pulling,Phase::Catching,Phase::Holding,Phase::Releasing,Phase::StashCandidate,Phase::ConsumeCandidate}) {
-   hand.phase=phase;check(interactionBlocksOpeningHold(hand),"active hand interaction lost priority");
-  }
-  hand.phase=Phase::Idle;
-  for(const auto flag:{Flag::PartGrip,Flag::PartCarry,Flag::TouchGrab,Flag::TransitionSuppressed}) {
-   hand.flags=static_cast<unsigned>(Flag::Valid)|static_cast<unsigned>(flag);
-   check(interactionBlocksOpeningHold(hand),"active grip lost priority");
-  }
- }
  check(parseControls("hold","left tap b +grip",parsed,error) && parsed.mode==OpenMode::Press,"tap offered impossible release-to-select");
  check(parseControls("hold",bindingText(Controls{}),parsed,error) && parsed==Controls{},"default binding did not roundtrip");
  const auto path=std::filesystem::temp_directory_path()/("PALM-controls-"+std::to_string(GetCurrentProcessId())+".ini");

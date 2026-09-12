@@ -1,7 +1,6 @@
 #include "PCH.h"
 #include "Runtime.h"
 #include "PalmControls.h"
-#include "PalmInputPriority.h"
 #include "RPSUIInputApi.h"
 #include <ShlObj.h>
 #include "Inventory.h"
@@ -45,7 +44,6 @@ struct RuntimeState {
  Gestures handGestures;
  bool leftHanded{};
  std::uint32_t world{},skeleton{},provider{};
- double nextHoldRejectionLog{};
 };
 RuntimeState& state(){static RuntimeState s;return s;}
 void refreshWheelInventory() {
@@ -78,12 +76,12 @@ bool publishPointerAim() {
 void clearSuppression() {
  auto& s=state();if(s.inputApi && s.inputToken){rpsui::sdk::InputCaptureV1 capture;(void)s.inputApi->capture(s.inputToken,&capture);}
 }
-bool claimInput(const rpsui::sdk::InputFrameV1& frame,ControlCapture mode) {
+bool claimInput(const rpsui::sdk::InputFrameV1& frame,bool owned) {
  auto& s=state();const auto masks=controlMasks(s.controls,frame.leftHanded);
  rpsui::sdk::InputCaptureV1 capture;
  for(unsigned hand=0;hand<2;++hand) {
-  if(mode==ControlCapture::Buttons)capture.buttons[hand]=masks.buttons[hand];
-  else if(mode==ControlCapture::Chord)capture.chord[hand]=masks.buttons[hand];
+  if(owned)capture.buttons[hand]=masks.buttons[hand];
+  else capture.chord[hand]=masks.buttons[hand];
  }
  const bool accepted=s.inputApi && s.inputApi->capture(s.inputToken,&capture);
  if(!accepted){s.presentationFailed=true;clearSuppression();spdlog::error("PALM input capture unavailable");}
@@ -311,37 +309,13 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
    anyDown |= (frame->hands[hand].pressed&masks.buttons[hand])!=0;
   }
   const bool ownedBefore=s.gesture.ownsInput();
-  bool interactionBusy=false;
-  unsigned priorityHand{},priorityPhase{},priorityFlags{},priorityResult{};
-  if(rockReady && eligible && valid && anyDown && isTimedHold(s.controls.binding.type) && !ownedBefore && !s.gesture.draining) {
-   for(unsigned side=0;side<2;++side)if(masks.buttons[side]) {
-    const auto hand=side?RockProviderHand::Right:RockProviderHand::Left;
-    RockProviderHandInteractionStateV1 interaction;
-    const auto result=RockProviderApi::inst->getHandInteractionStateV1(s.owner,hand,&interaction);
-    interactionBusy = result!=RockProviderResultV1::Ok || interaction.hand!=hand ||
-     interaction.worldGeneration!=s.rockFrame.worldGeneration || interaction.skeletonGeneration!=s.rockFrame.skeletonGeneration ||
-     interaction.providerGeneration!=s.rockFrame.providerGeneration || interactionBlocksOpeningHold(interaction);
-    if(interactionBusy) {
-     priorityHand=static_cast<unsigned>(hand);priorityPhase=static_cast<unsigned>(interaction.phase);
-     priorityFlags=interaction.flags;priorityResult=static_cast<unsigned>(result);break;
-    }
-   }
-  }
   std::optional<Action> clicked;
   {std::scoped_lock lock(s.presentationMutex);if(s.clickRequested.exchange(false))clicked=s.clickSelection;}
-  const auto edge=s.gesture.update(valid && (eligible || s.gesture.open || s.gesture.draining),s.controls,allDown,anyDown,clicked.has_value() && eligible,frame->seconds,interactionBusy);
-  if(anyDown && s.gesture.rejection!=HoldRejection::None && frame->seconds>=s.nextHoldRejectionLog) {
-   s.nextHoldRejectionLog=frame->seconds+2;
-   spdlog::info("PALM hold yielded to {}; release opening buttons to rearm (left={:X}, right={:X}, complete={}, ROCK hand={}, phase={}, flags={:X}, query={})",
-    s.gesture.rejection==HoldRejection::Interaction?"ROCK interaction":"existing button hold",
-    frame->hands[0].pressed&masks.buttons[0],frame->hands[1].pressed&masks.buttons[1],allDown,
-    priorityHand,priorityPhase,priorityFlags,priorityResult);
-  }
+  const auto edge=s.gesture.update(valid && (eligible || s.gesture.open || s.gesture.draining),s.controls,allDown,anyDown,clicked.has_value() && eligible,frame->seconds);
   s.held=s.gesture.open;
   if(s.open.load() && !s.gesture.open && edge!=ControlEdge::Select)closeWheel();
-  const auto capture=s.gesture.captureMode(s.controls,eligible,ownedBefore);
-  if(capture!=ControlCapture::None) {
-   if(!claimInput(*frame,capture)){closeWheel();s.gesture={};return;}
+  if((eligible && s.gesture.armed) || ownedBefore || s.gesture.ownsInput()) {
+   if(!claimInput(*frame,ownedBefore || s.gesture.ownsInput())){closeWheel();s.gesture={};return;}
   }else clearSuppression();
   if(rockReady)s.handGestures.update(s.owner,s.rockFrame,eligible,ownedBefore || s.gesture.ownsInput());
   publishGestureState();
