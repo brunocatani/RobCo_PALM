@@ -13,7 +13,8 @@ State& state(){static State value;return value;}
 constexpr std::array pitchKeys{L"fLeftPitchDegrees",L"fRightPitchDegrees"};
 constexpr std::array yawKeys{L"fLeftYawDegrees",L"fRightYawDegrees"};
 bool readAngle(const std::filesystem::path& path,const wchar_t* key,float& value) {
- std::array<wchar_t,64> text{};GetPrivateProfileStringW(L"Pointer",key,L"0",text.data(),static_cast<DWORD>(text.size()),path.c_str());
+ const auto fallback=std::to_wstring(value);
+ std::array<wchar_t,64> text{};GetPrivateProfileStringW(L"Pointer",key,fallback.c_str(),text.data(),static_cast<DWORD>(text.size()),path.c_str());
  wchar_t* end{};const float parsed=std::wcstof(text.data(),&end);
  if(end==text.data() || *end || !std::isfinite(parsed) || std::fabs(parsed)>90)return false;
  value=parsed;return true;
@@ -66,7 +67,7 @@ void initializeControls(const std::filesystem::path& path) {
   valid=readAngle(path,pitchKeys[hand],s.aim.pitch[hand]) && valid;
   valid=readAngle(path,yawKeys[hand],s.aim.yaw[hand]) && valid;
  }
- if(!valid)s.status="Invalid pointer angle; that angle uses 0 degrees";
+ if(!valid)s.status="Invalid pointer angle; using its default";
 }
 bool applyControls(const Controls& controls,bool queueSave) {
  Controls validated;std::string error;
@@ -103,7 +104,7 @@ void drawPointerAim() {
  using namespace devui;
  auto value=snapshotPointerAim();bool changed=false;
  visual::heading("Pointer aim","Fine-tune where each controller points.");
- {visual::Font font(render::FontRole::Body,18);ImGui::TextWrapped("Negative pitch lowers the pointer. Positive yaw moves it right. Release a slider to apply its change.");}
+ {visual::Font font(render::FontRole::Body,18);ImGui::TextWrapped("0 degrees points straight forward. Negative pitch lowers the pointer. Positive yaw moves it right. Release a slider to apply its change.");}
  ImGui::Dummy({0,14});
  if(ImGui::BeginTable("pointer-aim",2,ImGuiTableFlags_SizingStretchSame)) {
   for(unsigned hand=0;hand<2;++hand) {
@@ -119,7 +120,7 @@ void drawPointerAim() {
    };
    adjust("Pitch / up-down","Down 1","Up 1",value.pitch[hand]);
    adjust("Yaw / left-right","Left 1","Right 1",value.yaw[hand]);
-   if(visual::button("Reset to native aim",{ImGui::GetContentRegionAvail().x,40})){value.pitch[hand]=value.yaw[hand]=0;changed=true;}
+   if(visual::button("Reset to defaults",{ImGui::GetContentRegionAvail().x,40})){const PointerAim defaults;value.pitch[hand]=defaults.pitch[hand];value.yaw[hand]=defaults.yaw[hand];changed=true;}
    ImGui::EndGroup();ImGui::PopID();
   }
   ImGui::EndTable();

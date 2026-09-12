@@ -70,7 +70,7 @@ void publishGestureState() {
 
 bool publishPointerAim() {
  const auto aim=snapshotPointerAim();rpsui::sdk::PointerAimV1 request;
- for(unsigned side=0;side<2;++side){request.pitchDegrees[side]=aim.pitch[side];request.yawDegrees[side]=aim.yaw[side];}
+ for(unsigned side=0;side<2;++side){request.pitchDegrees[side]=nativePointerPitch(aim.pitch[side]);request.yawDegrees[side]=aim.yaw[side];}
  return state().inputApi && state().inputApi->setPointerAim && state().inputApi->setPointerAim(&request);
 }
 void clearSuppression() {

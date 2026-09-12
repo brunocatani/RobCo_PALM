@@ -68,7 +68,9 @@ int main(){try {
  initializeControls(path);const auto loaded=snapshotControls();check(loaded.mode==OpenMode::Press && loaded.binding.hand==Hand::Left,"PALM did not load its own INI");
  check(applyControls(Controls{}) && takeControlsSaveRequest(),"edit did not queue persistence");persistControls();initializeControls(path);
  check(snapshotControls()==Controls{},"controls were not restored from disk");
- check(snapshotPointerAim()==PointerAim{},"missing pointer keys did not use neutral calibration");
+ check(snapshotPointerAim()==PointerAim{},"missing pointer keys did not use default calibration");
+ check(nativePointerPitch(snapshotPointerAim().pitch[0])==-70.f && nativePointerPitch(snapshotPointerAim().pitch[1])==-70.f,"zero adjustment did not apply the forward baseline to both hands");
+ check(nativePointerPitch(-90.f)==-160.f && nativePointerPitch(90.f)==20.f,"pitch correction range was clipped around the forward baseline");
  (void)takePointerAimChange();
  PointerAim aim;aim.pitch={-75,-68};aim.yaw={-2,4};
  check(applyPointerAim(aim,false) && !takePointerAimChange(),"dragging the calibration slider changed live aim before release");
@@ -80,9 +82,16 @@ int main(){try {
  invalidAim=aim;invalidAim.yaw[1]=std::numeric_limits<float>::quiet_NaN();
  check(!applyPointerAim(invalidAim),"non-finite calibration was accepted");
  WritePrivateProfileStringW(L"Pointer",L"fLeftPitchDegrees",L"invalid",path.c_str());initializeControls(path);
- check(snapshotPointerAim().pitch[0]==0 && snapshotPointerAim().pitch[1]==aim.pitch[1],"invalid pointer angle replaced the other hand's calibration");
+ check(snapshotPointerAim().pitch[0]==PointerAim{}.pitch[0] && snapshotPointerAim().pitch[1]==aim.pitch[1],"invalid pointer angle did not use its default independently");
+ WritePrivateProfileStringW(L"Pointer",L"fLeftPitchDegrees",L"0",path.c_str());
+ WritePrivateProfileStringW(L"Pointer",L"fRightPitchDegrees",nullptr,path.c_str());initializeControls(path);
+ check(snapshotPointerAim().pitch[0]==0 && snapshotPointerAim().pitch[1]==PointerAim{}.pitch[1],"missing pitch overrode an explicitly saved zero");
  wchar_t preserved[32]{};GetPrivateProfileStringW(L"Other",L"untouched",L"",preserved,32,path.c_str());
  check(std::wstring_view(preserved)==L"hello","PALM rewrote unrelated INI values");
+ std::filesystem::remove(path);initializeControls(path);
+ check(snapshotPointerAim()==PointerAim{} && takeControlsSaveRequest(),"first run did not prepare default pointer settings");
+ persistControls();initializeControls(path);
+ check(snapshotPointerAim()==PointerAim{},"first-run pointer defaults did not persist");
  initializeControls({});std::cout<<"Control gestures, binding validation, handedness, and isolated persistence passed\n";
  return 0;
  }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

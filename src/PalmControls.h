@@ -12,6 +12,8 @@ struct PointerAim {
  std::array<float,2> pitch{},yaw{};
  bool operator==(const PointerAim&) const=default;
 };
+// User pitch is relative to the tested forward aim, not the native wand axis.
+inline constexpr float nativePointerPitch(float adjustmentDegrees){return -70.f+adjustmentDegrees;}
 struct Controls {
  OpenMode mode{OpenMode::Hold};
  f4cf::vrcf::InputBinding binding{.hand=f4cf::vrcf::Hand::Right,
