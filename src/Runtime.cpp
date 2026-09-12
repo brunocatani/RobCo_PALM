@@ -390,8 +390,9 @@ bool startRuntime() {
  if(!s.inputApi || !s.inputApi->subscribe || !s.inputApi->capture || !s.inputApi->unsubscribe || !s.inputApi->setPointerAim)return false;
  PWSTR documents{};
  if(SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents,0,nullptr,&documents))) {
-  const auto path=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"RobCo_PALM"/"PALM.ini";
+  const auto path=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"Mods_Config"/"RobCo_PALM"/"PALM.ini";
   CoTaskMemFree(documents);initializeControls(path);if(takeControlsSaveRequest())persistControls();
+  spdlog::info("PALM settings path: {}",path.string());
  }else {spdlog::error("PALM Documents folder unavailable");return false;}
  s.controls=snapshotControls();setGestureIntegrationAvailable(false);
  (void)takePointerAimChange();if(!publishPointerAim())return false;

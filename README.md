@@ -27,7 +27,7 @@ Choose your items in **Config → Items**. Rebind the controls or switch between
 
 In **Click to select**, release the opening buttons before selecting with the pointing hand's trigger or A/X. The wheel stays open until you click **Cancel** or enter Config. Opening bindings support press, tap, double tap, hold, long press, and release, with an optional modifier on either hand. Touch and axis inputs are excluded; thumbstick click is supported. Tap and release bindings use click-to-select.
 
-PALM saves its own controls to `Documents\My Games\Fallout4VR\RobCo_PALM\PALM.ini`; manual edits are read at startup.
+PALM saves its controls and pointer calibration to `Documents\My Games\Fallout4VR\Mods_Config\RobCo_PALM\PALM.ini`; manual edits are read at startup.
 
 ## Adding a mod section
 
