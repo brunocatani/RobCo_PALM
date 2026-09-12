@@ -187,9 +187,10 @@ void drawControls() {
  const auto type=value.binding.type;
  if(type==ActivationType::HoldDown || type==ActivationType::LongPress || type==ActivationType::DoublePress || type==ActivationType::Release) {
   visual::caption(type==ActivationType::DoublePress?"Double-tap window":type==ActivationType::Release?"Maximum hold (0 = any)":"Hold time");
-  float timing=value.binding.duration>0?value.binding.duration:type==ActivationType::LongPress?.6f:type==ActivationType::DoublePress?.4f:0;
-  ImGui::SetNextItemWidth(320);if(ImGui::SliderFloat("##binding-time",&timing,0,1,"%.2f seconds")){value.binding.duration=timing;changed=true;}
+  float timing=isTimedHold(type)?static_cast<float>(holdDuration(value)):value.binding.duration>0?value.binding.duration:type==ActivationType::DoublePress?.4f:0;
+  ImGui::SetNextItemWidth(320);if(ImGui::SliderFloat("##binding-time",&timing,isTimedHold(type)?.05f:0,1,"%.2f seconds")){value.binding.duration=timing;changed=true;}
  }
+ if(isTimedHold(type)){visual::Font font(render::FontRole::Body,18);ImGui::TextWrapped("Short presses keep their normal actions. Press combo buttons together, then hold. Release all opening buttons after another action before opening PALM.");}
  if(!supportsReleaseSelection(type)){visual::Font font(render::FontRole::Body,18);ImGui::TextColored(visual::muted(),"Tap and release bindings use click-to-select.");}
  if(changed)(void)applyControls(value,!ImGui::IsAnyItemActive());
  {auto& s=state();std::unique_lock lock(s.mutex,std::try_to_lock);if(lock.owns_lock()){if(s.dirty && !ImGui::IsAnyItemActive())s.save=true;visual::Font font(render::FontRole::Body,18);ImGui::TextColored(visual::muted(),"%s",s.status.c_str());}}
