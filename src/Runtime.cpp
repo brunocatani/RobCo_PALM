@@ -271,7 +271,9 @@ void selectWheel(bool closeAfterSelect,const std::optional<Action>& clicked) {
  if(hover && hover->section)s.sectionChoice=(static_cast<std::uint64_t>(hover->section)<<32)|hover->sectionItem;
  s.choice=hover?(hover->configHovered?kConfigChoice:hover->hoveredGesture?hover->hoveredGesture:
   hover->section?kSectionChoice:hover->hoveredItem?(kItemChoice|hover->hoveredItem):kCancelChoice):kCancelChoice;
- if(!hover){s.presentationFailed=true;spdlog::warn("PALM had no rendered selection; input released until next load");}
+ // Release may arrive before the first draw, including a skipped depth frame.
+ // Cancelling this opening is not evidence that presentation is unavailable.
+ if(!hover)spdlog::info("PALM opening cancelled before a rendered selection; waiting for both buttons to release");
 }
 void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
  try {
