@@ -72,8 +72,13 @@ int main(int argc, char** argv) {
    click(start+(index+.5f)*step,55);
   };
   settle();
+  const bool csahOnly = argc > 5 && std::string_view(argv[3]) == "--csah";
   const bool settingsOnly = argc > 3 && std::string_view(argv[3]) == "--settings-only";
-  if (settingsOnly) {
+  if (csahOnly) {
+   rock_configurator::initializeRpsPreview({}, {false,false,false}, nullptr, argv[4], argv[5]);
+   rock_configurator::setPreviewOpen(true);settle();
+   tab(2);save(L"csah-settings.png");
+  } else if (settingsOnly) {
    tab(2);save(L"rock-settings.png");
    click(220,120);save(L"developer-settings.png");
   } else {

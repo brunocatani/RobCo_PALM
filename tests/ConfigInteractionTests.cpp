@@ -62,7 +62,7 @@ bool fixtureVisit(rock::configuration_api::Group group, rock::configuration_api:
 bool fixtureWrite(rock::configuration_api::Group, const char*, const char*, const char*, char*, std::uint32_t) noexcept { return false; }
 }
 
-int main() {
+int main(int argc, char** argv) {
     const auto path = std::filesystem::temp_directory_path() /
         ("WheelConfigInteraction-" + std::to_string(GetCurrentProcessId()) + ".ini");
     struct Cleanup { std::filesystem::path path; ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); } } cleanup{path};
@@ -172,6 +172,20 @@ int main() {
         require(window("settings-rows")->ID != consumerWorkspace, "Developer page reused the consumer workspace");
         click(45, 120);
         require(window("settings-rows")->ID == consumerWorkspace, "ROCK tab did not restore the consumer workspace");
+        if (argc > 1) {
+            // Exercise the shipped CSAH catalog in the real RPS tab, both alone
+            // and alongside every existing page. All edits remain in memory.
+            for (bool otherMods : {false, true}) {
+                rock_configurator::initializeRpsPreview({path,path,path}, {otherMods,otherMods,otherMods},
+                    otherMods ? &configApi : nullptr, path, argv[1]);
+                rock_configurator::setPreviewOpen(true);frame();frame();click(railWidth + 440, 50);
+                if (otherMods) click(45 + 4 * 168, 120);
+                require(window("settings-rows"), "CSAH page did not open in RPS mods");
+                require(renderedText().find("CSAH Visual Suite") != std::string::npos, "CSAH page lost its authored controls");
+                scroll(window("settings-rows"));
+                scroll(window("/rail_"));
+            }
+        }
         std::cout << "Config interaction, scrolling, and separate ROCK/Developer pages passed\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n'; ImGui::DestroyContext(); return 1;

@@ -219,12 +219,14 @@ namespace rock_configurator
     {
         setting.selectedOptionIndex.reset();
         setting.numericValueValid = false;
-        if (!setting.fromRockApi) setting.type = inferType(setting.value);
-        setting.control = setting_control::build(
-            controlValueType(setting.type),
-            setting.key,
-            setting.value,
-            setting.description, _mod);
+        if (_mod != RpsMod::Csah) {
+            if (!setting.fromRockApi) setting.type = inferType(setting.value);
+            setting.control = setting_control::build(
+                controlValueType(setting.type),
+                setting.key,
+                setting.value,
+                setting.description, _mod);
+        }
         if (setting.type == SettingType::Integer) {
             long long value = 0;
             setting.numericValueValid = parseInteger(setting.value, value);
@@ -343,6 +345,7 @@ namespace rock_configurator
 
         if (_useRockApi && !connectRockApi()) return false;
         if (_useRockApi) return reloadRockSnapshot();
+        if (_mod == RpsMod::Csah) return loadCsahSettings();
 
         std::ifstream input(_path);
         if (!input) {
@@ -786,6 +789,13 @@ namespace rock_configurator
                 .message = "value unchanged",
                 .setting = setting,
             };
+        }
+        if (_mod == RpsMod::Csah) {
+            if (!saveCsahSetting(setting, *normalizedValue))
+                return { .message = _lastError, .setting = setting };
+            setting.value = *normalizedValue;
+            refreshControl(setting);
+            return { .changed = true, .saved = true, .message = "saved", .setting = setting };
         }
         if (setting.fromRockApi) {
 #ifndef WHEEL_DESKTOP_PREVIEW

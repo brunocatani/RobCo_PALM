@@ -27,6 +27,7 @@ namespace rock_configurator
         std::string id;
         std::string section;
         std::string key;
+        std::string label;
         std::string value;
         std::string category;
         std::string description;
@@ -53,8 +54,8 @@ namespace rock_configurator
     {
     public:
         explicit IniSettingsStore(std::filesystem::path path = {}, RpsMod mod = RpsMod::Rock,
-            const rock::configuration_api::ApiV1* api = nullptr) :
-            _path(std::move(path)), _mod(mod), _configurationApi(api),
+            const rock::configuration_api::ApiV1* api = nullptr, std::filesystem::path catalogPath = {}) :
+            _path(std::move(path)), _catalogPath(std::move(catalogPath)), _mod(mod), _configurationApi(api),
             _useRockApi(api || (_path.empty() && (mod == RpsMod::Rock || mod == RpsMod::RockDeveloper))) {}
 
         [[nodiscard]] bool load();
@@ -94,6 +95,8 @@ namespace rock_configurator
         void refreshControl(SettingRecord& setting) const;
         [[nodiscard]] bool connectRockApi();
         [[nodiscard]] bool reloadRockSnapshot();
+        [[nodiscard]] bool loadCsahSettings();
+        [[nodiscard]] bool saveCsahSetting(const SettingRecord& setting, std::string_view value);
         [[nodiscard]] rock::configuration_api::Group rockGroup() const noexcept;
         [[nodiscard]] static std::string cycleStringValue(const SettingRecord& setting, int direction);
         [[nodiscard]] static std::string adjustNumericValue(const SettingRecord& setting, int direction);
@@ -103,6 +106,7 @@ namespace rock_configurator
         [[nodiscard]] std::pair<std::size_t, std::size_t> categoryBounds(std::size_t index) const;
 
         std::filesystem::path _path;
+        std::filesystem::path _catalogPath;
         RpsMod _mod;
         const rock::configuration_api::ApiV1* _configurationApi = nullptr;
         bool _useRockApi = false;

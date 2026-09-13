@@ -108,11 +108,12 @@ namespace rock_configurator
             SelectionAnchor anchor;
             std::size_t activeIndex = 0;
         };
-        std::array<ModSettings, 4> s_modSettings{
+        std::array<ModSettings, kRpsMods.size()> s_modSettings{
             ModSettings{IniSettingsStore({}, RpsMod::Rock)},
             ModSettings{IniSettingsStore({}, RpsMod::Paper)},
             ModSettings{IniSettingsStore({}, RpsMod::Scissors)},
-            ModSettings{IniSettingsStore({}, RpsMod::RockDeveloper)}
+            ModSettings{IniSettingsStore({}, RpsMod::RockDeveloper)},
+            ModSettings{IniSettingsStore({}, RpsMod::Csah)}
         };
         std::size_t s_modIndex = 0;
         ModSettings& activeSettings() { return s_modSettings[s_modIndex]; }
@@ -876,8 +877,11 @@ namespace rock_configurator
             ImGui::SetCursorPos({14, 8});
             {
                 ScopedFont font(devui::render::FontRole::Medium, 25);
-                const devui::visual::ReadableLabel label(setting.key, true);
-                ImGui::TextUnformatted(label.text.data());
+                if (!setting.label.empty()) ImGui::TextUnformatted(setting.label.c_str());
+                else {
+                    const devui::visual::ReadableLabel label(setting.key, true);
+                    ImGui::TextUnformatted(label.text.data());
+                }
             }
             draw->PopClipRect();
             if (ImGui::IsItemHovered()) {
@@ -1231,7 +1235,7 @@ namespace rock_configurator
                 ImGui::BeginChild("rps-mod-tabs", {0, 64});
                 ImGui::SetCursorPos({18, 4});
                 bool first = true;
-                for (const std::size_t i : {0u, 3u, 1u, 2u}) {
+                for (const std::size_t i : {0u, 3u, 1u, 2u, 4u}) {
                     if (!s_modSettings[i].available) continue;
                     if (!first) ImGui::SameLine(0, 12);
                     first = false;
@@ -1504,7 +1508,8 @@ namespace rock_configurator
     }
 
     void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available,
-        const rock::configuration_api::ApiV1* rockApi)
+        const rock::configuration_api::ApiV1* rockApi, const std::filesystem::path& csahPath,
+        const std::filesystem::path& csahCatalog)
     {
         std::scoped_lock lock(s_runtimeMutex);
         invalidateQueuedRuntimeActions();
@@ -1512,6 +1517,8 @@ namespace rock_configurator
         s_activeTab = ConfiguratorTab::Wheel;
         s_modSettings[3] = ModSettings{IniSettingsStore({}, RpsMod::RockDeveloper, rockApi)};
         s_modSettings[3].available = available[0] && (paths[0].empty() || rockApi != nullptr);
+        s_modSettings[4] = ModSettings{IniSettingsStore(csahPath, RpsMod::Csah, nullptr, csahCatalog)};
+        s_modSettings[4].available = !csahPath.empty() && !csahCatalog.empty();
         for (std::size_t i = 0; i < paths.size(); ++i) {
             s_modSettings[i] = ModSettings{IniSettingsStore(paths[i], kRpsMods[i].id, i == 0 ? rockApi : nullptr)};
             s_modSettings[i].available = available[i];

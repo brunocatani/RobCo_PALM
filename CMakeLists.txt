@@ -12,6 +12,7 @@ set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 add_subdirectory("${COMMON_LIB_F4VR_PATH}" CommonLibF4 EXCLUDE_FROM_ALL)
 find_package(spdlog CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 set(IMGUI "${WORKSPACE}/../devtools/imgui")
 add_library(wheel_imgui STATIC "${IMGUI}/imgui.cpp" "${IMGUI}/imgui_draw.cpp"
   "${IMGUI}/imgui_tables.cpp" "${IMGUI}/imgui_widgets.cpp" "${IMGUI}/backends/imgui_impl_dx11.cpp")
@@ -23,13 +24,13 @@ add_library(wheel_view STATIC src/WheelView.cpp src/Fonts.cpp src/WheelConfig.cp
 target_include_directories(wheel_view PUBLIC src external/F4VR-Input
  "${WORKSPACE}/libraries_and_tools/F4VR-CommonFramework/external/openvr")
 target_link_libraries(wheel_view PUBLIC wheel_imgui windowscodecs ole32)
-set(WORKSHOP_SOURCES src/tools/ConfiguratorRuntime.cpp src/tools/IniSettingsStore.cpp
+set(WORKSHOP_SOURCES src/tools/ConfiguratorRuntime.cpp src/tools/IniSettingsStore.cpp src/tools/CsahSettings.cpp
  src/tools/RockSettingControlPolicy.cpp src/tools/SpawnBrowser.cpp)
 foreach(target wheel_workshop wheel_workshop_preview)
  add_library(${target} STATIC ${WORKSHOP_SOURCES})
  target_include_directories(${target} PUBLIC src/tools
   "${WORKSPACE}/main_projects/RPS_SDK/SDK/ROCK/include")
- target_link_libraries(${target} PUBLIC spdlog::spdlog wheel_view shell32)
+ target_link_libraries(${target} PUBLIC spdlog::spdlog wheel_view shell32 nlohmann_json::nlohmann_json)
  target_compile_features(${target} PUBLIC cxx_std_23)
  target_precompile_headers(${target} PRIVATE src/tools/PCH.h)
  target_compile_options(${target} PRIVATE /MP2 /utf-8 /wd4715)
@@ -101,6 +102,21 @@ target_compile_features(WheelPreviewIsolationTests PRIVATE cxx_std_23)
 target_compile_definitions(WheelPreviewIsolationTests PRIVATE WHEEL_DESKTOP_PREVIEW WIN32_LEAN_AND_MEAN NOMINMAX)
 target_link_libraries(WheelPreviewIsolationTests PRIVATE shell32)
 add_test(NAME Wheel.PreviewIsolation COMMAND WheelPreviewIsolationTests)
+
+foreach(mode Runtime Preview)
+ add_executable(WheelCsah${mode}Tests tests/CsahSettingsTests.cpp src/tools/IniSettingsStore.cpp
+  src/tools/CsahSettings.cpp src/tools/RockSettingControlPolicy.cpp)
+ target_include_directories(WheelCsah${mode}Tests PRIVATE src/tools "${WORKSPACE}/main_projects/RPS_SDK/SDK/ROCK/include")
+ target_compile_features(WheelCsah${mode}Tests PRIVATE cxx_std_23)
+ target_compile_definitions(WheelCsah${mode}Tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+ target_link_libraries(WheelCsah${mode}Tests PRIVATE shell32 nlohmann_json::nlohmann_json)
+ add_test(NAME Wheel.Csah${mode} COMMAND WheelCsah${mode}Tests)
+endforeach()
+target_compile_definitions(WheelCsahPreviewTests PRIVATE WHEEL_DESKTOP_PREVIEW)
+foreach(target WheelIniSettingsStoreControlTests WheelRockConfigurationBridgeTests WheelPreviewIsolationTests)
+ target_sources(${target} PRIVATE src/tools/CsahSettings.cpp)
+ target_link_libraries(${target} PRIVATE nlohmann_json::nlohmann_json)
+endforeach()
 
 add_executable(WheelConfigInteractionTests tests/ConfigInteractionTests.cpp preview/WorkshopAdapter.cpp)
 target_link_libraries(WheelConfigInteractionTests PRIVATE wheel_workshop_preview)
