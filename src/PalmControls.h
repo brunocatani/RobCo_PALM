@@ -15,10 +15,10 @@ struct PointerAim {
 // User pitch is relative to the tested forward aim, not the native wand axis.
 inline constexpr float nativePointerPitch(float adjustmentDegrees){return -70.f+adjustmentDegrees;}
 struct Controls {
- OpenMode mode{OpenMode::Hold};
+ OpenMode mode{OpenMode::Press};
  f4cf::vrcf::InputBinding binding{.hand=f4cf::vrcf::Hand::Right,
-  .type=f4cf::vrcf::ActivationType::HoldDown,.button=vr::k_EButton_SteamVR_Trigger,
-  .modifier=f4cf::vrcf::InputModifier{vr::k_EButton_Grip,{}},.duration=.25f,.suppress=true};
+  .type=f4cf::vrcf::ActivationType::Release,.button=vr::k_EButton_SteamVR_Touchpad,
+  .duration=0,.suppress=true};
  bool operator==(const Controls&) const=default;
 };
 struct ControlMasks {std::array<std::uint64_t,2> buttons{};};
@@ -33,6 +33,16 @@ inline ControlMasks controlMasks(const Controls& controls,bool leftHanded) {
  return result;
 }
 enum class ControlEdge {None,Open,Select};
+inline bool isPlainStickClick(const Controls& controls) {
+ return controls.mode==OpenMode::Press && controls.binding.type==f4cf::vrcf::ActivationType::Release &&
+  controls.binding.button==vr::k_EButton_SteamVR_Touchpad && !controls.binding.modifier && controls.binding.duration==0;
+}
+inline bool openingInputAllowed(const ControlMasks& masks,const std::array<std::uint64_t,2>& pressed,
+ const std::array<bool,2>& valid,const std::array<bool,2>& inHolster) {
+ for(unsigned hand=0;hand<2;++hand)
+  if(!valid[hand] || (pressed[hand]&~masks.buttons[hand]) || (masks.buttons[hand] && inHolster[hand]))return false;
+ return true;
+}
 inline bool supportsReleaseSelection(f4cf::vrcf::ActivationType type) {
  return type!=f4cf::vrcf::ActivationType::Tap && type!=f4cf::vrcf::ActivationType::Release;
 }
@@ -43,9 +53,12 @@ struct ControlGesture {
  double pressedAt{},firstPressedAt{},lastTime{};
  bool ownsInput() const {return pending || open || draining || waitingDouble;}
  ControlEdge activate(){pending=false;waitingDouble=false;draining=false;open=true;clickArmed=false;return ControlEdge::Open;}
- ControlEdge update(bool usable,const Controls& controls,bool allDown,bool anyDown,bool click,double now) {
+ ControlEdge update(bool usable,const Controls& controls,bool allDown,bool anyDown,bool click,double now,bool openingAllowed=true) {
   using f4cf::vrcf::ActivationType;
   if(!usable || !std::isfinite(now) || now<lastTime){*this={};return ControlEdge::None;}
+  // A competing gesture/holster invalidates the entire click. Releasing its
+  // other button or leaving its zone while still pressed must not reopen PALM.
+  if(!open && !openingAllowed){*this={};return ControlEdge::None;}
   lastTime=now;const auto type=controls.binding.type;
   const double duration=controls.binding.duration;
   const double doubleWindow=duration>0?duration:.4;

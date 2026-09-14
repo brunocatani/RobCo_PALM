@@ -1,6 +1,7 @@
 #include "PCH.h"
 #include "Runtime.h"
 #include "PalmControls.h"
+#include "api/VirtualHolstersAPI.h"
 #include "RPSUIInputApi.h"
 #include <ShlObj.h>
 #include "Inventory.h"
@@ -36,6 +37,10 @@ struct RuntimeState {
  std::uint64_t owner{},command{};
  ControlGesture gesture;
  Controls controls;
+ // Borrowed for the loaded plugin's process lifetime; queried on the game
+ // input callback thread, where Virtual Holsters owns its zone updates.
+ VirtualHolstersAPI* holsters{};
+ bool holstersUnavailable{};
  const rpsui::sdk::InputApiV1* inputApi{};
  std::uint64_t inputToken{};
  std::atomic_bool rockReady{false},clickRequested{false};
@@ -79,6 +84,9 @@ void clearSuppression() {
 bool claimInput(const rpsui::sdk::InputFrameV1& frame,bool owned) {
  auto& s=state();const auto masks=controlMasks(s.controls,frame.leftHanded);
  rpsui::sdk::InputCaptureV1 capture;
+ // A plain click cannot reserve its press: FRIK/holsters must see it while
+ // PALM waits for release to establish that it never became a chord.
+ if(isPlainStickClick(s.controls) && !s.gesture.open){clearSuppression();return true;}
  for(unsigned hand=0;hand<2;++hand) {
   if(owned)capture.buttons[hand]=masks.buttons[hand];
   else capture.chord[hand]=masks.buttons[hand];
@@ -310,13 +318,24 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
    allDown &= (frame->hands[hand].pressed&masks.buttons[hand])==masks.buttons[hand];
    anyDown |= (frame->hands[hand].pressed&masks.buttons[hand])!=0;
   }
+  std::array<bool,2> inHolster{};
+  bool holstersReady=!s.holstersUnavailable;
+  if(s.holsters) {
+   holstersReady=s.holsters->IsInitialized();
+   if(holstersReady)for(unsigned hand=0;hand<2;++hand)
+    if(masks.buttons[hand])inHolster[hand]=s.holsters->IsHandInHolsterZone(hand==0);
+  }
+  const bool openingAllowed=holstersReady && openingInputAllowed(masks,
+   {frame->hands[0].pressed,frame->hands[1].pressed},
+   {frame->hands[0].valid,frame->hands[1].valid},inHolster);
+  const bool openingBlocked=!s.gesture.open && !openingAllowed;
   const bool ownedBefore=s.gesture.ownsInput();
   std::optional<Action> clicked;
   {std::scoped_lock lock(s.presentationMutex);if(s.clickRequested.exchange(false))clicked=s.clickSelection;}
-  const auto edge=s.gesture.update(valid && (eligible || s.gesture.open || s.gesture.draining),s.controls,allDown,anyDown,clicked.has_value() && eligible,frame->seconds);
+  const auto edge=s.gesture.update(valid && (eligible || s.gesture.open || s.gesture.draining),s.controls,allDown,anyDown,clicked.has_value() && eligible,frame->seconds,openingAllowed);
   s.held=s.gesture.open;
   if(s.open.load() && !s.gesture.open && edge!=ControlEdge::Select)closeWheel();
-  if((eligible && s.gesture.armed) || ownedBefore || s.gesture.ownsInput()) {
+  if(!openingBlocked && ((eligible && s.gesture.armed) || ownedBefore || s.gesture.ownsInput())) {
    if(!claimInput(*frame,ownedBefore || s.gesture.ownsInput())){closeWheel();s.gesture={};return;}
   }else clearSuppression();
   if(rockReady)s.handGestures.update(s.owner,s.rockFrame,eligible,ownedBefore || s.gesture.ownsInput());
@@ -397,6 +416,11 @@ bool startRuntime() {
   spdlog::info("PALM settings path: {}",path.string());
  }else {spdlog::error("PALM Documents folder unavailable");return false;}
  s.controls=snapshotControls();setGestureIntegrationAvailable(false);
+ s.holsters=RequestVirtualHolstersAPI();
+ if(s.holsters && s.holsters->GetVersion()!=1)s.holsters=nullptr;
+ s.holstersUnavailable=GetModuleHandleW(L"VirtualHolsters.dll") && !s.holsters;
+ if(s.holstersUnavailable)spdlog::error("PALM opening disabled: loaded Virtual Holsters has no supported zone API");
+ else spdlog::info("PALM Virtual Holsters zone guard: {}",s.holsters?"available":"provider absent");
  (void)takePointerAimChange();if(!publishPointerAim())return false;
  constexpr auto requiredTableBytes=static_cast<std::uint32_t>(offsetof(RockProviderApi,cancelInteractionCommandV1)+sizeof(std::declval<RockProviderApi>().cancelInteractionCommandV1));
  const auto initialized=RockProviderApi::initialize(ROCK_PROVIDER_API_VERSION,requiredTableBytes);

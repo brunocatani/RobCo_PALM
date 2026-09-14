@@ -9,6 +9,50 @@ void check(bool value,const char* message){if(!value)throw std::runtime_error(me
 int main(){try {
  using namespace wheel;using namespace f4cf::vrcf;
  Controls controls;ControlGesture gesture;
+ check(isPlainStickClick(controls),"default is not a plain physical stick click");
+ const auto defaultMasks=controlMasks(controls,true);
+ check(defaultMasks.buttons[0]==0 && defaultMasks.buttons[1]==(1ull<<32),"default click changed physical hands in left-handed mode");
+ const auto plainClick=[&](std::uint64_t left,std::uint64_t right,double time,
+  std::array<bool,2> zones=std::array<bool,2>{},std::array<bool,2> valid=std::array<bool,2>{true,true}) {
+  const bool allowed=openingInputAllowed(defaultMasks,{left,right},valid,zones);
+  return gesture.update(true,controls,(right&(1ull<<32))!=0,(right&(1ull<<32))!=0,false,time,allowed);
+ };
+ constexpr auto stick=1ull<<32;
+ plainClick(0,0,0);
+ check(plainClick(0,stick,1)==ControlEdge::None && gesture.pending,"plain click opened before release");
+ check(plainClick(0,0,1.01)==ControlEdge::Open,"plain click required a hold");
+ check(plainClick(0,0,1.02)==ControlEdge::None && gesture.open,"latched wheel closed after opening click");
+ // Both press orders, both release orders, and every other physical button.
+ for(unsigned hand=0;hand<2;++hand)for(unsigned button=0;button<64;++button) {
+  if(hand==1 && button==32)continue;
+  const auto other=1ull<<button;
+  for(bool otherFirst:{false,true})for(bool otherReleasedFirst:{false,true}) {
+   gesture={};plainClick(0,0,0);
+   const auto sample=[&](bool rightDown,bool otherDown,double time) {
+    return plainClick(hand==0 && otherDown?other:0,(rightDown?stick:0)|(hand==1 && otherDown?other:0),time);
+   };
+   check(sample(!otherFirst,otherFirst,1)==ControlEdge::None,"first chord member opened PALM");
+   check(sample(true,true,2)==ControlEdge::None,"button chord opened PALM");
+   check(sample(otherReleasedFirst,!otherReleasedFirst,3)==ControlEdge::None,"partial chord release opened PALM");
+   check(sample(false,false,4)==ControlEdge::None,"rejected chord replayed on release");
+   sample(true,false,5);check(sample(false,false,5.01)==ControlEdge::Open,"fresh click failed after chord rejection");
+  }
+ }
+ for(bool enterWhileDown:{false,true}) {
+  gesture={};plainClick(0,0,0);
+  plainClick(0,stick,1,{false,!enterWhileDown});
+  check(plainClick(0,stick,2,{false,true})==ControlEdge::None,"holster zone opened PALM");
+  check(plainClick(0,stick,3)==ControlEdge::None && plainClick(0,0,4)==ControlEdge::None,"leaving holster replayed rejected click");
+  plainClick(0,stick,5);check(plainClick(0,0,5.01)==ControlEdge::Open,"fresh click failed after leaving holster");
+ }
+ gesture={};plainClick(0,0,0);plainClick(0,stick,1);
+ plainClick(0,stick,2,{}, {false,true});
+ check(plainClick(0,0,3)==ControlEdge::None,"unknown offhand state allowed a click");
+ gesture={};plainClick(0,0,0,{true,false});plainClick(0,stick,1,{true,false});
+ check(plainClick(0,0,1.01,{true,false})==ControlEdge::Open,"unbound hand's holster blocked right click");
+ std::string legacyError;
+ check(parseControls("hold","right hold trigger 0.25 suppress +grip",controls,legacyError),"explicit hold binding rejected");
+ gesture={};
  const auto update=[&](bool all,bool any,double time,bool click=false,bool usable=true){return gesture.update(usable,controls,all,any,click,time);};
  check(update(true,true,0)==ControlEdge::None,"a held binding opened across a context change");
  update(false,false,1);check(update(true,true,2)==ControlEdge::None && gesture.pending,"chord was not captured immediately");
@@ -61,7 +105,7 @@ int main(){try {
  controls.binding.duration=.2f;gesture={};update(false,false,0);update(true,true,1);
  check(update(false,false,1.3)==ControlEdge::None,"release binding ignored its maximum hold");
  check(parseControls("hold","left tap b +grip",parsed,error) && parsed.mode==OpenMode::Press,"tap offered impossible release-to-select");
- check(parseControls("hold",bindingText(Controls{}),parsed,error) && parsed==Controls{},"default binding did not roundtrip");
+ check(parseControls("press",bindingText(Controls{}),parsed,error) && parsed==Controls{},"default binding did not roundtrip");
  const auto path=std::filesystem::temp_directory_path()/("PALM-controls-"+std::to_string(GetCurrentProcessId())+".ini");
  struct Cleanup{std::filesystem::path path;~Cleanup(){std::error_code error;std::filesystem::remove(path,error);}} cleanup{path};
  {std::ofstream file(path);file<<"[Other]\nuntouched=hello\n[Controls]\nsMode=press\nsOpenMenu=left press b +grip\n";}
@@ -89,7 +133,7 @@ int main(){try {
  wchar_t preserved[32]{};GetPrivateProfileStringW(L"Other",L"untouched",L"",preserved,32,path.c_str());
  check(std::wstring_view(preserved)==L"hello","PALM rewrote unrelated INI values");
  std::filesystem::remove(path);initializeControls(path);
- check(snapshotPointerAim()==PointerAim{} && takeControlsSaveRequest(),"first run did not prepare default pointer settings");
+ check(snapshotControls()==Controls{} && snapshotPointerAim()==PointerAim{} && takeControlsSaveRequest(),"first run did not prepare default controls and pointer settings");
  persistControls();initializeControls(path);
  check(snapshotPointerAim()==PointerAim{},"first-run pointer defaults did not persist");
  initializeControls({});std::cout<<"Control gestures, binding validation, handedness, and isolated persistence passed\n";

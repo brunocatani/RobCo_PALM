@@ -52,12 +52,12 @@ bool parseControls(std::string_view mode,std::string_view text,Controls& out,std
 }
 Controls snapshotControls(){auto& s=state();std::scoped_lock lock(s.mutex);return s.controls;}
 void initializeControls(const std::filesystem::path& path) {
- auto& s=state();std::scoped_lock lock(s.mutex);s.path=path;s.aim={};s.aimDirty=false;s.aimChanged=true;
+ auto& s=state();std::scoped_lock lock(s.mutex);s.path=path;s.controls={};s.aim={};s.aimDirty=false;s.aimChanged=true;
  if(path.empty())return;
  if(!std::filesystem::exists(path)){s.save=true;return;}
  std::array<wchar_t,256> mode{},binding{};
- GetPrivateProfileStringW(L"Controls",L"sMode",L"hold",mode.data(),static_cast<DWORD>(mode.size()),path.c_str());
- GetPrivateProfileStringW(L"Controls",L"sOpenMenu",L"right hold trigger 0.25 suppress +grip",binding.data(),static_cast<DWORD>(binding.size()),path.c_str());
+ GetPrivateProfileStringW(L"Controls",L"sMode",L"press",mode.data(),static_cast<DWORD>(mode.size()),path.c_str());
+ GetPrivateProfileStringW(L"Controls",L"sOpenMenu",L"right release thumbstick suppress",binding.data(),static_cast<DWORD>(binding.size()),path.c_str());
  const std::wstring_view m(mode.data()),b(binding.data());
  const auto ascii=[](std::wstring_view wide){std::string text;for(wchar_t c:wide){if(c>127)return std::string{"invalid"};text.push_back(static_cast<char>(c));}return text;};
  Controls value;
@@ -153,7 +153,12 @@ void drawControls() {
  ImGui::EndDisabled();ImGui::SameLine();
  if(visual::button("Click to select",{245,48},value.mode==OpenMode::Press)){value.mode=OpenMode::Press;changed=true;}
  {visual::Font font(render::FontRole::Body,18);ImGui::PushTextWrapPos();ImGui::TextColored(visual::muted(),"%s",value.mode==OpenMode::Hold?
-  "Keep the opening input held. Release it to select.":"Open with your binding, release its buttons, then click to select. Click Cancel to close.");ImGui::PopTextWrapPos();}
+ "Keep the opening input held. Release it to select.":"Open with your binding, release its buttons, then click to select. Click Cancel to close.");ImGui::PopTextWrapPos();}
+ if(isPlainStickClick(value)) {
+  visual::Font font(render::FontRole::Body,18);ImGui::PushTextWrapPos();
+  ImGui::TextColored(visual::muted(),"Click and release the stick to open. No hold time. Other held buttons or a holster zone cancel the click.");
+  ImGui::PopTextWrapPos();
+ }
  ImGui::Dummy({0,12});
  const auto combo=[&](const char* label,int& index,const auto& labels) {
   bool edited=false;ImGui::TableNextColumn();visual::caption(label);ImGui::PushID(label);ImGui::SetNextItemWidth(-1);
