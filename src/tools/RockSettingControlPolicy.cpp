@@ -288,6 +288,13 @@ namespace rock_configurator::setting_control
                     { "6", "6 — Off" },
                 });
             }
+            if (key == "iWeaponGrabMode") {
+                return dropdown({
+                    { "1", "1 — Toggle both grips" },
+                    { "2", "2 — Toggle firing grip only" },
+                    { "3", "3 — Hold both grips (full immersive)" },
+                });
+            }
             if (key == "iHighlightIntensityMode") {
                 return dropdown({
                     { "1", "1 — 40%" },

@@ -25,6 +25,16 @@ int main()
 {
     using namespace rock_configurator::setting_control;
 
+    for (const auto value : {"1", "2", "3"}) {
+        const auto grabMode = build(ValueType::Integer, "iWeaponGrabMode", value, "");
+        expect(grabMode.kind == Kind::Dropdown && grabMode.options.size() == 3,
+            "weapon grab mode has three selectable modes");
+        if (grabMode.options.size() == 3) {
+            expect(grabMode.options[0].value == "1" && grabMode.options[1].value == "2" && grabMode.options[2].value == "3",
+                "weapon grab mode dropdown writes the correct ROCK values");
+        }
+    }
+
     const auto boolean = build(ValueType::Boolean, "bGrabEnabled", "true", "");
     expect(boolean.kind == Kind::Checkbox,
         "every ROCK boolean is presented as a checkbox");
