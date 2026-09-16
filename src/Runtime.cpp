@@ -11,6 +11,7 @@
 #include "WheelSelectionState.h"
 #include "Gestures.h"
 #include "GrenadeSelection.h"
+#include "RockBipodPolicy.h"
 #include "ROCKProviderApi.h"
 #include "tools/ConfiguratorRuntime.h"
 #include "tools/render/FrameworkPanelRenderer.h"
@@ -325,7 +326,14 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
    if(holstersReady)for(unsigned hand=0;hand<2;++hand)
     if(masks.buttons[hand])inHolster[hand]=s.holsters->IsHandInHolsterZone(hand==0);
   }
-  const bool openingAllowed=holstersReady && openingInputAllowed(masks,
+  bool bipodAllows=true;
+  if(rockReady) {
+   RockProviderEquippedWeaponStateV1 weapon;
+   bipodAllows=supportsEquippedWeaponStateV1() && RockProviderApi::inst->getEquippedWeaponStateV1 &&
+    RockProviderApi::inst->getEquippedWeaponStateV1(s.owner,&weapon)==RockProviderResultV1::Ok &&
+    bipodAllowsOpening(weapon,s.rockFrame);
+  }
+  const bool openingAllowed=bipodAllows && holstersReady && openingInputAllowed(masks,
    {frame->hands[0].pressed,frame->hands[1].pressed},
    {frame->hands[0].valid,frame->hands[1].valid},inHolster);
   const bool openingBlocked=!s.gesture.open && !openingAllowed;

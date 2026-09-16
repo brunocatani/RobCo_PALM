@@ -1,4 +1,5 @@
 #include "PalmControls.h"
+#include "RockBipodPolicy.h"
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
@@ -9,6 +10,32 @@ void check(bool value,const char* message){if(!value)throw std::runtime_error(me
 int main(){try {
  using namespace wheel;using namespace f4cf::vrcf;
  Controls controls;ControlGesture gesture;
+ {
+  using namespace rock::provider;
+  using Flag=RockProviderEquippedWeaponStateFlagV1;
+  RockProviderFrameSnapshot frame;frame.frameIndex=5;frame.worldGeneration=1;frame.skeletonGeneration=2;frame.providerGeneration=3;
+  RockProviderEquippedWeaponStateV1 weapon;weapon.frameIndex=frame.frameIndex;
+  weapon.worldGeneration=frame.worldGeneration;weapon.skeletonGeneration=frame.skeletonGeneration;weapon.providerGeneration=frame.providerGeneration;
+  weapon.flags=static_cast<std::uint32_t>(Flag::Valid);
+  check(bipodAllowsOpening(weapon,frame),"disabled/inactive bipod blocked opening");
+  const auto step=[&](bool down,double time){return gesture.update(true,controls,down,down,false,time,bipodAllowsOpening(weapon,frame));};
+  for(bool touchWhilePressed:{false,true}) {
+   gesture={};weapon.flags=static_cast<std::uint32_t>(Flag::Valid);step(false,0);
+   if(touchWhilePressed)step(true,1);
+   weapon.flags|=static_cast<std::uint32_t>(Flag::BipodInputReserved);
+   check(!bipodAllowsOpening(weapon,frame) && step(true,2)==ControlEdge::None,"bipod contact/latch opened PALM");
+   weapon.flags=static_cast<std::uint32_t>(Flag::Valid);
+   check(step(true,3)==ControlEdge::None && step(false,4)==ControlEdge::None,"bipod release or contact loss replayed click");
+   step(true,5);check(step(false,5.01)==ControlEdge::Open,"fresh click after bipod stopped reserving input failed");
+  }
+  weapon.flags=0;check(!bipodAllowsOpening(weapon,frame),"invalid weapon observation granted opening");
+  weapon.flags=static_cast<std::uint32_t>(Flag::Valid);
+  --weapon.frameIndex;check(!bipodAllowsOpening(weapon,frame),"stale bipod frame granted opening");++weapon.frameIndex;
+  ++weapon.worldGeneration;check(!bipodAllowsOpening(weapon,frame),"old world granted opening");--weapon.worldGeneration;
+  ++weapon.skeletonGeneration;check(!bipodAllowsOpening(weapon,frame),"old skeleton granted opening");--weapon.skeletonGeneration;
+  ++weapon.providerGeneration;check(!bipodAllowsOpening(weapon,frame),"old provider granted opening");
+  gesture={};
+ }
  check(isPlainStickClick(controls),"default is not a plain physical stick click");
  const auto defaultMasks=controlMasks(controls,true);
  check(defaultMasks.buttons[0]==0 && defaultMasks.buttons[1]==(1ull<<32),"default click changed physical hands in left-handed mode");
