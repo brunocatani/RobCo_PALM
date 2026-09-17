@@ -57,7 +57,6 @@ namespace rock_configurator::setting_control
             { "fGrabPinchMaxVolumeCubicGameUnits", 0.001, 1000000.0 },
             { "fGrabPinchMinFingerGapGameUnits", 0.0, 40.0 },
             { "fGrabPinchOtherFingerCurlValue", 0.0, 1.0 },
-            { "fGrabPinchSurfaceInsetGameUnits", 0.0, 8.0 },
             { "fGrabPinchThumbIndexMaxOpenValue", 0.0, 1.0 },
             { "fGrabPositionOnlyAngularScale", 0.05, 1.0 },
             { "fGrabSmallObjectAngularScale", 0.05, 1.0 },
