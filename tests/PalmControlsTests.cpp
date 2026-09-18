@@ -12,11 +12,11 @@ int main(){try {
  Controls controls;ControlGesture gesture;
  const auto holdControls=controlsForMode(InputMode::GripTriggerHold);
  {
-  using namespace rock::provider;
-  using Flag=RockProviderHandInteractionFlagV1;
-  RockProviderFrameSnapshot frame;frame.frameIndex=5;frame.worldGeneration=1;frame.skeletonGeneration=2;frame.providerGeneration=3;
-  for(const auto hand:{RockProviderHand::Left,RockProviderHand::Right}) {
-   RockProviderHandInteractionStateV1 interaction;interaction.hand=hand;interaction.frameIndex=frame.frameIndex;
+
+  using Flag=rock::api::grab::HandInteractionFlagV1;
+  wheel::RockFrame frame;frame.frameIndex=5;frame.worldGeneration=1;frame.skeletonGeneration=2;frame.providerGeneration=3;
+  for(const auto hand:{rock::api::Hand::Left,rock::api::Hand::Right}) {
+   rock::api::grab::HandInteractionStateV1 interaction;interaction.hand=hand;interaction.frameIndex=frame.frameIndex;
    interaction.worldGeneration=1;interaction.skeletonGeneration=2;interaction.providerGeneration=3;
    interaction.flags=static_cast<unsigned>(Flag::Valid);
    const auto allowed=[&]{return triggerEquipAllowsOpening(interaction,frame,hand);};
@@ -45,7 +45,7 @@ int main(){try {
    ++interaction.worldGeneration;check(!allowed(),"old world granted trigger capture");--interaction.worldGeneration;
    ++interaction.skeletonGeneration;check(!allowed(),"old skeleton granted trigger capture");--interaction.skeletonGeneration;
    ++interaction.providerGeneration;check(!allowed(),"old provider granted trigger capture");--interaction.providerGeneration;
-   interaction.hand=RockProviderHand::None;check(!allowed(),"wrong physical hand granted trigger capture");
+   interaction.hand=rock::api::Hand::None;check(!allowed(),"wrong physical hand granted trigger capture");
   }
  }
  {
@@ -76,10 +76,10 @@ int main(){try {
   }
  }
  {
-  using namespace rock::provider;
-  using Flag=RockProviderEquippedWeaponStateFlagV1;
-  RockProviderFrameSnapshot frame;frame.frameIndex=5;frame.worldGeneration=1;frame.skeletonGeneration=2;frame.providerGeneration=3;
-  RockProviderEquippedWeaponStateV1 weapon;weapon.frameIndex=frame.frameIndex;
+
+  using Flag=rock::api::weapon::EquippedWeaponStateFlagV1;
+  wheel::RockFrame frame;frame.frameIndex=5;frame.worldGeneration=1;frame.skeletonGeneration=2;frame.providerGeneration=3;
+  rock::api::weapon::EquippedWeaponStateV1 weapon;weapon.frameIndex=frame.frameIndex;
   weapon.worldGeneration=frame.worldGeneration;weapon.skeletonGeneration=frame.skeletonGeneration;weapon.providerGeneration=frame.providerGeneration;
   weapon.flags=static_cast<std::uint32_t>(Flag::Valid);
   check(bipodAllowsOpening(weapon,frame),"disabled/inactive bipod blocked opening");

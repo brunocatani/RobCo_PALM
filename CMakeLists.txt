@@ -37,7 +37,7 @@ foreach(target wheel_workshop wheel_workshop_preview)
 endforeach()
 target_link_libraries(wheel_workshop PUBLIC CommonLibF4::CommonLibF4)
 target_compile_definitions(wheel_workshop_preview PUBLIC WHEEL_DESKTOP_PREVIEW)
-add_library(RobCoPALM SHARED src/Plugin.cpp src/Runtime.cpp src/Gestures.cpp src/Inventory.cpp src/Equipment.cpp src/Renderer.cpp src/MenuApi.cpp
+add_library(RobCoPALM SHARED src/Plugin.cpp src/Runtime.cpp src/RockServices.cpp src/Gestures.cpp src/Inventory.cpp src/Equipment.cpp src/Renderer.cpp src/MenuApi.cpp
  src/tools/render/FrameworkPanelRenderer.cpp src/exports.def src/IconResources.rc)
 set_target_properties(RobCoPALM PROPERTIES OUTPUT_NAME wheelmenu)
 set_source_files_properties(src/Gestures.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)

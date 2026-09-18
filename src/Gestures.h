@@ -8,15 +8,15 @@ class Gestures {
 public:
  void initialize();
  bool available() const {return _available;}
- void update(std::uint64_t owner,const rock::provider::RockProviderFrameSnapshot& frame,bool usable,bool wheelInputOwned=false);
- const char* select(std::uint64_t owner,unsigned choice,const rock::provider::RockProviderFrameSnapshot& frame);
+ void update(std::uint64_t owner,const wheel::RockFrame& frame,bool usable,bool wheelInputOwned=false);
+ const char* select(std::uint64_t owner,unsigned choice,const wheel::RockFrame& frame);
  void clear(std::uint64_t owner);
  const GestureViewState& view() const {return _view;}
 private:
  void clearHand(std::uint64_t owner,unsigned hand,const char* reason);
- bool publish(std::uint64_t owner,unsigned hand,const rock::provider::RockProviderFrameSnapshot& frame);
+ bool publish(std::uint64_t owner,unsigned hand,const wheel::RockFrame& frame);
  bool _available{};
  GestureViewState _view;
- std::array<rock::provider::RockProviderHandVisualAuthorityRequestV1,2> _requests;
+ std::array<rock::api::animation::HandVisualAuthorityRequestV1,2> _requests;
 };
 }

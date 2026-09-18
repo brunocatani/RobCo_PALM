@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <fstream>
 #include <Windows.h>
-#include <ROCKConfigurationApi.h>
+#include <ROCK/Configuration.h>
 
 namespace {
 void require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
@@ -51,15 +51,17 @@ std::string renderedText() {
     rock_configurator::drainPreviewActions();
     return result;
 }
-std::uint64_t fixtureRevision() noexcept { return 1; }
-bool fixtureVisit(rock::configuration_api::Group group, rock::configuration_api::VisitorV1 visitor, void* context) noexcept {
-    using namespace rock::configuration_api;
+rock::api::Status fixtureRevision(rock::api::OwnerToken owner,std::uint64_t* out) noexcept { if(owner!=1)return rock::api::Status::OwnerNotRegistered; *out=1; return rock::api::Status::Ok; }
+rock::api::Status fixtureVisit(rock::api::OwnerToken owner,rock::api::configuration::Group group, rock::api::configuration::VisitorV1 visitor, void* context) noexcept {
+    using namespace rock::api::configuration;
+    using rock::api::Status;
+    if(owner!=1)return Status::OwnerNotRegistered;
     const SettingV1 consumer{"PhysicsInteraction", "bConsumerFixture", "true", "true", "01. Consumer Controls", "consumer-fixture", ValueType::Boolean, 0};
     const SettingV1 developer{"PhysicsInteraction", "fMovedFixture", "4", "4", "01. Developer Controls", "developer-fixture", ValueType::Float, 0};
     visitor(group == Group::Consumer ? &consumer : &developer, context);
-    return true;
+    return Status::Ok;
 }
-bool fixtureWrite(rock::configuration_api::Group, const char*, const char*, const char*, char*, std::uint32_t) noexcept { return false; }
+rock::api::Status fixtureWrite(rock::api::OwnerToken,rock::api::configuration::Group, const char*, const char*, const char*, char*, std::uint32_t) noexcept { return rock::api::Status::NotReady; }
 }
 
 int main(int argc, char** argv) {
@@ -155,7 +157,7 @@ int main(int argc, char** argv) {
             click(45.0f + count * 168.0f, 120);
             require(window("settings-rows")->ID == firstId, "hidden mod tab remained clickable");
         }
-        const rock::configuration_api::ApiV1 configApi{1, sizeof(rock::configuration_api::ApiV1), fixtureRevision, fixtureVisit, fixtureWrite};
+        const rock::api::configuration::ApiV1 configApi{fixtureRevision, fixtureVisit, fixtureWrite};
         rock_configurator::initializeRpsPreview({path, {}, {}}, {true, false, false}, &configApi);
         rock_configurator::setPreviewOpen(true); frame(); frame();
         click(railWidth + 440, 50);

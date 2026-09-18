@@ -2,7 +2,7 @@
 
 #include "RockSettingControlPolicy.h"
 #include "RpsMod.h"
-#include <ROCKConfigurationApi.h>
+#include <ROCK/Configuration.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -54,8 +54,8 @@ namespace rock_configurator
     {
     public:
         explicit IniSettingsStore(std::filesystem::path path = {}, RpsMod mod = RpsMod::Rock,
-            const rock::configuration_api::ApiV1* api = nullptr, std::filesystem::path catalogPath = {}) :
-            _path(std::move(path)), _catalogPath(std::move(catalogPath)), _mod(mod), _configurationApi(api),
+            const rock::api::configuration::ApiV1* api = nullptr, std::filesystem::path catalogPath = {}, rock::api::OwnerToken owner = 0) :
+            _path(std::move(path)), _catalogPath(std::move(catalogPath)), _mod(mod), _configurationApi(api), _configurationOwner(owner),
             _useRockApi(api || (_path.empty() && (mod == RpsMod::Rock || mod == RpsMod::RockDeveloper))) {}
 
         [[nodiscard]] bool load();
@@ -97,7 +97,7 @@ namespace rock_configurator
         [[nodiscard]] bool reloadRockSnapshot();
         [[nodiscard]] bool loadCsahSettings();
         [[nodiscard]] bool saveCsahSetting(const SettingRecord& setting, std::string_view value);
-        [[nodiscard]] rock::configuration_api::Group rockGroup() const noexcept;
+        [[nodiscard]] rock::api::configuration::Group rockGroup() const noexcept;
         [[nodiscard]] static std::string cycleStringValue(const SettingRecord& setting, int direction);
         [[nodiscard]] static std::string adjustNumericValue(const SettingRecord& setting, int direction);
 
@@ -108,7 +108,8 @@ namespace rock_configurator
         std::filesystem::path _path;
         std::filesystem::path _catalogPath;
         RpsMod _mod;
-        const rock::configuration_api::ApiV1* _configurationApi = nullptr;
+        const rock::api::configuration::ApiV1* _configurationApi = nullptr;
+        rock::api::OwnerToken _configurationOwner{};
         bool _useRockApi = false;
         std::uint64_t _loadedRevision = 0;
         std::vector<IniLine> _lines;

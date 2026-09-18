@@ -1,13 +1,13 @@
 #pragma once
-#include <ROCKProviderApi.h>
+#include "RockFrame.h"
 #include <array>
 
 namespace wheel {
 // ROCK owns the enabled setting and contact/latch decision. A failed or stale
 // query cannot grant an opening click against an active provider.
-inline bool bipodAllowsOpening(const rock::provider::RockProviderEquippedWeaponStateV1& weapon,
- const rock::provider::RockProviderFrameSnapshot& frame) {
- using Flag=rock::provider::RockProviderEquippedWeaponStateFlagV1;
+inline bool bipodAllowsOpening(const rock::api::weapon::EquippedWeaponStateV1& weapon,
+ const wheel::RockFrame& frame) {
+ using Flag=rock::api::weapon::EquippedWeaponStateFlagV1;
  return (weapon.flags&static_cast<std::uint32_t>(Flag::Valid)) &&
   weapon.frameIndex==frame.frameIndex && weapon.worldGeneration==frame.worldGeneration &&
   weapon.skeletonGeneration==frame.skeletonGeneration && weapon.providerGeneration==frame.providerGeneration &&
@@ -15,9 +15,9 @@ inline bool bipodAllowsOpening(const rock::provider::RockProviderEquippedWeaponS
 }
 // Query only physical hands whose trigger participates in the opening binding.
 // A current empty hand permits capture; an unknown hand cannot take equip input.
-inline bool triggerEquipAllowsOpening(const rock::provider::RockProviderHandInteractionStateV1& state,
- const rock::provider::RockProviderFrameSnapshot& frame,rock::provider::RockProviderHand hand) {
- using Flag=rock::provider::RockProviderHandInteractionFlagV1;
+inline bool triggerEquipAllowsOpening(const rock::api::grab::HandInteractionStateV1& state,
+ const wheel::RockFrame& frame,rock::api::Hand hand) {
+ using Flag=rock::api::grab::HandInteractionFlagV1;
  return (state.flags&static_cast<std::uint32_t>(Flag::Valid)) && state.hand==hand &&
   state.frameIndex==frame.frameIndex && state.worldGeneration==frame.worldGeneration &&
   state.skeletonGeneration==frame.skeletonGeneration && state.providerGeneration==frame.providerGeneration &&

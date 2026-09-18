@@ -1,3 +1,5 @@
+#include "tools/RockConfigurationClient.h"
+#include "RockServices.h"
 #include "PCH.h"
 #include "Runtime.h"
 #include "PalmControls.h"
@@ -12,14 +14,14 @@
 #include "Gestures.h"
 #include "GrenadeSelection.h"
 #include "RockInputPolicy.h"
-#include "ROCKProviderApi.h"
+#include "RockFrame.h"
 #include "tools/ConfiguratorRuntime.h"
 #include "tools/render/FrameworkPanelRenderer.h"
 #include <RE/Bethesda/SendPapyrusEvent.h>
 
 namespace wheel {
 namespace {
-using namespace rock::provider;
+
 constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kSectionChoice=3,kItemChoice=std::uint64_t{1}<<63;
 struct RuntimeState {
  std::atomic_bool open{false},held{false},inputReady{false};
@@ -47,7 +49,7 @@ struct RuntimeState {
  const rpsui::sdk::InputApiV1* inputApi{};
  std::uint64_t inputToken{};
  std::atomic_bool rockReady{false},clickRequested{false};
- RockProviderFrameSnapshot rockFrame;
+ wheel::RockFrame rockFrame;
  Action clickSelection;
  Gestures handGestures;
  bool leftHanded{};
@@ -100,21 +102,21 @@ bool claimInput(const rpsui::sdk::InputFrameV1& frame,bool owned) {
 }
 void cancelCommand() {
  auto& s=state();
- if(s.command && RockProviderApi::inst)(void)RockProviderApi::inst->cancelInteractionCommandV1(s.owner,s.command);
+ if(s.command && rockServices().client.owner())(void)rockServices().grab->cancelInteractionCommandV1(s.owner,s.command);
  s.command=0;
 }
 void serviceCommand() {
  auto& s=state();if(!s.command)return;
- RockProviderInteractionCommandResultV1 result;
- const auto query=RockProviderApi::inst->getInteractionCommandResultV1(s.owner,s.command,&result);
- if(query==RockProviderResultV1::Ok && result.state==RockProviderInteractionCommandStateV1::Queued)return;
- const bool success=query==RockProviderResultV1::Ok && result.state==RockProviderInteractionCommandStateV1::Succeeded;
- const char* message=success?(result.hand==RockProviderHand::Left?"Taken into left hand":"Taken into right hand"):
-  result.failure==RockProviderInteractionFailureV1::HandBusy?"No free hand — put something down and try again":
-  result.failure==RockProviderInteractionFailureV1::TargetAlreadyOwned?"A throwable is already held or attaching":"Item handoff failed";
+ rock::api::grab::InteractionCommandResultV1 result;
+ const auto query=rockServices().grab->getInteractionCommandResultV1(s.owner,s.command,&result);
+ if(query==rock::api::Status::Ok && result.state==rock::api::grab::InteractionCommandStateV1::Queued)return;
+ const bool success=query==rock::api::Status::Ok && result.state==rock::api::grab::InteractionCommandStateV1::Succeeded;
+ const char* message=success?(result.hand==rock::api::Hand::Left?"Taken into left hand":"Taken into right hand"):
+  result.failure==rock::api::grab::InteractionFailureV1::HandBusy?"No free hand — put something down and try again":
+  result.failure==rock::api::grab::InteractionFailureV1::TargetAlreadyOwned?"A throwable is already held or attaching":"Item handoff failed";
  actionStatus(message);
  spdlog::info("PALM handoff {}: {} (query {}, failure {})",s.command,message,static_cast<unsigned>(query),static_cast<unsigned>(result.failure));
- if(query!=RockProviderResultV1::Ok)cancelCommand();else s.command=0;
+ if(query!=rock::api::Status::Ok)cancelCommand();else s.command=0;
 }
 
 std::optional<rpsui::sdk::PanelPoseV1> poseFor(const rpsui::sdk::InputFrameV1& frame) {
@@ -129,20 +131,19 @@ std::optional<rpsui::sdk::PanelPoseV1> poseFor(const rpsui::sdk::InputFrameV1& f
  for(float v:p.center)if(!std::isfinite(v) || std::fabs(v)>1.e8f)return {};
  return p;
 }
-void requestInventoryHandoff(std::uint32_t id,const RockProviderFrameSnapshot& frame) {
+void requestInventoryHandoff(std::uint32_t id,const wheel::RockFrame& frame) {
  auto& s=state();
- RockProviderForceGrabRequestV1 request;
- request.flags=static_cast<std::uint32_t>(RockProviderForceGrabFlagV1::FromPlayerInventory);
- request.targetFormId=id;
+ rock::api::grab::InventoryGrabRequestV1 request;
+ request.baseFormId=id;
  request.worldGeneration=frame.worldGeneration;request.skeletonGeneration=frame.skeletonGeneration;
  request.providerGeneration=frame.providerGeneration;
- const auto result=RockProviderApi::inst->requestForceGrabV1(s.owner,&request,&s.command);
- if(result!=RockProviderResultV1::RequestQueued) {
-  s.command=0;actionStatus(result==RockProviderResultV1::HandBusy?"Hands are busy — try again":"Item handoff unavailable");
+ const auto result=rockServices().grab->requestInventoryGrab(s.owner,&request,&s.command);
+ if(result!=rock::api::Status::RequestQueued) {
+  s.command=0;actionStatus(result==rock::api::Status::HandBusy?"Hands are busy — try again":"Item handoff unavailable");
  }
- spdlog::info("Selected item {:08X}: queue result {}",request.targetFormId,static_cast<unsigned>(result));
+ spdlog::info("Selected item {:08X}: queue result {}",request.baseFormId,static_cast<unsigned>(result));
 }
-void submitChoice(const RockProviderFrameSnapshot& frame) {
+void submitChoice(const wheel::RockFrame& frame) {
  auto& s=state();const auto choice=s.choice.exchange(0);
  const auto ticket=s.choiceGeneration.load();
  if(!choice || ticket!=s.generation.load())return;
@@ -220,12 +221,11 @@ void submitChoice(const RockProviderFrameSnapshot& frame) {
     auto& runtime=state();struct Finish{RuntimeState& s;~Finish(){s.gameActionPending=false;}} finish{runtime};
     try {
     if(!runtime.sessionReady.load() || !runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
-    RockProviderFrameSnapshot current;
-    if(grenade && runtime.rockReady.load() && RockProviderApi::inst &&
-       RockProviderApi::inst->getFrameSnapshot(&current) && current.providerReady) {
-     const auto module=GetModuleHandleW(L"ROCK.dll");
-     const auto get=module?reinterpret_cast<rock::configuration_api::GetApiV1>(GetProcAddress(module,rock::configuration_api::kExportName)):nullptr;
-     const auto immersive=immersiveGrenadesEnabled(get?get(rock::configuration_api::kVersion):nullptr);
+    wheel::RockFrame current;
+    if(grenade && runtime.rockReady.load() && rockServices().client.owner() &&
+       rockServices().snapshot(current) && current.providerReady) {
+     const auto connection=rock_configurator::configurationConnection();
+     const auto immersive=immersiveGrenadesEnabled(connection.api,connection.owner);
      if(!immersive) {
       actionStatus("ROCK grenade setting unavailable");spdlog::warn("PALM grenade selection could not read ROCK's applied Immersive Grenades setting");return;
      }
@@ -294,7 +294,7 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
   const auto controls=snapshotControls();
   if(controls!=s.controls || s.leftHanded!=frame->leftHanded){s.controls=controls;s.leftHanded=frame->leftHanded;s.gesture={};s.clickRequested=false;if(s.open.load() || s.held.load())closeWheel();}
   if(takeWheelConfigChange())refreshWheelInventory();
-  const bool rockReady=s.owner && RockProviderApi::inst && RockProviderApi::inst->getFrameSnapshot(&s.rockFrame) && s.rockFrame.providerReady;
+  const bool rockReady=s.owner && rockServices().client.owner() && rockServices().snapshot(s.rockFrame) && s.rockFrame.providerReady;
   const bool providerChanged=s.rockReady.exchange(rockReady)!=rockReady ||
    (rockReady && (s.world!=s.rockFrame.worldGeneration || s.skeleton!=s.rockFrame.skeletonGeneration || s.provider!=s.rockFrame.providerGeneration));
   setGestureIntegrationAvailable(rockReady && s.handGestures.available());
@@ -333,17 +333,17 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
   }
   bool bipodAllows=true;
   if(rockReady) {
-   RockProviderEquippedWeaponStateV1 weapon;
-   bipodAllows=supportsEquippedWeaponStateV1() && RockProviderApi::inst->getEquippedWeaponStateV1 &&
-    RockProviderApi::inst->getEquippedWeaponStateV1(s.owner,&weapon)==RockProviderResultV1::Ok &&
+   rock::api::weapon::EquippedWeaponStateV1 weapon;
+   bipodAllows=(rockServices().weapon!=nullptr) && rockServices().weapon->getEquippedWeaponStateV1 &&
+    rockServices().weapon->getEquippedWeaponStateV1(s.owner,&weapon)==rock::api::Status::Ok &&
     bipodAllowsOpening(weapon,s.rockFrame);
   }
   bool triggerEquipAllows=true;
   for(unsigned hand=0;hand<2;++hand)if(s.rockLoaded && (masks.buttons[hand]&(1ull<<33))) {
-   const auto physical=hand==0?RockProviderHand::Left:RockProviderHand::Right;
-   RockProviderHandInteractionStateV1 interaction;
-   triggerEquipAllows &= rockReady && supportsHandInteractionStateV1() && RockProviderApi::inst->getHandInteractionStateV1 &&
-    RockProviderApi::inst->getHandInteractionStateV1(s.owner,physical,&interaction)==RockProviderResultV1::Ok &&
+   const auto physical=hand==0?rock::api::Hand::Left:rock::api::Hand::Right;
+   rock::api::grab::HandInteractionStateV1 interaction;
+   triggerEquipAllows &= rockReady && (rockServices().grab!=nullptr) && rockServices().grab->getHandInteractionStateV1 &&
+    rockServices().grab->getHandInteractionStateV1(s.owner,physical,&interaction)==rock::api::Status::Ok &&
     triggerEquipAllowsOpening(interaction,s.rockFrame,physical);
   }
   const bool openingAllowed=bipodAllows && triggerEquipAllows && holstersReady && openingInputAllowed(masks,pressed,handValid,inHolster);
@@ -442,28 +442,14 @@ bool startRuntime() {
  if(s.holstersUnavailable)spdlog::error("PALM opening disabled: loaded Virtual Holsters has no supported zone API");
  else spdlog::info("PALM Virtual Holsters zone guard: {}",s.holsters?"available":"provider absent");
  (void)takePointerAimChange();if(!publishPointerAim())return false;
- constexpr auto requiredTableBytes=static_cast<std::uint32_t>(offsetof(RockProviderApi,cancelInteractionCommandV1)+sizeof(std::declval<RockProviderApi>().cancelInteractionCommandV1));
- const auto initialized=RockProviderApi::initialize(ROCK_PROVIDER_API_VERSION,requiredTableBytes);
- auto* api=RockProviderApi::inst;
- if(!initialized && api && api->registerConsumerV1 && api->unregisterConsumerV1 && api->getFrameSnapshot &&
-    api->requestForceGrabV1 && api->getInteractionCommandResultV1 && api->cancelInteractionCommandV1 &&
-    api->getHandInteractionStateV1 && hasFeatureBitV1(RockProviderApi::negotiatedFeatureBits,RockProviderFeatureBitV1::InventoryForceGrab)) {
-  RockProviderConsumerRegistrationV1 registration;
-  std::snprintf(registration.modName,sizeof(registration.modName),"RobCo PALM");
-  registration.requestedCapabilities=static_cast<unsigned>(RockProviderConsumerCapabilityV1::FrameSnapshots)|
-   static_cast<unsigned>(RockProviderConsumerCapabilityV1::InteractionCommands)|static_cast<unsigned>(RockProviderConsumerCapabilityV1::HandInteractionState);
-  const bool gestures=api->setHandVisualAuthorityV1 && api->clearHandVisualAuthorityV1 && supportsHandVisualAuthorityV1();
-  if(gestures)registration.requestedCapabilities|=static_cast<unsigned>(RockProviderConsumerCapabilityV1::HandVisualAuthority);
-  RockProviderConsumerHandleV1 handle;
-  if(api->registerConsumerV1(&registration,&handle)==RockProviderResultV1::Ok &&
-     (handle.grantedCapabilities&registration.requestedCapabilities)==registration.requestedCapabilities) {
-   s.owner=handle.ownerToken;if(gestures)s.handGestures.initialize();
-  }else if(handle.ownerToken)(void)api->unregisterConsumerV1(handle.ownerToken);
+ if(rockServices().connect()) {
+  s.owner=rockServices().client.owner();
+  if(rockServices().animation && rockServices().input)s.handGestures.initialize();
  }
  if(s.rockLoaded && !s.owner)
   spdlog::warn("ROCK integration unavailable; PALM trigger bindings wait for held-weapon state, other bindings and vanilla items remain available");
  s.inputToken=s.inputApi->subscribe(onFrame,nullptr);
- if(!s.inputToken){if(s.owner)(void)api->unregisterConsumerV1(s.owner);s.owner=0;return false;}
+ if(!s.inputToken){if(s.owner)(void)rockServices().client.close();s.owner=0;return false;}
  rollback.complete=true;
  spdlog::info("PALM standalone input registered; optional ROCK owner={}, controls={}",s.owner,bindingText(s.controls));
  return true;

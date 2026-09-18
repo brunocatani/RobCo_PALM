@@ -1,7 +1,8 @@
+#include "RockServices.h"
 #include "PCH.h"
 #include "Equipment.h"
 #include "Inventory.h"
-#include "ROCKProviderApi.h"
+#include "RockFrame.h"
 #include <array>
 #include <cstring>
 
@@ -36,20 +37,20 @@ const char* toggleEquipment(const Item& selected,std::uint64_t owner) noexcept {
   auto* object=RE::TESForm::GetFormByID<RE::TESBoundObject>(selected.id);
   if(!object || (!object->Is(RE::ENUM_FORM_ID::kWEAP) && !object->Is(RE::ENUM_FORM_ID::kARMO)))return "Equipment no longer available";
   if(owner && object->Is(RE::ENUM_FORM_ID::kWEAP)) {
-   using namespace rock::provider;
-   for(const auto hand:{RockProviderHand::Left,RockProviderHand::Right}) {
-    RockProviderHandInteractionStateV1 interaction;
-    if(!RockProviderApi::inst || !RockProviderApi::inst->getHandInteractionStateV1 ||
-       RockProviderApi::inst->getHandInteractionStateV1(owner,hand,&interaction)!=RockProviderResultV1::Ok ||
-       !(interaction.flags&static_cast<std::uint32_t>(RockProviderHandInteractionFlagV1::Valid)))return "Hand state unavailable";
-    constexpr auto loose=static_cast<std::uint32_t>(RockProviderHandInteractionFlagV1::LooseObject)|
-     static_cast<std::uint32_t>(RockProviderHandInteractionFlagV1::LooseWeapon);
+
+   for(const auto hand:{rock::api::Hand::Left,rock::api::Hand::Right}) {
+    rock::api::grab::HandInteractionStateV1 interaction;
+    if(!rockServices().client.owner() || !rockServices().grab->getHandInteractionStateV1 ||
+       rockServices().grab->getHandInteractionStateV1(owner,hand,&interaction)!=rock::api::Status::Ok ||
+       !(interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlagV1::Valid)))return "Hand state unavailable";
+    constexpr auto loose=static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlagV1::LooseObject)|
+     static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlagV1::LooseWeapon);
     // LooseObject is also set for a merely highlighted world object. Only an
     // active handoff/hold (or detached part carry) owns the hand against equip.
-    const bool holding=interaction.phase!=RockProviderHandInteractionPhaseV1::Idle &&
-     interaction.phase!=RockProviderHandInteractionPhaseV1::Touching && interaction.phase!=RockProviderHandInteractionPhaseV1::Selecting;
+    const bool holding=interaction.phase!=rock::api::grab::HandInteractionPhaseV1::Idle &&
+     interaction.phase!=rock::api::grab::HandInteractionPhaseV1::Touching && interaction.phase!=rock::api::grab::HandInteractionPhaseV1::Selecting;
     if(((interaction.flags&loose) && holding) ||
-       (interaction.flags&static_cast<std::uint32_t>(RockProviderHandInteractionFlagV1::PartCarry)))return "Put down the held object before changing weapons";
+       (interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlagV1::PartCarry)))return "Put down the held object before changing weapons";
    }
   }
   std::uint32_t stackIndex=0;bool found=false,equipped=false;

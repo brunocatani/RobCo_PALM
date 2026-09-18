@@ -1508,19 +1508,19 @@ namespace rock_configurator
     }
 
     void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available,
-        const rock::configuration_api::ApiV1* rockApi, const std::filesystem::path& csahPath,
+        const rock::api::configuration::ApiV1* rockApi, const std::filesystem::path& csahPath,
         const std::filesystem::path& csahCatalog)
     {
         std::scoped_lock lock(s_runtimeMutex);
         invalidateQueuedRuntimeActions();
         s_modIndex = 0;
         s_activeTab = ConfiguratorTab::Wheel;
-        s_modSettings[3] = ModSettings{IniSettingsStore({}, RpsMod::RockDeveloper, rockApi)};
+        s_modSettings[3] = ModSettings{IniSettingsStore({}, RpsMod::RockDeveloper, rockApi, {}, rockApi?1:0)};
         s_modSettings[3].available = available[0] && (paths[0].empty() || rockApi != nullptr);
         s_modSettings[4] = ModSettings{IniSettingsStore(csahPath, RpsMod::Csah, nullptr, csahCatalog)};
         s_modSettings[4].available = !csahPath.empty() && !csahCatalog.empty();
         for (std::size_t i = 0; i < paths.size(); ++i) {
-            s_modSettings[i] = ModSettings{IniSettingsStore(paths[i], kRpsMods[i].id, i == 0 ? rockApi : nullptr)};
+            s_modSettings[i] = ModSettings{IniSettingsStore(paths[i], kRpsMods[i].id, i == 0 ? rockApi : nullptr, {}, rockApi?1:0)};
             s_modSettings[i].available = available[i];
         }
         s_providerInputReady.store(true);

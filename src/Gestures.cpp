@@ -1,3 +1,4 @@
+#include "RockServices.h"
 #include <F4SE/Impl/PCH.h>
 #include <spdlog/spdlog.h>
 #include "Gestures.h"
@@ -5,9 +6,9 @@
 
 namespace wheel {
 namespace {
-using namespace rock::provider;
+
 using Frik=frik::api::FRIKApiV2;
-RockProviderHand physicalHand(unsigned index){return index?RockProviderHand::Left:RockProviderHand::Right;}
+rock::api::Hand physicalHand(unsigned index){return index?rock::api::Hand::Left:rock::api::Hand::Right;}
 Frik::Hand skeletonHand(unsigned index){return index?Frik::Hand::Left:Frik::Hand::Right;}
 }
 void Gestures::initialize() {
@@ -15,13 +16,13 @@ void Gestures::initialize() {
  const auto* api=Frik::inst;
  _available=!error && api && api->isSkeletonReady && api->getHandPoseLocalTransformsForPose &&
   api->getCurrentHandPose && api->isConfigOpen && api->isWristPipboyOpen && api->isOffHandGrippingWeapon &&
-  RockProviderApi::inst->setHandVisualAuthorityV1 && RockProviderApi::inst->clearHandVisualAuthorityV1 &&
-  supportsHandVisualAuthorityV1();
+  rockServices().animation && rockServices().input && rockServices().animation->setHandVisualAuthorityV1 && rockServices().animation->clearHandVisualAuthorityV1 &&
+  (rockServices().animation!=nullptr);
  spdlog::info("PALM gestures: {} (skeleton pose resolver result {})",_available?"available through ROCK":"unavailable",error);
 }
 void Gestures::clearHand(std::uint64_t owner,unsigned hand,const char* reason) {
  if(!_view.active[hand])return;
- const auto result=RockProviderApi::inst->clearHandVisualAuthorityV1(owner,physicalHand(hand));
+ const auto result=rockServices().animation->clearHandVisualAuthorityV1(owner,physicalHand(hand));
  spdlog::info("PALM gesture cleared: hand={}, reason={}, result={}",hand?"left":"right",reason,static_cast<unsigned>(result));
  // Even if explicit cleanup is rejected, stopping renewal expires ROCK's lease.
  _view.active[hand]=0;
@@ -30,29 +31,29 @@ void Gestures::clear(std::uint64_t owner) {
  for(unsigned hand=0;hand<2;++hand)clearHand(owner,hand,"context/lifecycle changed");
  _view.availability={};
 }
-bool Gestures::publish(std::uint64_t owner,unsigned hand,const RockProviderFrameSnapshot& frame) {
+bool Gestures::publish(std::uint64_t owner,unsigned hand,const wheel::RockFrame& frame) {
  auto& request=_requests[hand];
  request.worldGeneration=frame.worldGeneration;request.skeletonGeneration=frame.skeletonGeneration;
  request.providerGeneration=frame.providerGeneration;
- const auto result=RockProviderApi::inst->setHandVisualAuthorityV1(owner,&request);
- if(result==RockProviderResultV1::Ok)return true;
+ const auto result=rockServices().animation->setHandVisualAuthorityV1(owner,&request);
+ if(result==rock::api::Status::Ok)return true;
  spdlog::warn("PALM gesture publication rejected: hand={}, result={}",hand?"left":"right",static_cast<unsigned>(result));
  clearHand(owner,hand,"publication rejected");return false;
 }
-void Gestures::update(std::uint64_t owner,const RockProviderFrameSnapshot& frame,bool usable,bool wheelInputOwned) {
+void Gestures::update(std::uint64_t owner,const wheel::RockFrame& frame,bool usable,bool wheelInputOwned) {
  if(!usable || !_available || !frame.frikSkeletonReady || !Frik::inst->isSkeletonReady()) {clear(owner);return;}
  const bool uiBusy=Frik::inst->isConfigOpen() || Frik::inst->isWristPipboyOpen();
  for(unsigned hand=0;hand<2;++hand) {
-  RockProviderHandInteractionStateV1 interaction;
-  const bool queryOk=RockProviderApi::inst->getHandInteractionStateV1(owner,physicalHand(hand),&interaction)==RockProviderResultV1::Ok &&
+  rock::api::grab::HandInteractionStateV1 interaction;
+  const bool queryOk=rockServices().grab->getHandInteractionStateV1(owner,physicalHand(hand),&interaction)==rock::api::Status::Ok &&
    interaction.hand==physicalHand(hand);
   bool inputAvailable=true,actionHeld=false;
   // The wheel's captured right trigger/grab chord is UI input through both
   // releases. It must not mark a free pose hand busy or cancel a new pose.
   for(const unsigned button:{2u,33u,7u,1u,32u}) {
    if(hand==0 && wheelInputOwned && (button==2 || button==33))continue;
-   RockProviderRawWandButtonStateV1 raw;
-   inputAvailable&=RockProviderApi::inst->getRawWandButtonStateV1(physicalHand(hand),button,&raw) && raw.available;
+   rock::api::input::RawWandButtonStateV1 raw;
+   inputAvailable&=rockServices().input->getRawWandButtonStateV1(owner,physicalHand(hand),button,&raw)==rock::api::Status::Ok && raw.available;
    actionHeld|=raw.held!=0;
   }
   const auto pose=Frik::inst->getCurrentHandPose(skeletonHand(hand));
@@ -70,7 +71,7 @@ void Gestures::update(std::uint64_t owner,const RockProviderFrameSnapshot& frame
   }
  }
 }
-const char* Gestures::select(std::uint64_t owner,unsigned choice,const RockProviderFrameSnapshot& frame) {
+const char* Gestures::select(std::uint64_t owner,unsigned choice,const wheel::RockFrame& frame) {
  if(!isGestureChoice(choice))return "Unknown gesture";
  const unsigned hand=gestureIsLeft(choice)?1:0;
  if(_view.active[hand]==choice){clearHand(owner,hand,"selected again");return "Gesture cleared";}
@@ -86,9 +87,9 @@ const char* Gestures::select(std::uint64_t owner,unsigned choice,const RockProvi
  // Read-only skeleton math resolves our authored flex/splay for either hand
  // and power armor. Every live pose write and clear goes through ROCK.
  if(!Frik::inst->getHandPoseLocalTransformsForPose(skeletonHand(hand),pose,&locals) ||
-    locals.enabledMask!=ROCK_PROVIDER_ALL_FINGER_LOCAL_TRANSFORMS_V1)return "Gesture finger transforms unavailable";
+    locals.enabledMask!=((1u << rock::api::hands::kFingerLocalTransformCount) - 1u))return "Gesture finger transforms unavailable";
  auto& request=_requests[hand];request={};request.hand=physicalHand(hand);
- request.flags=static_cast<unsigned>(RockProviderHandVisualAuthorityFlagV1::FingerLocalTransforms);
+ request.flags=static_cast<unsigned>(rock::api::animation::HandVisualAuthorityFlagV1::FingerLocalTransforms);
  request.priority=1; // Yield to ordinary interaction poses, including FRIK's internal poses.
  request.leaseFrames=3;request.fingerLocalTransformMask=locals.enabledMask;
  for(unsigned i=0;i<15;++i) {

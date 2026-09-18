@@ -1,3 +1,4 @@
+#include "RockConfigurationClient.h"
 #include "IniSettingsStore.h"
 
 #include <ShlObj.h>
@@ -248,26 +249,22 @@ namespace rock_configurator
         }
     }
 
-    rock::configuration_api::Group IniSettingsStore::rockGroup() const noexcept
+    rock::api::configuration::Group IniSettingsStore::rockGroup() const noexcept
     {
-        return _mod == RpsMod::RockDeveloper ? rock::configuration_api::Group::Developer : rock::configuration_api::Group::Consumer;
+        return _mod == RpsMod::RockDeveloper ? rock::api::configuration::Group::Developer : rock::api::configuration::Group::Consumer;
     }
 
     bool IniSettingsStore::connectRockApi()
     {
 #ifdef WHEEL_DESKTOP_PREVIEW
         // Production previews stay read-only; an injected API is only a test fixture.
-        if (!_configurationApi) { _useRockApi = false; return true; }
+        if (!_configurationApi) { _useRockApi=false; return true; }
 #endif
         if (!_configurationApi) {
-            const auto module = GetModuleHandleW(L"ROCK.dll");
-            const auto getApi = module ? reinterpret_cast<rock::configuration_api::GetApiV1>(
-                GetProcAddress(module, rock::configuration_api::kExportName)) : nullptr;
-            if (getApi) _configurationApi = getApi(rock::configuration_api::kVersion);
+            const auto connection=configurationConnection();
+            _configurationApi=connection.api; _configurationOwner=connection.owner;
         }
-        if (!_configurationApi || _configurationApi->version != rock::configuration_api::kVersion ||
-            _configurationApi->byteSize < sizeof(rock::configuration_api::ApiV1) ||
-            !_configurationApi->revision || !_configurationApi->visit || !_configurationApi->setValue) {
+        if (!_configurationApi || !_configurationOwner || !_configurationApi->revision || !_configurationApi->visit || !_configurationApi->setValue) {
             _configurationApi = nullptr;
             _lastError = "ROCK's configuration interface is unavailable; load the matching ROCK version";
             return false;
@@ -277,13 +274,14 @@ namespace rock_configurator
 
     bool IniSettingsStore::needsReload() const noexcept
     {
-        return _configurationApi && _configurationApi->revision() != _loadedRevision;
+        std::uint64_t revision{};
+        return _configurationApi && (_configurationApi->revision(_configurationOwner,&revision)!=rock::api::Status::Ok || revision != _loadedRevision);
     }
 
     bool IniSettingsStore::reloadRockSnapshot()
     {
         struct Snapshot { IniSettingsStore* store; std::vector<SettingRecord> settings; bool failed = false; } snapshot{this, {}};
-        const auto visitor = [](const rock::configuration_api::SettingV1* entry, void* context) noexcept {
+        const auto visitor = [](const rock::api::configuration::SettingV1* entry, void* context) noexcept {
             auto& snapshot = *static_cast<Snapshot*>(context);
             if (snapshot.failed) return;
             try {
@@ -300,10 +298,10 @@ namespace rock_configurator
                 setting.overridden = entry->overridden != 0;
                 setting.lineIndex = (std::numeric_limits<std::size_t>::max)();
                 switch (entry->type) {
-                case rock::configuration_api::ValueType::Boolean: setting.type = SettingType::Boolean; break;
-                case rock::configuration_api::ValueType::Integer: setting.type = SettingType::Integer; break;
-                case rock::configuration_api::ValueType::Float: setting.type = SettingType::Float; break;
-                case rock::configuration_api::ValueType::String: setting.type = SettingType::String; break;
+                case rock::api::configuration::ValueType::Boolean: setting.type = SettingType::Boolean; break;
+                case rock::api::configuration::ValueType::Integer: setting.type = SettingType::Integer; break;
+                case rock::api::configuration::ValueType::Float: setting.type = SettingType::Float; break;
+                case rock::api::configuration::ValueType::String: setting.type = SettingType::String; break;
                 }
                 store.refreshControl(setting);
                 snapshot.settings.push_back(std::move(setting));
@@ -311,12 +309,12 @@ namespace rock_configurator
                 snapshot.failed = true;
             }
         };
-        if (!_configurationApi->visit(rockGroup(), visitor, &snapshot) || snapshot.failed) {
+        if (_configurationApi->visit(_configurationOwner,rockGroup(), visitor, &snapshot)!=rock::api::Status::Ok || snapshot.failed) {
             _lastError = "ROCK configuration is not ready";
             return false;
         }
         _settings = std::move(snapshot.settings);
-        _loadedRevision = _configurationApi->revision();
+        if (_configurationApi->revision(_configurationOwner,&_loadedRevision)!=rock::api::Status::Ok) { _lastError="ROCK configuration revision unavailable"; return false; }
         return true;
     }
 
@@ -800,8 +798,8 @@ namespace rock_configurator
         if (setting.fromRockApi) {
 #ifndef WHEEL_DESKTOP_PREVIEW
             std::array<char, 512> error{};
-            if (!_configurationApi || !_configurationApi->setValue(rockGroup(), setting.section.c_str(),
-                    setting.key.c_str(), normalizedValue->c_str(), error.data(), static_cast<std::uint32_t>(error.size()))) {
+            if (!_configurationApi || _configurationApi->setValue(_configurationOwner,rockGroup(), setting.section.c_str(),
+                    setting.key.c_str(), normalizedValue->c_str(), error.data(), static_cast<std::uint32_t>(error.size()))!=rock::api::Status::Ok) {
                 _lastError = error[0] ? error.data() : "ROCK configuration write failed";
                 return { .changed = false, .saved = false, .message = _lastError, .setting = setting };
             }
