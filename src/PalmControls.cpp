@@ -8,7 +8,8 @@
 
 namespace wheel {
 namespace {
-struct State {std::mutex mutex;Controls controls;PointerAim aim;std::filesystem::path path;std::string status;bool dirty{},aimDirty{};std::atomic_bool save{},aimChanged{},gestures{true};};
+// controls retains the custom binding while a fixed input mode is selected.
+struct State {std::mutex mutex;Controls controls;InputMode inputMode{InputMode::StickClick};PointerAim aim;std::filesystem::path path;std::string status;bool dirty{},aimDirty{};std::atomic_bool save{},aimChanged{},gestures{true};};
 State& state(){static State value;return value;}
 constexpr std::array pitchKeys{L"fLeftPitchDegrees",L"fRightPitchDegrees"};
 constexpr std::array yawKeys{L"fLeftYawDegrees",L"fRightYawDegrees"};
@@ -50,9 +51,15 @@ bool parseControls(std::string_view mode,std::string_view text,Controls& out,std
  if(parsed->type==ActivationType::Press || parsed->type==ActivationType::Tap)out.binding.duration=0;
  error.clear();return true;
 }
-Controls snapshotControls(){auto& s=state();std::scoped_lock lock(s.mutex);return s.controls;}
+Controls snapshotControls(){auto& s=state();std::scoped_lock lock(s.mutex);return controlsForMode(s.inputMode,s.controls);}
+InputMode snapshotInputMode(){auto& s=state();std::scoped_lock lock(s.mutex);return s.inputMode;}
+bool applyInputMode(InputMode mode) {
+ if(mode!=InputMode::StickClick && mode!=InputMode::GripTriggerHold && mode!=InputMode::Custom)return false;
+ auto& s=state();std::scoped_lock lock(s.mutex);s.inputMode=mode;s.save=true;
+ s.status=s.path.empty()?"Preview controls updated":"Saving controls...";return true;
+}
 void initializeControls(const std::filesystem::path& path) {
- auto& s=state();std::scoped_lock lock(s.mutex);s.path=path;s.controls={};s.aim={};s.aimDirty=false;s.aimChanged=true;
+ auto& s=state();std::scoped_lock lock(s.mutex);s.path=path;s.controls={};s.inputMode=InputMode::StickClick;s.aim={};s.dirty=false;s.save=false;s.status.clear();s.aimDirty=false;s.aimChanged=true;
  if(path.empty())return;
  if(!std::filesystem::exists(path)){s.save=true;return;}
  std::array<wchar_t,256> mode{},binding{};
@@ -62,6 +69,18 @@ void initializeControls(const std::filesystem::path& path) {
  const auto ascii=[](std::wstring_view wide){std::string text;for(wchar_t c:wide){if(c>127)return std::string{"invalid"};text.push_back(static_cast<char>(c));}return text;};
  Controls value;
  if(parseControls(ascii(m),ascii(b),value,s.status)){s.controls=value;s.status="Controls loaded";}
+ // Existing installations keep their exact binding. Presets are authoritative
+ // once iInputMode is present; the other two keys then store Custom's binding.
+ std::array<wchar_t,16> inputMode{};
+ GetPrivateProfileStringW(L"Controls",L"iInputMode",L"",inputMode.data(),static_cast<DWORD>(inputMode.size()),path.c_str());
+ const std::wstring_view selected(inputMode.data());
+ if(selected.empty()) {
+  s.inputMode=s.controls==Controls{}?InputMode::StickClick:
+   s.controls==controlsForMode(InputMode::GripTriggerHold)?InputMode::GripTriggerHold:InputMode::Custom;
+ }else if(selected==L"1")s.inputMode=InputMode::StickClick;
+ else if(selected==L"2")s.inputMode=InputMode::GripTriggerHold;
+ else if(selected==L"3")s.inputMode=InputMode::Custom;
+ else s.status="Invalid input mode; using mode 1";
  bool valid=true;
  for(unsigned hand=0;hand<2;++hand) {
   valid=readAngle(path,pitchKeys[hand],s.aim.pitch[hand]) && valid;
@@ -72,7 +91,9 @@ void initializeControls(const std::filesystem::path& path) {
 bool applyControls(const Controls& controls,bool queueSave) {
  Controls validated;std::string error;
  if(!parseControls(controls.mode==OpenMode::Hold?"hold":"press",bindingText(controls),validated,error)){auto& s=state();std::scoped_lock lock(s.mutex);s.status=error;return false;}
- auto& s=state();std::scoped_lock lock(s.mutex);s.controls=validated;s.dirty=true;if(queueSave)s.save=true;s.status=s.path.empty()?"Preview controls updated":"Saving controls...";return true;
+ auto& s=state();std::scoped_lock lock(s.mutex);
+ if(s.inputMode!=InputMode::Custom){s.status="Select mode 3 - Custom to remap controls";return false;}
+ s.controls=validated;s.dirty=true;if(queueSave)s.save=true;s.status=s.path.empty()?"Preview controls updated":"Saving controls...";return true;
 }
 bool takeControlsSaveRequest(){return state().save.exchange(false);}
 void persistControls() {
@@ -81,7 +102,8 @@ void persistControls() {
  try {
   std::filesystem::create_directories(s.path.parent_path());
   const auto text=bindingText(s.controls);const std::wstring binding(text.begin(),text.end());
-  bool written=WritePrivateProfileStringW(L"Controls",L"sMode",s.controls.mode==OpenMode::Hold?L"hold":L"press",s.path.c_str()) &&
+  bool written=WritePrivateProfileStringW(L"Controls",L"iInputMode",std::to_wstring(static_cast<int>(s.inputMode)).c_str(),s.path.c_str()) &&
+   WritePrivateProfileStringW(L"Controls",L"sMode",s.controls.mode==OpenMode::Hold?L"hold":L"press",s.path.c_str()) &&
    WritePrivateProfileStringW(L"Controls",L"sOpenMenu",binding.c_str(),s.path.c_str());
   for(unsigned hand=0;hand<2;++hand) {
    written=WritePrivateProfileStringW(L"Pointer",pitchKeys[hand],std::to_wstring(s.aim.pitch[hand]).c_str(),s.path.c_str()) && written;
@@ -145,8 +167,24 @@ void setGestureIntegrationAvailable(bool available){state().gestures=available;}
 bool gestureIntegrationAvailable(){return state().gestures.load();}
 void drawControls() {
  using namespace devui;using namespace f4cf::vrcf;
- auto value=snapshotControls();bool changed=false;
  visual::heading("Controls","Choose how the wheel opens and makes selections.");
+ auto inputMode=snapshotInputMode();
+ visual::caption("Input mode");
+ constexpr std::array modeNames{"1 - Stick click (default)","2 - Grip + trigger hold","3 - Custom"};
+ ImGui::SetNextItemWidth(-1);
+ if(ImGui::BeginCombo("##input-mode",modeNames[static_cast<unsigned>(inputMode)-1])) {
+  for(unsigned i=0;i<modeNames.size();++i)if(ImGui::Selectable(modeNames[i],static_cast<unsigned>(inputMode)==i+1)) {
+   inputMode=static_cast<InputMode>(i+1);(void)applyInputMode(inputMode);
+  }
+  ImGui::EndCombo();
+ }
+ auto value=snapshotControls();bool changed=false;
+ {visual::Font font(render::FontRole::Body,18);ImGui::TextWrapped("%s",inputMode==InputMode::StickClick?
+  "Click and release the right stick to open. Click to select; click Cancel to close.":inputMode==InputMode::GripTriggerHold?
+  "Hold right grip + trigger for 0.50 seconds. Release to select. A held weapon's trigger-equip and the two-hand Rocky gesture take priority.":
+  "Remap the opening gesture and selection below. Your custom binding is kept when switching modes.");}
+ ImGui::Dummy({0,12});
+ if(inputMode==InputMode::Custom) {
  visual::caption("Selection");
  ImGui::BeginDisabled(!supportsReleaseSelection(value.binding.type));
  if(visual::button("Release to select",{245,48},value.mode==OpenMode::Hold)){value.mode=OpenMode::Hold;changed=true;}
@@ -198,6 +236,7 @@ void drawControls() {
  }
  if(!supportsReleaseSelection(type)){visual::Font font(render::FontRole::Body,18);ImGui::TextColored(visual::muted(),"Tap and release bindings use click-to-select.");}
  if(changed)(void)applyControls(value,!ImGui::IsAnyItemActive());
+ }
  {auto& s=state();std::unique_lock lock(s.mutex,std::try_to_lock);if(lock.owns_lock()){if(s.dirty && !ImGui::IsAnyItemActive())s.save=true;visual::Font font(render::FontRole::Body,18);ImGui::TextColored(visual::muted(),"%s",s.status.c_str());}}
  ImGui::Dummy({0,24});
 }

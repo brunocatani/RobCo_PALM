@@ -11,7 +11,7 @@
 #include "WheelSelectionState.h"
 #include "Gestures.h"
 #include "GrenadeSelection.h"
-#include "RockBipodPolicy.h"
+#include "RockInputPolicy.h"
 #include "ROCKProviderApi.h"
 #include "tools/ConfiguratorRuntime.h"
 #include "tools/render/FrameworkPanelRenderer.h"
@@ -37,6 +37,8 @@ struct RuntimeState {
  rpsui::sdk::PanelPoseV1 wheelPose;
  std::uint64_t owner{},command{};
  ControlGesture gesture;
+ RockyInputPriority rockyPriority;
+ bool rockLoaded{};
  Controls controls;
  // Borrowed for the loaded plugin's process lifetime; queried on the game
  // input callback thread, where Virtual Holsters owns its zone updates.
@@ -305,7 +307,7 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
    refreshWheelInventory();
   }
   if(!usable || reset) {
-   s.handGestures.clear(s.owner);publishGestureState();closeWheel();cancelCommand();clearSuppression();s.gesture={};s.clickRequested=false;
+   s.handGestures.clear(s.owner);publishGestureState();closeWheel();cancelCommand();clearSuppression();s.gesture={};s.rockyPriority={};s.clickRequested=false;
    s.world=s.rockFrame.worldGeneration;s.skeleton=s.rockFrame.skeletonGeneration;s.provider=s.rockFrame.providerGeneration;
    return;
   }
@@ -313,6 +315,9 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
   if(rock_configurator::takeInventoryRefreshRequest())refreshWheelInventory();
   const bool eligible=!s.command && !s.gameActionPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening();
   const auto masks=controlMasks(s.controls,frame->leftHanded);
+  const std::array pressed{frame->hands[0].pressed,frame->hands[1].pressed};
+  const std::array handValid{frame->hands[0].valid,frame->hands[1].valid};
+  const bool rockyOwnsInput=s.rockLoaded && s.rockyPriority.update(pressed,handValid);
   bool allDown=true,anyDown=false,valid=true;
   for(unsigned hand=0;hand<2;++hand)if(masks.buttons[hand]) {
    valid &= frame->hands[hand].valid;
@@ -333,14 +338,20 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
     RockProviderApi::inst->getEquippedWeaponStateV1(s.owner,&weapon)==RockProviderResultV1::Ok &&
     bipodAllowsOpening(weapon,s.rockFrame);
   }
-  const bool openingAllowed=bipodAllows && holstersReady && openingInputAllowed(masks,
-   {frame->hands[0].pressed,frame->hands[1].pressed},
-   {frame->hands[0].valid,frame->hands[1].valid},inHolster);
-  const bool openingBlocked=!s.gesture.open && !openingAllowed;
+  bool triggerEquipAllows=true;
+  for(unsigned hand=0;hand<2;++hand)if(s.rockLoaded && (masks.buttons[hand]&(1ull<<33))) {
+   const auto physical=hand==0?RockProviderHand::Left:RockProviderHand::Right;
+   RockProviderHandInteractionStateV1 interaction;
+   triggerEquipAllows &= rockReady && supportsHandInteractionStateV1() && RockProviderApi::inst->getHandInteractionStateV1 &&
+    RockProviderApi::inst->getHandInteractionStateV1(s.owner,physical,&interaction)==RockProviderResultV1::Ok &&
+    triggerEquipAllowsOpening(interaction,s.rockFrame,physical);
+  }
+  const bool openingAllowed=bipodAllows && triggerEquipAllows && holstersReady && openingInputAllowed(masks,pressed,handValid,inHolster);
+  const bool openingBlocked=rockyOwnsInput || (!s.gesture.open && !openingAllowed);
   const bool ownedBefore=s.gesture.ownsInput();
   std::optional<Action> clicked;
   {std::scoped_lock lock(s.presentationMutex);if(s.clickRequested.exchange(false))clicked=s.clickSelection;}
-  const auto edge=s.gesture.update(valid && (eligible || s.gesture.open || s.gesture.draining),s.controls,allDown,anyDown,clicked.has_value() && eligible,frame->seconds,openingAllowed);
+  const auto edge=s.gesture.update(valid && (eligible || s.gesture.open || s.gesture.draining),s.controls,allDown,anyDown,clicked.has_value() && eligible,frame->seconds,openingAllowed,rockyOwnsInput);
   s.held=s.gesture.open;
   if(s.open.load() && !s.gesture.open && edge!=ControlEdge::Select)closeWheel();
   if(!openingBlocked && ((eligible && s.gesture.armed) || ownedBefore || s.gesture.ownsInput())) {
@@ -424,6 +435,7 @@ bool startRuntime() {
   spdlog::info("PALM settings path: {}",path.string());
  }else {spdlog::error("PALM Documents folder unavailable");return false;}
  s.controls=snapshotControls();setGestureIntegrationAvailable(false);
+ s.rockLoaded=GetModuleHandleW(L"ROCK.dll")!=nullptr;
  s.holsters=RequestVirtualHolstersAPI();
  if(s.holsters && s.holsters->GetVersion()!=1)s.holsters=nullptr;
  s.holstersUnavailable=GetModuleHandleW(L"VirtualHolsters.dll") && !s.holsters;
@@ -448,8 +460,8 @@ bool startRuntime() {
    s.owner=handle.ownerToken;if(gestures)s.handGestures.initialize();
   }else if(handle.ownerToken)(void)api->unregisterConsumerV1(handle.ownerToken);
  }
- if(GetModuleHandleW(L"ROCK.dll") && !s.owner)
-  spdlog::warn("ROCK item/gesture integration unavailable; PALM continues with native controls and vanilla items");
+ if(s.rockLoaded && !s.owner)
+  spdlog::warn("ROCK integration unavailable; PALM trigger bindings wait for held-weapon state, other bindings and vanilla items remain available");
  s.inputToken=s.inputApi->subscribe(onFrame,nullptr);
  if(!s.inputToken){if(s.owner)(void)api->unregisterConsumerV1(s.owner);s.owner=0;return false;}
  rollback.complete=true;

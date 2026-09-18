@@ -1,5 +1,6 @@
 #include "ConfiguratorRuntime.h"
 #include "WheelConfig.h"
+#include "PalmControls.h"
 #include "WheelView.h"
 #include "Fonts.h"
 #include "IconAtlas.h"
@@ -84,7 +85,10 @@ int main(int argc, char** argv) {
   } else {
   click(rail+60,344);click(rail+60,392);click(rail+60,440);
   save(L"wheel-items.png");
-  tab(1);save(L"palm-settings.png");click(110,265);save(L"palm-controls-hold.png");click(rail+410,260);save(L"palm-controls-press.png");click(110,328);save(L"palm-pointer-aim.png");tab(0);
+  tab(1);save(L"palm-settings.png");click(110,265);save(L"palm-controls-click.png");
+  (void)wheel::applyInputMode(wheel::InputMode::GripTriggerHold);save(L"palm-controls-hold.png");
+  (void)wheel::applyInputMode(wheel::InputMode::Custom);save(L"palm-controls-custom.png");
+  click(110,328);save(L"palm-pointer-aim.png");tab(0);
   click(100,367);click(rail+60,344);click(rail+60,392);save(L"weapon-favorites.png");
   click(100,429);click(rail+60,344);save(L"armor-favorites.png");
   wheelModel=wheel::selectedWheelInventory(wheel::demoInventory());wheelModel.category=wheel::Category::Weapons;

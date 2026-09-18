@@ -8,6 +8,7 @@
 
 namespace wheel {
 enum class OpenMode { Hold, Press };
+enum class InputMode { StickClick=1, GripTriggerHold=2, Custom=3 };
 struct PointerAim {
  std::array<float,2> pitch{},yaw{};
  bool operator==(const PointerAim&) const=default;
@@ -21,6 +22,18 @@ struct Controls {
   .duration=0,.suppress=true};
  bool operator==(const Controls&) const=default;
 };
+inline Controls controlsForMode(InputMode mode,const Controls& custom={}) {
+ if(mode==InputMode::Custom)return custom;
+ Controls result;
+ if(mode==InputMode::GripTriggerHold) {
+  result.mode=OpenMode::Hold;
+  result.binding.type=f4cf::vrcf::ActivationType::HoldDown;
+  result.binding.button=vr::k_EButton_SteamVR_Trigger;
+  result.binding.modifier=f4cf::vrcf::InputModifier{vr::k_EButton_Grip,{}};
+  result.binding.duration=.5f;
+ }
+ return result;
+}
 struct ControlMasks {std::array<std::uint64_t,2> buttons{};};
 inline unsigned physicalHand(f4cf::vrcf::Hand hand,bool leftHanded) {
  using f4cf::vrcf::Hand;
@@ -53,9 +66,9 @@ struct ControlGesture {
  double pressedAt{},firstPressedAt{},lastTime{};
  bool ownsInput() const {return pending || open || draining || waitingDouble;}
  ControlEdge activate(){pending=false;waitingDouble=false;draining=false;open=true;clickArmed=false;return ControlEdge::Open;}
- ControlEdge update(bool usable,const Controls& controls,bool allDown,bool anyDown,bool click,double now,bool openingAllowed=true) {
+ ControlEdge update(bool usable,const Controls& controls,bool allDown,bool anyDown,bool click,double now,bool openingAllowed=true,bool priorityBlocked=false) {
   using f4cf::vrcf::ActivationType;
-  if(!usable || !std::isfinite(now) || now<lastTime){*this={};return ControlEdge::None;}
+  if(!usable || priorityBlocked || !std::isfinite(now) || now<lastTime){*this={};return ControlEdge::None;}
   // A competing gesture/holster invalidates the entire click. Releasing its
   // other button or leaving its zone while still pressed must not reopen PALM.
   if(!open && !openingAllowed){*this={};return ControlEdge::None;}
@@ -100,6 +113,8 @@ struct ControlGesture {
 bool parseControls(std::string_view mode,std::string_view binding,Controls& out,std::string& error);
 std::string bindingText(const Controls& controls);
 Controls snapshotControls();
+InputMode snapshotInputMode();
+bool applyInputMode(InputMode mode);
 void initializeControls(const std::filesystem::path& path);
 bool applyControls(const Controls& controls,bool queueSave=true); // Memory only; explicit save is queued for the game task.
 bool takeControlsSaveRequest();

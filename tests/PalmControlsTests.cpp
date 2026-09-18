@@ -1,5 +1,5 @@
 #include "PalmControls.h"
-#include "RockBipodPolicy.h"
+#include "RockInputPolicy.h"
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
@@ -10,6 +10,71 @@ void check(bool value,const char* message){if(!value)throw std::runtime_error(me
 int main(){try {
  using namespace wheel;using namespace f4cf::vrcf;
  Controls controls;ControlGesture gesture;
+ const auto holdControls=controlsForMode(InputMode::GripTriggerHold);
+ {
+  using namespace rock::provider;
+  using Flag=RockProviderHandInteractionFlagV1;
+  RockProviderFrameSnapshot frame;frame.frameIndex=5;frame.worldGeneration=1;frame.skeletonGeneration=2;frame.providerGeneration=3;
+  for(const auto hand:{RockProviderHand::Left,RockProviderHand::Right}) {
+   RockProviderHandInteractionStateV1 interaction;interaction.hand=hand;interaction.frameIndex=frame.frameIndex;
+   interaction.worldGeneration=1;interaction.skeletonGeneration=2;interaction.providerGeneration=3;
+   interaction.flags=static_cast<unsigned>(Flag::Valid);
+   const auto allowed=[&]{return triggerEquipAllowsOpening(interaction,frame,hand);};
+   check(allowed(),"empty hand blocked trigger binding");
+   for(const auto occupied:{Flag::LooseObject,Flag::FiringGrip,Flag::PartGrip}) {
+    interaction.flags=static_cast<unsigned>(Flag::Valid)|static_cast<unsigned>(occupied);
+    check(allowed(),"non-loose-weapon occupancy reserved trigger-equip");
+   }
+   for(bool startPending:{false,true}) {
+    ControlGesture hold;
+    hold.update(true,holdControls,false,false,false,0);
+    if(startPending)hold.update(true,holdControls,true,true,false,1);
+    interaction.flags=static_cast<unsigned>(Flag::Valid)|static_cast<unsigned>(Flag::LooseWeapon);
+    check(!allowed() && hold.update(true,holdControls,true,true,false,1.1,allowed())==ControlEdge::None && !hold.ownsInput(),"loose weapon lost trigger to menu capture");
+    interaction.flags=static_cast<unsigned>(Flag::Valid);
+    check(hold.update(true,holdControls,true,true,false,2,allowed())==ControlEdge::None,"equip completion replayed held chord");
+    hold.update(true,holdControls,false,true,false,2.1,allowed());
+    check(hold.update(true,holdControls,true,true,false,3,allowed())==ControlEdge::None,"partial release rearmed equip chord");
+    hold.update(true,holdControls,false,false,false,4,allowed());
+    hold.update(true,holdControls,true,true,false,5,allowed());
+    check(hold.update(true,holdControls,true,true,false,5.49,allowed())==ControlEdge::None,"mode 2 opened before 0.50 seconds");
+    check(hold.update(true,holdControls,true,true,false,5.51,allowed())==ControlEdge::Open,"fresh mode 2 hold did not open");
+   }
+   interaction.flags=0;check(!allowed(),"invalid hand granted trigger capture");interaction.flags=static_cast<unsigned>(Flag::Valid);
+   --interaction.frameIndex;check(!allowed(),"stale hand granted trigger capture");++interaction.frameIndex;
+   ++interaction.worldGeneration;check(!allowed(),"old world granted trigger capture");--interaction.worldGeneration;
+   ++interaction.skeletonGeneration;check(!allowed(),"old skeleton granted trigger capture");--interaction.skeletonGeneration;
+   ++interaction.providerGeneration;check(!allowed(),"old provider granted trigger capture");--interaction.providerGeneration;
+   interaction.hand=RockProviderHand::None;check(!allowed(),"wrong physical hand granted trigger capture");
+  }
+ }
+ {
+  constexpr auto grip=1ull<<2,trigger=1ull<<33,chord=grip|trigger;
+  // Either hand may lead. Even an already-open PALM hold must yield, and all
+  // four buttons must be released in any order before another menu attempt.
+  for(unsigned firstHand=0;firstHand<2;++firstHand)for(bool openFirst:{false,true}) {
+   std::array<unsigned,4> releaseOrder{0,1,2,3};
+   do {
+    RockyInputPriority priority;ControlGesture hold;double time=0;
+    const auto masks=controlMasks(holdControls,false);
+    const auto step=[&](std::array<std::uint64_t,2> pressed) {
+     time+=.6;
+     return hold.update(true,holdControls,(pressed[1]&chord)==chord,(pressed[1]&chord)!=0,false,time,
+      openingInputAllowed(masks,pressed,{true,true},{}),priority.update(pressed,{true,true}));
+    };
+    step({});std::array<std::uint64_t,2> pressed{};pressed[firstHand]=chord;step(pressed);
+    if(openFirst)step(pressed);
+    if(firstHand==1 && openFirst)check(hold.open,"Rocky preemption fixture did not open PALM");
+    pressed={chord,chord};check(step(pressed)==ControlEdge::None && !hold.ownsInput(),"Rocky chord retained PALM or selected an item");
+    check(priority.update({}, {false,true}),"tracking loss released Rocky priority");
+    for(auto button:releaseOrder) {
+     pressed[button/2]&=~(button%2?trigger:grip);
+     check(step(pressed)==ControlEdge::None && !hold.ownsInput(),"Rocky release replayed or captured PALM");
+    }
+    step({0,chord});check(step({0,chord})==ControlEdge::Open,"fresh PALM hold failed after Rocky release");
+   }while(std::next_permutation(releaseOrder.begin(),releaseOrder.end()));
+  }
+ }
  {
   using namespace rock::provider;
   using Flag=RockProviderEquippedWeaponStateFlagV1;
@@ -137,6 +202,15 @@ int main(){try {
  struct Cleanup{std::filesystem::path path;~Cleanup(){std::error_code error;std::filesystem::remove(path,error);}} cleanup{path};
  {std::ofstream file(path);file<<"[Other]\nuntouched=hello\n[Controls]\nsMode=press\nsOpenMenu=left press b +grip\n";}
  initializeControls(path);const auto loaded=snapshotControls();check(loaded.mode==OpenMode::Press && loaded.binding.hand==Hand::Left,"PALM did not load its own INI");
+ check(snapshotInputMode()==InputMode::Custom,"legacy remapping was not retained as Custom");
+ for(const auto mode:{InputMode::StickClick,InputMode::GripTriggerHold}) {
+  check(applyInputMode(mode) && snapshotControls()==controlsForMode(mode),"fixed input mode used custom binding");
+  check(!applyControls(loaded),"preset permitted remapping outside Custom");
+  persistControls();initializeControls(path);
+  check(snapshotInputMode()==mode && snapshotControls()==controlsForMode(mode),"selected input mode was not restored");
+  check(applyInputMode(InputMode::Custom) && snapshotControls()==loaded,"preset switching discarded custom mapping");
+ }
+ check(!applyInputMode(static_cast<InputMode>(4)) && snapshotInputMode()==InputMode::Custom,"invalid input mode changed controls");
  check(applyControls(Controls{}) && takeControlsSaveRequest(),"edit did not queue persistence");persistControls();initializeControls(path);
  check(snapshotControls()==Controls{},"controls were not restored from disk");
  check(snapshotPointerAim()==PointerAim{},"missing pointer keys did not use default calibration");
@@ -160,9 +234,11 @@ int main(){try {
  wchar_t preserved[32]{};GetPrivateProfileStringW(L"Other",L"untouched",L"",preserved,32,path.c_str());
  check(std::wstring_view(preserved)==L"hello","PALM rewrote unrelated INI values");
  std::filesystem::remove(path);initializeControls(path);
- check(snapshotControls()==Controls{} && snapshotPointerAim()==PointerAim{} && takeControlsSaveRequest(),"first run did not prepare default controls and pointer settings");
+ check(snapshotInputMode()==InputMode::StickClick && snapshotControls()==Controls{} && snapshotPointerAim()==PointerAim{} && takeControlsSaveRequest(),"first run did not prepare mode 1 and pointer settings");
  persistControls();initializeControls(path);
  check(snapshotPointerAim()==PointerAim{},"first-run pointer defaults did not persist");
+ WritePrivateProfileStringW(L"Controls",L"iInputMode",L"99",path.c_str());initializeControls(path);
+ check(snapshotInputMode()==InputMode::StickClick && snapshotControls()==Controls{},"invalid saved mode did not use default");
  initializeControls({});std::cout<<"Control gestures, binding validation, handedness, and isolated persistence passed\n";
  return 0;
  }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}
