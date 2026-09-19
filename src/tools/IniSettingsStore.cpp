@@ -263,6 +263,7 @@ namespace rock_configurator
         if (!_configurationApi) {
             const auto connection=configurationConnection();
             _configurationApi=connection.api; _configurationOwner=connection.owner;
+            _lastProviderStatus=connection.status;
         }
         if (!_configurationApi || !_configurationOwner || !_configurationApi->revision || !_configurationApi->visit || !_configurationApi->setValue) {
             _configurationApi = nullptr;
@@ -309,12 +310,14 @@ namespace rock_configurator
                 snapshot.failed = true;
             }
         };
-        if (_configurationApi->visit(_configurationOwner,rockGroup(), visitor, &snapshot)!=rock::api::Status::Ok || snapshot.failed) {
+        _lastProviderStatus=_configurationApi->visit(_configurationOwner,rockGroup(), visitor, &snapshot);
+        if (_lastProviderStatus!=rock::api::Status::Ok || snapshot.failed) {
             _lastError = "ROCK configuration is not ready";
             return false;
         }
         _settings = std::move(snapshot.settings);
-        if (_configurationApi->revision(_configurationOwner,&_loadedRevision)!=rock::api::Status::Ok) { _lastError="ROCK configuration revision unavailable"; return false; }
+        _lastProviderStatus=_configurationApi->revision(_configurationOwner,&_loadedRevision);
+        if (_lastProviderStatus!=rock::api::Status::Ok) { _lastError="ROCK configuration revision unavailable"; return false; }
         return true;
     }
 
@@ -798,8 +801,9 @@ namespace rock_configurator
         if (setting.fromRockApi) {
 #ifndef WHEEL_DESKTOP_PREVIEW
             std::array<char, 512> error{};
-            if (!_configurationApi || _configurationApi->setValue(_configurationOwner,rockGroup(), setting.section.c_str(),
-                    setting.key.c_str(), normalizedValue->c_str(), error.data(), static_cast<std::uint32_t>(error.size()))!=rock::api::Status::Ok) {
+            _lastProviderStatus=_configurationApi ? _configurationApi->setValue(_configurationOwner,rockGroup(), setting.section.c_str(),
+                    setting.key.c_str(), normalizedValue->c_str(), error.data(), static_cast<std::uint32_t>(error.size())) : rock::api::Status::NotReady;
+            if (_lastProviderStatus!=rock::api::Status::Ok) {
                 _lastError = error[0] ? error.data() : "ROCK configuration write failed";
                 return { .changed = false, .saved = false, .message = _lastError, .setting = setting };
             }

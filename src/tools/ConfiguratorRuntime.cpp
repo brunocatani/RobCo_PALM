@@ -221,7 +221,17 @@ namespace rock_configurator
                 anchor.id = previous[activeIndex].id;
                 anchor.fallbackIndex = activeIndex;
             }
+            const auto previousError = store.lastError();
+            const auto previousStatus = store.lastProviderStatus();
+            const bool wasLoaded = loaded;
             loaded = reload ? store.reload() : store.load();
+            if (!loaded && (wasLoaded || previousError != store.lastError() || previousStatus != store.lastProviderStatus())) {
+                logger::warn("PALM Config load failed: path='{}' error='{}' providerStatus={} thread={}",
+                    store.path().string(), store.lastError(), static_cast<unsigned>(store.lastProviderStatus()), GetCurrentThreadId());
+            } else if (loaded && !wasLoaded) {
+                logger::info("PALM Config catalog loaded: path='{}' settings={} thread={}",
+                    store.path().string(), store.settings().size(), GetCurrentThreadId());
+            }
             const auto& settings = store.settings();
             if (!loaded || settings.empty()) {
                 activeIndex = 0;
@@ -358,6 +368,11 @@ namespace rock_configurator
         void applySettingChangeLocked(const SettingChangeResult& result)
         {
             s_statusMessage = result.message.empty() ? "No change" : result.message;
+            if (!result.saved && result.setting.fromRockApi) {
+                logger::warn("PALM Config write failed: [{}] {} error='{}' providerStatus={} thread={}",
+                    result.setting.section, result.setting.key, result.message,
+                    static_cast<unsigned>(activeSettings().store.lastProviderStatus()), GetCurrentThreadId());
+            }
             if (result.changed && result.saved) {
 #ifndef WHEEL_DESKTOP_PREVIEW
                 (void)readActiveStoreLocked(true);

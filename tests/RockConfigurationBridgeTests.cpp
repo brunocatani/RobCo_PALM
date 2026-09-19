@@ -15,6 +15,7 @@ namespace
     std::string configured = "false";
     std::string written;
     bool refuseWrite = false;
+    Status visitStatus = Status::Ok;
     std::string grenadeMode = "false";
     bool publishGrenade = true;
     bool grenadeVisitSucceeds = true;
@@ -34,6 +35,7 @@ namespace
     Status visit(rock::api::OwnerToken owner,Group group, VisitorV1 callback, void* context) noexcept
     {
         if(owner!=1)return Status::OwnerNotRegistered;
+        if(visitStatus!=Status::Ok)return visitStatus;
         if (group == Group::Consumer) {
             const SettingV1 logging{"Logging", "iLogLevel", "6", "6",
                 "01. Logging", "Log detail", ValueType::Integer, 0};
@@ -100,12 +102,20 @@ int main()
         refuseWrite = true;
         result = store.setBooleanByIndex(0, false);
         require(!result.saved && store.settings()[0].value == "true", "failed write changed the menu state");
+        require(store.lastProviderStatus()==Status::NotReady, "write failure discarded provider status");
         refuseWrite = false;
         result = store.setBooleanByIndex(0, false);
         require(result.saved && written == "false", "restoring default was not delegated to ROCK");
         configured = "false"; ++revision;
         require(store.needsReload() && store.reload(), "external removal did not refresh");
         require(!store.settings()[0].overridden, "default still displayed as overridden");
+        for(const auto failure:{Status::WrongThread,Status::OwnerNotRegistered,Status::NotReady}) {
+            visitStatus=failure;
+            require(!store.reload() && store.settings().empty(), "rejected catalog kept editable stale settings");
+            require(store.lastProviderStatus()==failure, "catalog failure discarded provider status");
+        }
+        visitStatus=Status::Ok;
+        require(store.reload() && store.lastProviderStatus()==Status::Ok, "catalog did not recover after provider rejection");
         struct Cleanup { std::filesystem::path path; ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); } } cleanup{absent};
         { std::ofstream file(absent); file << "[ImmersiveWeapons]\n; 99. Old weapon section\nbBipodMode=true\n[Logging]\n; Old help\niLogLevel=6\n"; }
         IniSettingsStore consumer(absent, RpsMod::Rock, &api, {}, 1);

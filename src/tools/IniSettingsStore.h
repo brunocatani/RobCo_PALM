@@ -65,6 +65,7 @@ namespace rock_configurator
         [[nodiscard]] const std::vector<SettingRecord>& settings() const noexcept { return _settings; }
         [[nodiscard]] const std::filesystem::path& path() const noexcept { return _path; }
         [[nodiscard]] const std::string& lastError() const noexcept { return _lastError; }
+        [[nodiscard]] rock::api::Status lastProviderStatus() const noexcept { return _lastProviderStatus; }
 
         [[nodiscard]] std::optional<std::size_t> indexForId(std::string_view id) const;
         [[nodiscard]] bool isSlider(std::size_t index) const;
@@ -110,6 +111,7 @@ namespace rock_configurator
         RpsMod _mod;
         const rock::api::configuration::ApiV1* _configurationApi = nullptr;
         rock::api::OwnerToken _configurationOwner{};
+        rock::api::Status _lastProviderStatus{rock::api::Status::Ok};
         bool _useRockApi = false;
         std::uint64_t _loadedRevision = 0;
         std::vector<IniLine> _lines;
