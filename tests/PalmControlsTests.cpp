@@ -12,6 +12,38 @@ int main(){try {
  Controls controls;ControlGesture gesture;
  const auto holdControls=controlsForMode(InputMode::GripTriggerHold);
  {
+  constexpr std::uint64_t recordedHold=0x600000004,grip=1ull<<2,trigger=1ull<<33,axis2=1ull<<34;
+  const auto masks=controlMasks(holdControls,false);
+  ControlGesture hold;
+  const auto step=[&](std::uint64_t right,double time) {
+   return hold.update(true,holdControls,(right&masks.buttons[1])==masks.buttons[1],(right&masks.buttons[1])!=0,false,time,
+    openingInputAllowed(masks,{0,right},{true,true},{}));
+  };
+  step(0,0);
+  check(step(recordedHold,1)==ControlEdge::None && hold.pending,"recorded grip/Axis2 input did not start mode 2 hold");
+  check(step(recordedHold,1.49)==ControlEdge::None,"grip companion bypassed hold duration");
+  check(step(recordedHold,1.5)==ControlEdge::Open,"recorded mode 2 input failed to open after 0.50 seconds");
+  check(step(grip|axis2,1.6)==ControlEdge::Select && hold.draining,"grip companion blocked release-to-select");
+  check(step(recordedHold,2.2)==ControlEdge::None,"partial release replayed the grip chord");
+  step(0,2.3);step(grip|trigger,3);
+  check(step(grip|trigger,3.5)==ControlEdge::Open,"controllers without a grip companion stopped opening");
+  check(!openingInputAllowed(masks,{0,trigger|axis2},{true,true},{}),"Axis2 substituted for the physical grip button");
+  check(!openingInputAllowed(masks,{0,recordedHold},{true,true},{false,true}),"grip companion bypassed holster guard");
+  check(!openingInputAllowed(masks,{0,recordedHold},{false,true},{}),"grip companion bypassed controller validity");
+  for(unsigned boundHand=0;boundHand<2;++boundHand) {
+   auto binding=holdControls;binding.binding.hand=boundHand==0?Hand::Left:Hand::Right;
+   const auto boundMasks=controlMasks(binding,false);
+   std::array<std::uint64_t,2> pressed{};pressed[boundHand]=recordedHold;
+   check(openingInputAllowed(boundMasks,pressed,{true,true},{}),"grip companion mapped to the wrong physical hand");
+   for(unsigned hand=0;hand<2;++hand)for(unsigned button=0;button<64;++button) {
+    const auto extra=std::uint64_t{1}<<button;
+    if(hand==boundHand && (recordedHold&extra))continue;
+    auto competing=pressed;competing[hand]|=extra;
+    check(!openingInputAllowed(boundMasks,competing,{true,true},{}),"grip companion allowed an unrelated competing button");
+   }
+  }
+ }
+ {
 
   using Flag=rock::api::grab::HandInteractionFlagV1;
   wheel::RockFrame frame;frame.frameIndex=5;frame.worldGeneration=1;frame.skeletonGeneration=2;frame.providerGeneration=3;

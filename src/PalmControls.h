@@ -52,8 +52,15 @@ inline bool isPlainStickClick(const Controls& controls) {
 }
 inline bool openingInputAllowed(const ControlMasks& masks,const std::array<std::uint64_t,2>& pressed,
  const std::array<bool,2>& valid,const std::array<bool,2>& inHolster) {
- for(unsigned hand=0;hand<2;++hand)
-  if(!valid[hand] || (pressed[hand]&~masks.buttons[hand]) || (masks.buttons[hand] && inHolster[hand]))return false;
+ for(unsigned hand=0;hand<2;++hand) {
+  auto allowed=masks.buttons[hand];
+  // Some controllers report Axis2 alongside grip (observed 0x600000004 for
+  // right grip + trigger). Accept that companion only with a bound, pressed grip;
+  // the binding itself still requires the real grip button.
+  constexpr auto grip=std::uint64_t{1}<<vr::k_EButton_Grip;
+  if(allowed&pressed[hand]&grip)allowed|=std::uint64_t{1}<<vr::k_EButton_Axis2;
+  if(!valid[hand] || (pressed[hand]&~allowed) || (masks.buttons[hand] && inHolster[hand]))return false;
+ }
  return true;
 }
 inline bool supportsReleaseSelection(f4cf::vrcf::ActivationType type) {
