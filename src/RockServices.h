@@ -3,6 +3,11 @@
 #include <ROCK/Client.h>
 #include <ROCK/Hands.h>
 namespace wheel {
+struct RockSnapshotDiagnostic {
+    const char* stage{"owner"}; // Static labels; safe to copy to the log task.
+    int status{-1}; // -1 means the query was not called.
+    rock::api::SampleV1 observed;
+};
 struct RockServices {
     rock::api::Client client;
     const rock::api::grab::ApiV1* grab{};
@@ -11,7 +16,7 @@ struct RockServices {
     const rock::api::input::ApiV1* input{};
     const rock::api::animation::ApiV1* animation{};
     bool connect();
-    bool snapshot(RockFrame& frame) const;
+    bool snapshot(RockFrame& frame, RockSnapshotDiagnostic* diagnostic=nullptr) const;
 };
 RockServices& rockServices();
 }

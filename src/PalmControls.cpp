@@ -51,7 +51,7 @@ bool parseControls(std::string_view mode,std::string_view text,Controls& out,std
  if(parsed->type==ActivationType::Press || parsed->type==ActivationType::Tap)out.binding.duration=0;
  error.clear();return true;
 }
-Controls snapshotControls(){auto& s=state();std::scoped_lock lock(s.mutex);return controlsForMode(s.inputMode,s.controls);}
+Controls snapshotControls(InputMode* inputMode){auto& s=state();std::scoped_lock lock(s.mutex);if(inputMode)*inputMode=s.inputMode;return controlsForMode(s.inputMode,s.controls);}
 InputMode snapshotInputMode(){auto& s=state();std::scoped_lock lock(s.mutex);return s.inputMode;}
 bool applyInputMode(InputMode mode) {
  if(mode!=InputMode::StickClick && mode!=InputMode::GripTriggerHold && mode!=InputMode::Custom)return false;

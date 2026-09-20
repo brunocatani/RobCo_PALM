@@ -42,6 +42,10 @@ struct RuntimeState {
  RockyInputPriority rockyPriority;
  bool rockLoaded{};
  Controls controls;
+ // Owned by the input callback, like the gesture. No disk writes in that callback.
+ InputMode loggedInputMode{InputMode::StickClick};
+ bool loggedControls{},loggedUsable{};
+ double nextOpeningReport{},nextAvailabilityReport{};
  // Borrowed for the loaded plugin's process lifetime; queried on the game
  // input callback thread, where Virtual Holsters owns its zone updates.
  VirtualHolstersAPI* holsters{};
@@ -56,6 +60,15 @@ struct RuntimeState {
  std::uint32_t world{},skeleton{},provider{};
 };
 RuntimeState& state(){static RuntimeState s;return s;}
+template<class Log> void queueInputLog(Log log) noexcept {
+ // Use the existing game-task path and capture only values. Diagnostics must
+ // never turn a logging/queue failure into a gameplay input failure.
+ try {
+  if(const auto* tasks=F4SE::GetTaskInterface())tasks->AddTask([log=std::move(log)]() noexcept {
+   try{log();}catch(...){OutputDebugStringA("PALM input diagnostic write failed\n");}
+  });
+ }catch(...){OutputDebugStringA("PALM input diagnostic queue failed\n");}
+}
 void refreshWheelInventory() {
  const auto ticket=state().generation.load();
  if(const auto* tasks=F4SE::GetTaskInterface())tasks->AddTask([ticket] {
@@ -291,14 +304,31 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
   if(!frame)return;auto& s=state();
   if(takePointerAimChange() && !publishPointerAim())spdlog::error("PALM pointer aim update rejected by UI framework");
   if(takeControlsSaveRequest())if(const auto* tasks=F4SE::GetTaskInterface())tasks->AddTask([]{persistControls();});
-  const auto controls=snapshotControls();
+  InputMode inputMode;
+  const auto controls=snapshotControls(&inputMode);
+  if(!s.loggedControls || inputMode!=s.loggedInputMode || controls!=s.controls || s.leftHanded!=frame->leftHanded) {
+   s.loggedControls=true;s.loggedInputMode=inputMode;
+   queueInputLog([inputMode,controls,leftHanded=frame->leftHanded,sequence=frame->sequence] {
+    spdlog::info("PALM controls applied: mode={} selection={} binding='{}' leftHanded={} inputFrame={}",
+     static_cast<unsigned>(inputMode),controls.mode==OpenMode::Hold?"release":"click",bindingText(controls),leftHanded,sequence);
+   });
+  }
   if(controls!=s.controls || s.leftHanded!=frame->leftHanded){s.controls=controls;s.leftHanded=frame->leftHanded;s.gesture={};s.clickRequested=false;if(s.open.load() || s.held.load())closeWheel();}
   if(takeWheelConfigChange())refreshWheelInventory();
-  const bool rockReady=s.owner && rockServices().client.owner() && rockServices().snapshot(s.rockFrame) && s.rockFrame.providerReady;
+  RockSnapshotDiagnostic snapshotDiagnostic;
+  const bool rockReady=s.owner && rockServices().client.owner() && rockServices().snapshot(s.rockFrame,&snapshotDiagnostic) && s.rockFrame.providerReady;
   const bool providerChanged=s.rockReady.exchange(rockReady)!=rockReady ||
    (rockReady && (s.world!=s.rockFrame.worldGeneration || s.skeleton!=s.rockFrame.skeletonGeneration || s.provider!=s.rockFrame.providerGeneration));
   setGestureIntegrationAvailable(rockReady && s.handGestures.available());
-  const bool usable=s.sessionReady.load() && frame->ready && frameworkReady() && !s.presentationFailed.load();
+  const bool sessionReady=s.sessionReady.load(),uiReady=frameworkReady(),presentationFailed=s.presentationFailed.load();
+  const bool usable=sessionReady && frame->ready && uiReady && !presentationFailed;
+  if(s.loggedUsable!=usable && frame->seconds>=s.nextAvailabilityReport) {
+   s.loggedUsable=usable;s.nextAvailabilityReport=frame->seconds+.5;
+   queueInputLog([usable,sessionReady,uiReady,presentationFailed,ready=frame->ready,sequence=frame->sequence] {
+    spdlog::info("PALM input availability: usable={} session={} input={} framework={} presentationFailed={} inputFrame={}",
+     usable,sessionReady,ready,uiReady,presentationFailed,sequence);
+   });
+  }
   s.inputReady=usable;rock_configurator::setAvailable(usable);
   const bool reset=s.sessionResetPending.exchange(false);
   if(providerChanged) {
@@ -313,7 +343,8 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
   }
   serviceCommand();
   if(rock_configurator::takeInventoryRefreshRequest())refreshWheelInventory();
-  const bool eligible=!s.command && !s.gameActionPending.load() && !rock_configurator::isOpen() && !rock_configurator::isOpening();
+  const bool gameActionPending=s.gameActionPending.load(),configOpen=rock_configurator::isOpen(),configOpening=rock_configurator::isOpening();
+  const bool eligible=!s.command && !gameActionPending && !configOpen && !configOpening;
   const auto masks=controlMasks(s.controls,frame->leftHanded);
   const std::array pressed{frame->hands[0].pressed,frame->hands[1].pressed};
   const std::array handValid{frame->hands[0].valid,frame->hands[1].valid};
@@ -332,18 +363,21 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
     if(masks.buttons[hand])inHolster[hand]=s.holsters->IsHandInHolsterZone(hand==0);
   }
   bool bipodAllows=true;
+  rock::api::weapon::EquippedWeaponStateV1 weapon;
+  int weaponStatus=-1;
   if(rockReady) {
-   rock::api::weapon::EquippedWeaponStateV1 weapon;
    bipodAllows=(rockServices().weapon!=nullptr) && rockServices().weapon->getEquippedWeaponStateV1 &&
-    rockServices().weapon->getEquippedWeaponStateV1(s.owner,&weapon)==rock::api::Status::Ok &&
+    (weaponStatus=static_cast<int>(rockServices().weapon->getEquippedWeaponStateV1(s.owner,&weapon)))==static_cast<int>(rock::api::Status::Ok) &&
     bipodAllowsOpening(weapon,s.rockFrame);
   }
   bool triggerEquipAllows=true;
+  std::array<rock::api::grab::HandInteractionStateV1,2> interactions;
+  std::array<int,2> interactionStatus{-1,-1};
   for(unsigned hand=0;hand<2;++hand)if(s.rockLoaded && (masks.buttons[hand]&(1ull<<33))) {
    const auto physical=hand==0?rock::api::Hand::Left:rock::api::Hand::Right;
-   rock::api::grab::HandInteractionStateV1 interaction;
+   auto& interaction=interactions[hand];
    triggerEquipAllows &= rockReady && (rockServices().grab!=nullptr) && rockServices().grab->getHandInteractionStateV1 &&
-    rockServices().grab->getHandInteractionStateV1(s.owner,physical,&interaction)==rock::api::Status::Ok &&
+    (interactionStatus[hand]=static_cast<int>(rockServices().grab->getHandInteractionStateV1(s.owner,physical,&interaction)))==static_cast<int>(rock::api::Status::Ok) &&
     triggerEquipAllowsOpening(interaction,s.rockFrame,physical);
   }
   const bool openingAllowed=bipodAllows && triggerEquipAllows && holstersReady && openingInputAllowed(masks,pressed,handValid,inHolster);
@@ -351,7 +385,41 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
   const bool ownedBefore=s.gesture.ownsInput();
   std::optional<Action> clicked;
   {std::scoped_lock lock(s.presentationMutex);if(s.clickRequested.exchange(false))clicked=s.clickSelection;}
+  const auto before=s.gesture;
   const auto edge=s.gesture.update(valid && (eligible || s.gesture.open || s.gesture.draining),s.controls,allDown,anyDown,clicked.has_value() && eligible,frame->seconds,openingAllowed,rockyOwnsInput);
+  // At most two reports per second, only while an opening attempt is active.
+  // Repeated held samples also expose a gesture continually reset by a guard.
+  if(!before.open && (anyDown || before.pending || edge==ControlEdge::Open) &&
+     std::isfinite(frame->seconds) && frame->seconds>=s.nextOpeningReport) {
+   s.nextOpeningReport=frame->seconds+.5;
+   queueInputLog([inputMode,sequence=frame->sequence,seconds=frame->seconds,thread=GetCurrentThreadId(),
+    pressed,masks,handValid,allDown,anyDown,eligible,gameActionPending,configOpen,configOpening,command=s.command,
+    holstersReady,inHolster,bipodAllows,triggerEquipAllows,rockyOwnsInput,openingAllowed,before,after=s.gesture,edge,
+    rockLoaded=s.rockLoaded,rockReady,rockFrame=s.rockFrame,snapshotDiagnostic,weaponStatus,weapon,interactionStatus,interactions] {
+    spdlog::info("PALM opening input: mode={} inputFrame={} thread={} pressed[L,R]=[{:X},{:X}] binding[L,R]=[{:X},{:X}] valid[L,R]=[{},{}] allDown={} anyDown={} eligible={} config[open,opening]=[{},{}] actionPending={} command={} holstersReady={} zones[L,R]=[{},{}] bipodAllows={} triggerAllows={} rocky={} openingAllowed={}",
+     static_cast<unsigned>(inputMode),sequence,thread,pressed[0],pressed[1],masks.buttons[0],masks.buttons[1],handValid[0],handValid[1],
+     allDown,anyDown,eligible,configOpen,configOpening,gameActionPending,command,holstersReady,inHolster[0],inHolster[1],bipodAllows,triggerEquipAllows,rockyOwnsInput,openingAllowed);
+    spdlog::info("PALM opening gesture: inputFrame={} before[armed,pending,open,draining]=[{},{},{},{}] after=[{},{},{},{}] heldSeconds={:.3f} edge={}",
+     sequence,before.armed,before.pending,before.open,before.draining,after.armed,after.pending,after.open,after.draining,
+     before.pending?seconds-before.pressedAt:0.,edge==ControlEdge::Open?"open":edge==ControlEdge::Select?"select":"none");
+    if(rockLoaded && !rockReady) {
+     const auto& observed=snapshotDiagnostic.observed;
+     spdlog::info("PALM opening ROCK snapshot: inputFrame={} stage={} status={} (-1=not-called,0=ok,17=wrong-thread) expected[frame,world,skeleton,provider]=[{},{},{},{}] observed=[{},{},{},{}]",
+      sequence,snapshotDiagnostic.stage,snapshotDiagnostic.status,rockFrame.frameIndex,rockFrame.worldGeneration,rockFrame.skeletonGeneration,rockFrame.providerGeneration,
+      observed.frameIndex,observed.worldGeneration,observed.skeletonGeneration,observed.providerGeneration);
+    }
+    if(!bipodAllows)spdlog::info("PALM opening bipod: inputFrame={} status={} flags={:X} expected[frame,world,skeleton,provider]=[{},{},{},{}] observed=[{},{},{},{}]",
+     sequence,weaponStatus,weapon.flags,rockFrame.frameIndex,rockFrame.worldGeneration,rockFrame.skeletonGeneration,rockFrame.providerGeneration,
+     weapon.frameIndex,weapon.worldGeneration,weapon.skeletonGeneration,weapon.providerGeneration);
+    if(!triggerEquipAllows)for(unsigned hand=0;hand<2;++hand)if(masks.buttons[hand]&(1ull<<33)) {
+     const auto& interaction=interactions[hand];
+     spdlog::info("PALM opening trigger: inputFrame={} physicalHand={} status={} reportedHand={} flags={:X} expected[frame,world,skeleton,provider]=[{},{},{},{}] observed=[{},{},{},{}]",
+      sequence,hand==0?"left":"right",interactionStatus[hand],static_cast<unsigned>(interaction.hand),interaction.flags,
+      rockFrame.frameIndex,rockFrame.worldGeneration,rockFrame.skeletonGeneration,rockFrame.providerGeneration,
+      interaction.frameIndex,interaction.worldGeneration,interaction.skeletonGeneration,interaction.providerGeneration);
+    }
+   });
+  }
   s.held=s.gesture.open;
   if(s.open.load() && !s.gesture.open && edge!=ControlEdge::Select)closeWheel();
   if(!openingBlocked && ((eligible && s.gesture.armed) || ownedBefore || s.gesture.ownsInput())) {

@@ -112,7 +112,7 @@ struct ControlGesture {
 };
 bool parseControls(std::string_view mode,std::string_view binding,Controls& out,std::string& error);
 std::string bindingText(const Controls& controls);
-Controls snapshotControls();
+Controls snapshotControls(InputMode* inputMode=nullptr);
 InputMode snapshotInputMode();
 bool applyInputMode(InputMode mode);
 void initializeControls(const std::filesystem::path& path);
