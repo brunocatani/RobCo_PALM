@@ -21,13 +21,21 @@ ROCK adds physical item handling; hand gestures also need FRIK 0.79 / API 2.3 fo
 
 ## Using PALM
 
-By default, hold **right trigger + grab** to open the wheel, point, and release to select.
+**Mode 1 (default):** click and release the physical right analog stick to open the wheel, point, and click with the pointing hand's trigger or A/X to select. Click **Cancel** to close.
 
-Choose your items in **Config → Items**. Rebind the controls or switch between **Release to select** and **Click to select** in **Config → PALM settings → Controls**.
+**Mode 2:** hold **right trigger + grab** for **0.50 seconds** to open the wheel, point, and release to select. Aim at the center/Cancel area and release to cancel.
+
+Choose your items in **Config → Items**. Select either preset or **Mode 3 — Custom** in **Config → PALM settings → Controls**. Custom mode unlocks remapping and the choice between **Release to select** and **Click to select**; its binding is retained when you switch back to a preset.
 
 In **Click to select**, release the opening buttons before selecting with the pointing hand's trigger or A/X. The wheel stays open until you click **Cancel** or enter Config. Opening bindings support press, tap, double tap, hold, long press, and release, with an optional modifier on either hand. Touch and axis inputs are excluded; thumbstick click is supported. Tap and release bindings use click-to-select.
 
 PALM saves its controls and pointer calibration to `Documents\My Games\Fallout4VR\Mods_Config\RobCo_PALM\PALM.ini`; manual edits are read at startup.
+
+New configurations use `Controls/iInputMode = 1`. Existing files without that key retain their previous binding by selecting the matching preset or Custom. Presets do not use `sMode` or `sOpenMenu` as their binding; those keys store Custom's settings.
+
+ROCK's trigger-equip, Rocky gesture, and bipod clicks take priority over opening PALM. A bound hand inside a Virtual Holsters zone or unrelated held buttons can also block opening. Release the opening buttons fully before trying again.
+
+Install the `.7z` asset from [GitHub Releases](https://github.com/brunocatani/RobCo_PALM/releases/latest) through your mod manager. The plugin remains `Data/F4SE/Plugins/wheelmenu.dll`; GitHub's automatic source archives are for development.
 
 ## Adding a mod section
 
