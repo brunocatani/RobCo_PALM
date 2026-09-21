@@ -206,11 +206,11 @@ void submitChoice(const wheel::RockFrame& frame) {
    const auto* tasks=F4SE::GetTaskInterface();
    if(!tasks){actionStatus("Equipment task queue unavailable");return;}
    s.gameActionPending=true;
-   try { tasks->AddTask([ticket,item=*equipment] {
+   try { tasks->AddTask([ticket,item=*equipment,inputThread=GetCurrentThreadId()] {
     auto& runtime=state();
     struct Finish {RuntimeState& state;~Finish(){state.gameActionPending=false;}} finish{runtime};
     if(!runtime.sessionReady.load() || !runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
-    try { actionStatus(toggleEquipment(item,runtime.rockReady.load()?runtime.owner:0)); refreshWheelInventory(); }
+    try { actionStatus(toggleEquipment(item,runtime.rockReady.load()?runtime.owner:0,inputThread)); refreshWheelInventory(); }
     catch(...){spdlog::error("Equipment result publication failed");}
    }); } catch(...) {s.gameActionPending=false;throw;}
    return;

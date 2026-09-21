@@ -29,7 +29,7 @@ bool validateEquipmentRuntime() noexcept {
   return equipmentReady;
  }catch(...){spdlog::error("PALM equipment entrypoint validation failed");return false;}
 }
-const char* toggleEquipment(const Item& selected,std::uint64_t owner) noexcept {
+const char* toggleEquipment(const Item& selected,std::uint64_t owner,std::uint32_t inputThread) noexcept {
  try {
   if(!equipmentReady)return "Equipment support unavailable";
   auto* player=RE::PlayerCharacter::GetSingleton();
@@ -39,10 +39,18 @@ const char* toggleEquipment(const Item& selected,std::uint64_t owner) noexcept {
   if(owner && object->Is(RE::ENUM_FORM_ID::kWEAP)) {
 
    for(const auto hand:{rock::api::Hand::Left,rock::api::Hand::Right}) {
-    rock::api::grab::HandInteractionStateV1 interaction;
-    if(!rockServices().client.owner() || !rockServices().grab->getHandInteractionStateV1 ||
-       rockServices().grab->getHandInteractionStateV1(owner,hand,&interaction)!=rock::api::Status::Ok ||
-       !(interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlagV1::Valid)))return "Hand state unavailable";
+    rock::api::grab::HandInteractionStateV1 interaction{};
+    const auto& services=rockServices();
+    const auto status=services.client.owner() && services.grab && services.grab->getHandInteractionStateV1?
+     services.grab->getHandInteractionStateV1(owner,hand,&interaction):rock::api::Status::NotReady;
+    if(status!=rock::api::Status::Ok ||
+       !(interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlagV1::Valid))) {
+     // One report per explicit equipment action, never per input/render frame.
+     spdlog::warn("PALM equipment hand query rejected: weapon={:08X} hand={} status={} flags={:X} owner={:016X} inputThread={} taskThread={} frame={} generations[world,skeleton,provider]=[{},{},{}]",
+      selected.id,hand==rock::api::Hand::Left?"left":"right",static_cast<unsigned>(status),interaction.flags,owner,
+      inputThread,GetCurrentThreadId(),interaction.frameIndex,interaction.worldGeneration,interaction.skeletonGeneration,interaction.providerGeneration);
+     return "Hand state unavailable";
+    }
     constexpr auto loose=static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlagV1::LooseObject)|
      static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlagV1::LooseWeapon);
     // LooseObject is also set for a merely highlighted world object. Only an
