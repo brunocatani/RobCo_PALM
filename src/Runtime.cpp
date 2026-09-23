@@ -49,7 +49,6 @@ struct RuntimeState {
  // Borrowed for the loaded plugin's process lifetime; queried on the game
  // input callback thread, where Virtual Holsters owns its zone updates.
  VirtualHolstersAPI* holsters{};
- bool holstersUnavailable{};
  const rpsui::sdk::InputApiV1* inputApi{};
  std::uint64_t inputToken{};
  std::atomic_bool rockReady{false},clickRequested{false};
@@ -356,12 +355,10 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
    anyDown |= (frame->hands[hand].pressed&masks.buttons[hand])!=0;
   }
   std::array<bool,2> inHolster{};
-  bool holstersReady=!s.holstersUnavailable;
-  if(s.holsters) {
-   holstersReady=s.holsters->IsInitialized();
-   if(holstersReady)for(unsigned hand=0;hand<2;++hand)
-    if(masks.buttons[hand])inHolster[hand]=s.holsters->IsHandInHolsterZone(hand==0);
-  }
+  // Optional provider readiness gates only its zone queries, never the wheel.
+  const bool holstersReady=s.holsters && s.holsters->IsInitialized();
+  if(holstersReady)for(unsigned hand=0;hand<2;++hand)
+   if(masks.buttons[hand])inHolster[hand]=s.holsters->IsHandInHolsterZone(hand==0);
   bool bipodAllows=true;
   rock::api::weapon::EquippedWeaponStateV1 weapon;
   int weaponStatus=-1;
@@ -380,7 +377,7 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
     (interactionStatus[hand]=static_cast<int>(rockServices().grab->getHandInteractionStateV1(s.owner,physical,&interaction)))==static_cast<int>(rock::api::Status::Ok) &&
     triggerEquipAllowsOpening(interaction,s.rockFrame,physical);
   }
-  const bool openingAllowed=bipodAllows && triggerEquipAllows && holstersReady && openingInputAllowed(masks,pressed,handValid,inHolster);
+  const bool openingAllowed=bipodAllows && triggerEquipAllows && openingInputAllowed(masks,pressed,handValid,inHolster);
   const bool openingBlocked=rockyOwnsInput || (!s.gesture.open && !openingAllowed);
   const bool ownedBefore=s.gesture.ownsInput();
   std::optional<Action> clicked;
@@ -506,8 +503,8 @@ bool startRuntime() {
  s.rockLoaded=GetModuleHandleW(L"ROCK.dll")!=nullptr;
  s.holsters=RequestVirtualHolstersAPI();
  if(s.holsters && s.holsters->GetVersion()!=1)s.holsters=nullptr;
- s.holstersUnavailable=GetModuleHandleW(L"VirtualHolsters.dll") && !s.holsters;
- if(s.holstersUnavailable)spdlog::error("PALM opening disabled: loaded Virtual Holsters has no supported zone API");
+ if(GetModuleHandleW(L"VirtualHolsters.dll") && !s.holsters)
+  spdlog::warn("PALM Virtual Holsters zone guard disabled: loaded provider has no supported zone API; wheel input remains available");
  else spdlog::info("PALM Virtual Holsters zone guard: {}",s.holsters?"available":"provider absent");
  (void)takePointerAimChange();if(!publishPointerAim())return false;
  if(rockServices().connect()) {
