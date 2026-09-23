@@ -166,10 +166,25 @@ namespace rock_configurator
 
         const auto start = std::chrono::steady_clock::now();
 
+        // FO4VR SortAndLoadPluginsFromPluginsFile (0x14011FAA0) orders files;
+        // CompileFiles (0x14011E8E0) consumes that list with activeFile last.
+        // Daytripper's ConstructObjectListForFiles preserves this same sequence.
+        // Copy filename ranks here; never retain the engine's file pointers.
+        std::unordered_map<std::string, std::size_t> loadOrderByName;
+        const auto* activeFile = dataHandler->activeFile;
+        for (const auto* file : dataHandler->files) {
+            if (file && file != activeFile && file->filename[0] != '\0') {
+                loadOrderByName.try_emplace(file->filename, loadOrderByName.size());
+            }
+        }
+        if (activeFile && activeFile->filename[0] != '\0') {
+            loadOrderByName.insert_or_assign(activeFile->filename, loadOrderByName.size());
+        }
+
         // Build only the buckets represented by actual spawnable forms. The form's
-        // original owning file supplies its display name, while the runtime FormID
-        // supplies the load-order key. This intentionally avoids loader-specific
-        // compiled-file collections and remains valid for both full and light files.
+        // original owning file supplies its name and engine position. Runtime
+        // FormIDs supply identity only: their full/light indices cannot encode
+        // the combined load order. No loader-specific compiled collections are used.
         std::unordered_map<std::uint32_t, std::size_t> slotByKey;
         _plugins.clear();
 
@@ -199,10 +214,18 @@ namespace rock_configurator
                 const auto key = spawn_plugin_identity::pluginKeyFromFormId(formId);
                 auto [slot, inserted] = slotByKey.try_emplace(key, _plugins.size());
                 if (inserted) {
+                    const auto order = loadOrderByName.find(owner->filename);
+                    if (order == loadOrderByName.end()) {
+                        _lastResult = std::format("Engine load order unavailable for {}; spawn index not built", utf8SafeName(owner->filename));
+                        logger::warn("PALM Config spawn: owner '{}' (key {:08X}) missing from engine file order; index build skipped.",
+                            owner->filename, key);
+                        _plugins.clear();
+                        return false;
+                    }
                     _plugins.push_back(PluginRecord{
                         .name = utf8SafeName(owner->filename),
                         .items = {},
-                        .key = key,
+                        .loadOrder = order->second,
                     });
                 }
                 _plugins[slot->second].items.push_back(ItemRecord{
@@ -214,10 +237,7 @@ namespace rock_configurator
             }
         }
 
-        // Canonical load order regardless of how the engine arrays were iterated:
-        // regular plugins ascending by compile index, then light plugins ascending
-        // by small-file index (their keys carry the 0xFE000000 prefix).
-        std::ranges::sort(_plugins, [](const PluginRecord& lhs, const PluginRecord& rhs) { return lhs.key < rhs.key; });
+        std::ranges::sort(_plugins, {}, &PluginRecord::loadOrder);
         for (auto& plugin : _plugins) {
             std::ranges::sort(plugin.items, [](const ItemRecord& lhs, const ItemRecord& rhs) {
                 return nameLessCaseInsensitive(lhs.name, rhs.name);
@@ -234,7 +254,7 @@ namespace rock_configurator
         const auto elapsedMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
         _lastResult = std::format("Indexed {} items from {} plugins", itemCount, _plugins.size());
         logger::info(
-            "PALM Config spawn: indexed {} named items across {} plugins in {:.1f} ms ({} forms skipped without an owning plugin file).",
+            "PALM Config spawn: indexed {} named items across {} plugins in engine load order in {:.1f} ms ({} forms skipped without an owning plugin file).",
             itemCount, _plugins.size(), elapsedMs, skippedUnowned);
         return true;
 #endif

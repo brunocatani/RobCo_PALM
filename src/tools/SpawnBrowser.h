@@ -38,7 +38,7 @@ namespace rock_configurator
         {
             std::string name;
             std::vector<ItemRecord> items;
-            std::uint32_t key{ 0 };
+            std::size_t loadOrder{ 0 };
         };
 
         struct MenuAction

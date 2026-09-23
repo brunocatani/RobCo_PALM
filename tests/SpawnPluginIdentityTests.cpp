@@ -1,5 +1,3 @@
-#include <algorithm>
-#include <array>
 #include <cstdint>
 #include <iostream>
 
@@ -41,23 +39,13 @@ namespace
             "FE runtime FormIDs are classified as light-plugin keys");
     }
 
-    void testRuntimeAndLoadOrderBoundaries()
+    void testRuntimeFormBoundaries()
     {
         using namespace rock_configurator::spawn_plugin_identity;
         expect(isRuntimeCreatedFormId(0xFF001234u),
             "FF runtime-created forms are excluded from plugin ownership");
         expect(!isRuntimeCreatedFormId(0xFEFFF123u),
             "light-plugin forms are not mistaken for runtime-created forms");
-
-        std::array<std::uint32_t, 4> keys{
-            pluginKeyFromFormId(0xFE010001u),
-            pluginKeyFromFormId(0x0A000001u),
-            pluginKeyFromFormId(0xFE001001u),
-            pluginKeyFromFormId(0xFD000001u),
-        };
-        std::ranges::sort(keys);
-        expect(keys == std::array<std::uint32_t, 4>{ 0x0Au, 0xFDu, 0xFE000001u, 0xFE000010u },
-            "numeric plugin keys sort full files before light files in load order");
     }
 }
 
@@ -65,7 +53,7 @@ int main()
 {
     testFullPluginIdentity();
     testLightPluginIdentity();
-    testRuntimeAndLoadOrderBoundaries();
+    testRuntimeFormBoundaries();
     if (failures != 0) {
         std::cerr << failures << " spawn plugin identity assertion(s) failed.\n";
         return 1;
