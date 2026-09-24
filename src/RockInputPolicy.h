@@ -1,8 +1,16 @@
 #pragma once
 #include "RockFrame.h"
+#include <ROCK/InputV1_1.h>
 #include <array>
 
 namespace wheel {
+inline bool decorationAllowsOpening(const rock::api::input::v1_1::DecorationState& state,
+ const wheel::RockFrame& frame) {
+ using Flag=rock::api::input::v1_1::DecorationFlag;
+ return state.sample.frameIndex==frame.frameIndex && state.sample.worldGeneration==frame.worldGeneration &&
+  state.sample.skeletonGeneration==frame.skeletonGeneration && state.sample.providerGeneration==frame.providerGeneration &&
+  !(state.flags&static_cast<std::uint32_t>(Flag::InputReserved));
+}
 // ROCK owns the enabled setting and contact/latch decision. A failed or stale
 // query cannot grant an opening click against an active provider.
 inline bool bipodAllowsOpening(const rock::api::weapon::EquippedWeaponStateV1& weapon,

@@ -377,7 +377,13 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
     (interactionStatus[hand]=static_cast<int>(rockServices().grab->getHandInteractionStateV1(s.owner,physical,&interaction)))==static_cast<int>(rock::api::Status::Ok) &&
     triggerEquipAllowsOpening(interaction,s.rockFrame,physical);
   }
-  const bool openingAllowed=bipodAllows && triggerEquipAllows && openingInputAllowed(masks,pressed,handValid,inHolster);
+  bool decorationAllows=true;
+  if(rockReady && (masks.buttons[1]&(1ull<<32)) && rockServices().decorationInput) {
+   rock::api::input::v1_1::DecorationState decoration;
+   decorationAllows=rockServices().decorationInput->getDecorationState(s.owner,&decoration)==rock::api::Status::Ok &&
+    decorationAllowsOpening(decoration,s.rockFrame);
+  }
+  const bool openingAllowed=bipodAllows && decorationAllows && triggerEquipAllows && openingInputAllowed(masks,pressed,handValid,inHolster);
   const bool openingBlocked=rockyOwnsInput || (!s.gesture.open && !openingAllowed);
   const bool ownedBefore=s.gesture.ownsInput();
   std::optional<Action> clicked;
