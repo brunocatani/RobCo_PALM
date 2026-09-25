@@ -4,9 +4,9 @@
 #include <array>
 
 namespace wheel {
-inline bool decorationAllowsOpening(const rock::api::input::v1_1::DecorationState& state,
+inline bool placementAllowsOpening(const rock::api::input::v1_1::PlacementClickState& state,
  const wheel::RockFrame& frame) {
- using Flag=rock::api::input::v1_1::DecorationFlag;
+ using Flag=rock::api::input::v1_1::PlacementClickFlag;
  return state.sample.frameIndex==frame.frameIndex && state.sample.worldGeneration==frame.worldGeneration &&
   state.sample.skeletonGeneration==frame.skeletonGeneration && state.sample.providerGeneration==frame.providerGeneration &&
   !(state.flags&static_cast<std::uint32_t>(Flag::InputReserved));

@@ -12,10 +12,10 @@ bool RockServices::connect() {
         if(status!=Status::Ok) spdlog::error("PALM ROCK owner cleanup failed: {}",static_cast<unsigned>(status));
         return false;
     }
-    // Input 1.1 is optional on older ROCK builds, which have no decoration
+    // Input 1.1 is optional on older ROCK builds, which have no held-placement
     // reservation. Negotiate its size/minor before reading the appended slot.
-    decorationInput=nullptr;
-    (void)client.acquire(1,decorationInput);
+    placementInput=nullptr;
+    (void)client.acquire(1,placementInput);
     // Gesture support is optional; input and animation must both be available.
     if(client.acquire(1,input)==Status::Ok) (void)client.acquire(2,animation);
     return true;

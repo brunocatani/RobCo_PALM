@@ -135,18 +135,18 @@ int main(){try {
  }
  {
   wheel::RockFrame frame;frame.frameIndex=5;frame.worldGeneration=1;frame.skeletonGeneration=2;frame.providerGeneration=3;
-  rock::api::input::v1_1::DecorationState decoration;
+  rock::api::input::v1_1::PlacementClickState decoration;
   decoration.sample.frameIndex=frame.frameIndex;decoration.sample.worldGeneration=frame.worldGeneration;
   decoration.sample.skeletonGeneration=frame.skeletonGeneration;decoration.sample.providerGeneration=frame.providerGeneration;
-  check(decorationAllowsOpening(decoration,frame),"inactive decoration blocked PALM");
-  decoration.flags=static_cast<std::uint32_t>(rock::api::input::v1_1::DecorationFlag::InputReserved);
-  check(!decorationAllowsOpening(decoration,frame),"decoration click opened PALM");
+  check(placementAllowsOpening(decoration,frame),"inactive decoration blocked PALM");
+  decoration.flags=static_cast<std::uint32_t>(rock::api::input::v1_1::PlacementClickFlag::InputReserved);
+  check(!placementAllowsOpening(decoration,frame),"decoration click opened PALM");
   gesture={};
   gesture.update(true,controls,false,false,false,0,true);
   gesture.update(true,controls,true,true,false,1,false);
   check(gesture.update(true,controls,false,false,false,2,false)==ControlEdge::None,"decoration release replayed in PALM");
   decoration.flags=0;--decoration.sample.frameIndex;
-  check(!decorationAllowsOpening(decoration,frame),"stale decoration state allowed PALM capture");
+  check(!placementAllowsOpening(decoration,frame),"stale decoration state allowed PALM capture");
   gesture={};
  }
  check(isPlainStickClick(controls),"default is not a plain physical stick click");
