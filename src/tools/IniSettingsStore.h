@@ -56,7 +56,7 @@ namespace rock_configurator
         explicit IniSettingsStore(std::filesystem::path path = {}, RpsMod mod = RpsMod::Rock,
             const rock::api::configuration::ApiV1* api = nullptr, std::filesystem::path catalogPath = {}, rock::api::OwnerToken owner = 0) :
             _path(std::move(path)), _catalogPath(std::move(catalogPath)), _mod(mod), _configurationApi(api), _configurationOwner(owner),
-            _useRockApi(api || (_path.empty() && (mod == RpsMod::Rock || mod == RpsMod::RockDeveloper))) {}
+            _useRockApi(api || (_path.empty() && isRockConfiguration(mod))) {}
 
         [[nodiscard]] bool load();
         [[nodiscard]] bool reload();

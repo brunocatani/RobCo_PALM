@@ -1,12 +1,15 @@
 #include "PCH.h"
 #include "RockServices.h"
+#include "tools/LoadedRpsMods.h"
 namespace wheel {
 RockServices& rockServices() { static auto* service=new RockServices(); return *service; }
 bool RockServices::connect() {
-    const auto module=GetModuleHandleA("ROCK.dll");
+    const auto variant=rock_configurator::loadedRockMod();
+    const auto module=variant?GetModuleHandleW(rock_configurator::modInfo(*variant).module):nullptr;
     const auto query=module?reinterpret_cast<rock::api::QueryInterfaceV1>(GetProcAddress(module,rock::api::kQueryExportName)):nullptr;
     using rock::api::Status;
     if (client.connect(query,"RobCo PALM")!=Status::Ok) return false;
+    spdlog::info("PALM connected to {}",rock_configurator::modInfo(*variant).name);
     if (client.acquire(3,grab)!=Status::Ok || client.acquire(1,weapon)!=Status::Ok || client.acquire(1,hands)!=Status::Ok) {
         const auto status=client.close();
         if(status!=Status::Ok) spdlog::error("PALM ROCK owner cleanup failed: {}",static_cast<unsigned>(status));

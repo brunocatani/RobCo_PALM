@@ -89,6 +89,12 @@ int main()
         ValueType::String, "sLogPattern", "%Y [%l] %v", "");
     expect(freeText.kind == Kind::Text,
         "genuinely free-form ROCK strings remain text controls");
+    const auto v2Paper = build(ValueType::String,"sAccess","ReadOnly","",rock_configurator::RpsMod::PaperV2);
+    expect(v2Paper.kind==Kind::Dropdown && v2Paper.options.size()==3,
+        "PAPER V2 keeps its configuration adapter's finite cache choices");
+    const auto v2Rock = build(ValueType::Float,"fManualScopeHoldSeconds","0.30","",rock_configurator::RpsMod::RockV2);
+    expect(v2Rock.bounded && near(v2Rock.minimum,bounded.minimum) && near(v2Rock.maximum,bounded.maximum),
+        "ROCK V2 catalog retains supported ROCK control semantics");
 
     expect(near(snapNumeric(bounded, 0.333), 0.33),
         "slider commits snap to their fine-tuning step");

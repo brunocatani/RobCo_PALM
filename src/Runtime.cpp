@@ -506,7 +506,7 @@ bool startRuntime() {
   spdlog::info("PALM settings path: {}",path.string());
  }else {spdlog::error("PALM Documents folder unavailable");return false;}
  s.controls=snapshotControls();setGestureIntegrationAvailable(false);
- s.rockLoaded=GetModuleHandleW(L"ROCK.dll")!=nullptr;
+ s.rockLoaded=rock_configurator::loadedRockMod().has_value();
  s.holsters=RequestVirtualHolstersAPI();
  if(s.holsters && s.holsters->GetVersion()!=1)s.holsters=nullptr;
  if(GetModuleHandleW(L"VirtualHolsters.dll") && !s.holsters)

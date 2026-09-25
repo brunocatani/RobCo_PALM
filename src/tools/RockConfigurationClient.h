@@ -1,6 +1,7 @@
 #pragma once
 #include <ROCK/Client.h>
 #include <ROCK/Configuration.h>
+#include "LoadedRpsMods.h"
 #ifndef WHEEL_DESKTOP_PREVIEW
 #include <Windows.h>
 #endif
@@ -10,14 +11,20 @@ struct ConfigurationConnection {
     rock::api::OwnerToken owner{};
     rock::api::Status status{rock::api::Status::NotReady};
 };
-inline ConfigurationConnection configurationConnection() noexcept {
+inline ConfigurationConnection configurationConnection(std::optional<RpsMod> requested = std::nullopt) noexcept {
 #ifndef WHEEL_DESKTOP_PREVIEW
-    // Process-lifetime registration shared by the consumer/developer pages.
+    const auto selected = requested ? requested : loadedRockMod();
+    if (!selected || !isRockConfiguration(*selected)) return {};
+    // Separate process-lifetime registrations for the two providers; each is
+    // shared only by that provider's consumer/developer pages.
     // Connection and visits are performed on the game thread.
-    static auto* client=new rock::api::Client();
-    static const rock::api::configuration::ApiV1* api{};
+    static auto* clients=new std::array<rock::api::Client, 2>();
+    static std::array<const rock::api::configuration::ApiV1*, 2> apis{};
+    const auto index = isV2Rock(*selected) ? 1u : 0u;
+    auto* client=&(*clients)[index];
+    auto& api=apis[index];
     if (!api) {
-        const auto module=GetModuleHandleA("ROCK.dll");
+        const auto module=GetModuleHandleW(modInfo(*selected).module);
         const auto query=module?reinterpret_cast<rock::api::QueryInterfaceV1>(GetProcAddress(module,rock::api::kQueryExportName)):nullptr;
         if(!client->owner()) {
             const auto status=client->connect(query,"RobCo PALM Configuration");

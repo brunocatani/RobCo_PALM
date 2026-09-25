@@ -382,6 +382,7 @@ namespace rock_configurator::setting_control
         std::string_view description,
         RpsMod mod)
     {
+        mod = configurationFamily(mod);
         if (mod != RpsMod::Rock && mod != RpsMod::RockDeveloper) {
             if (type == ValueType::Boolean) return { .kind = Kind::Checkbox };
             if (mod == RpsMod::Paper && key == "sMaximumMode")

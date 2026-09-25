@@ -19,6 +19,20 @@ namespace
     std::string grenadeMode = "false";
     bool publishGrenade = true;
     bool grenadeVisitSucceeds = true;
+    std::string v2Written;
+    Status currentV2Revision(rock::api::OwnerToken owner,std::uint64_t* out) noexcept {
+        if(owner!=2)return Status::OwnerNotRegistered; *out=1; return Status::Ok;
+    }
+    Status visitV2(rock::api::OwnerToken owner,Group group, VisitorV1 callback, void* context) noexcept {
+        if(owner!=2)return Status::OwnerNotRegistered;
+        if(group!=Group::Developer)return Status::NotReady;
+        const SettingV1 value{"Debug","bDeveloperModeEnabled","true","false","Developer","V2 provider",ValueType::Boolean,1};
+        callback(&value,context);return Status::Ok;
+    }
+    Status setV2(rock::api::OwnerToken owner,Group group,const char*,const char*,const char* value,char*,std::uint32_t) noexcept {
+        if(owner!=2 || group!=Group::Developer)return Status::OwnerNotRegistered;
+        v2Written=value;return Status::Ok;
+    }
     Status visitGrenade(rock::api::OwnerToken owner,Group group, VisitorV1 callback, void* context) noexcept
     {
         if(owner!=1)return Status::OwnerNotRegistered;
@@ -72,6 +86,14 @@ int main()
 {
     using namespace rock_configurator;
     try {
+        require(!selectLoadedRock(false,false), "absent ROCK fabricated an integration");
+        require(selectLoadedRock(true,false)==RpsMod::Rock, "released-only selection failed");
+        require(selectLoadedRock(false,true)==RpsMod::RockV2, "V2-only selection failed");
+        require(selectLoadedRock(true,true)==RpsMod::RockV2, "combined presence selected inconsistent integration");
+        require(std::wstring_view(modInfo(RpsMod::RockV2).module)==L"ROCK_V2.dll" &&
+            std::wstring_view(modInfo(RpsMod::PaperV2).module)==L"PAPER_V2.dll", "V2 pages used released module identities");
+        require(std::string_view(modInfo(RpsMod::PaperV2).directory)!=modInfo(RpsMod::Paper).directory,
+            "PAPER variants shared a configuration directory");
         const rock::api::configuration::ApiV1 grenadeApi{currentRevision, visitGrenade, nullptr};
         require(wheel::immersiveGrenadesEnabled(&grenadeApi,1) == false, "disabled immersive grenades did not select vanilla mode");
         grenadeMode = "true";
@@ -124,6 +146,15 @@ int main()
             "consumer menu used disk order instead of the provider catalog");
         require(consumer.settings()[0].category == "01. Logging" && consumer.settings()[1].category == "04. Weapon Handling" &&
             consumer.settings()[0].description == "Log detail", "old INI comments replaced compiled section labels or help");
+        const rock::api::configuration::ApiV1 v2Api{currentV2Revision,visitV2,setV2};
+        IniSettingsStore v2Developer({},RpsMod::RockV2Developer,&v2Api,{},2);
+        require(v2Developer.load() && v2Developer.settings().size()==1 &&
+            v2Developer.settings()[0].description=="V2 provider", "V2 page did not use its own provider catalog/group");
+        require(v2Developer.path().filename()=="ROCK_V2_Developer.ini" &&
+            v2Developer.path().parent_path().filename()=="ROCK_V2", "V2 developer page resolved released paths");
+        written.clear();
+        require(v2Developer.setBooleanByIndex(0,false).saved && v2Written=="false" && written.empty(),
+            "V2 edit reached the released provider or failed to retain its owner");
         std::cout << "Wheel configuration bridge checks passed.\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

@@ -113,7 +113,10 @@ namespace rock_configurator
             ModSettings{IniSettingsStore({}, RpsMod::Paper)},
             ModSettings{IniSettingsStore({}, RpsMod::Scissors)},
             ModSettings{IniSettingsStore({}, RpsMod::RockDeveloper)},
-            ModSettings{IniSettingsStore({}, RpsMod::Csah)}
+            ModSettings{IniSettingsStore({}, RpsMod::Csah)},
+            ModSettings{IniSettingsStore({}, RpsMod::RockV2)},
+            ModSettings{IniSettingsStore({}, RpsMod::PaperV2)},
+            ModSettings{IniSettingsStore({}, RpsMod::RockV2Developer)}
         };
         std::size_t s_modIndex = 0;
         ModSettings& activeSettings() { return s_modSettings[s_modIndex]; }
@@ -280,8 +283,10 @@ namespace rock_configurator
                 else settings.loaded = false;
             }
             if (!activeSettings().available) {
-                for (std::size_t i = 0; i < s_modSettings.size(); ++i)
+                for (const auto mod : kRpsModDisplayOrder) {
+                    const auto i=static_cast<std::size_t>(mod);
                     if (s_modSettings[i].available) { s_modIndex = i; break; }
+                }
             }
             updateSettingsStatusLocked();
         }
@@ -1250,7 +1255,8 @@ namespace rock_configurator
                 ImGui::BeginChild("rps-mod-tabs", {0, 64});
                 ImGui::SetCursorPos({18, 4});
                 bool first = true;
-                for (const std::size_t i : {0u, 3u, 1u, 2u, 4u}) {
+                for (const auto mod : kRpsModDisplayOrder) {
+                    const auto i=static_cast<std::size_t>(mod);
                     if (!s_modSettings[i].available) continue;
                     if (!first) ImGui::SameLine(0, 12);
                     first = false;
@@ -1524,19 +1530,24 @@ namespace rock_configurator
 
     void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available,
         const rock::api::configuration::ApiV1* rockApi, const std::filesystem::path& csahPath,
-        const std::filesystem::path& csahCatalog)
+        const std::filesystem::path& csahCatalog, bool rockV2, bool paperV2)
     {
         std::scoped_lock lock(s_runtimeMutex);
         invalidateQueuedRuntimeActions();
         s_modIndex = 0;
         s_activeTab = ConfiguratorTab::Wheel;
-        s_modSettings[3] = ModSettings{IniSettingsStore({}, RpsMod::RockDeveloper, rockApi, {}, rockApi?1:0)};
-        s_modSettings[3].available = available[0] && (paths[0].empty() || rockApi != nullptr);
+        for (std::size_t i=0;i<s_modSettings.size();++i)
+            s_modSettings[i]=ModSettings{IniSettingsStore({},kRpsMods[i].id)};
+        const auto developer = rockV2 ? RpsMod::RockV2Developer : RpsMod::RockDeveloper;
+        const auto developerIndex = static_cast<std::size_t>(developer);
+        s_modSettings[developerIndex] = ModSettings{IniSettingsStore({}, developer, rockApi, {}, rockApi?1:0)};
+        s_modSettings[developerIndex].available = available[0] && (paths[0].empty() || rockApi != nullptr);
         s_modSettings[4] = ModSettings{IniSettingsStore(csahPath, RpsMod::Csah, nullptr, csahCatalog)};
         s_modSettings[4].available = !csahPath.empty() && !csahCatalog.empty();
         for (std::size_t i = 0; i < paths.size(); ++i) {
-            s_modSettings[i] = ModSettings{IniSettingsStore(paths[i], kRpsMods[i].id, i == 0 ? rockApi : nullptr, {}, rockApi?1:0)};
-            s_modSettings[i].available = available[i];
+            const std::size_t index = i==0 && rockV2 ? 5 : i==1 && paperV2 ? 6 : i;
+            s_modSettings[index] = ModSettings{IniSettingsStore(paths[i], kRpsMods[index].id, i == 0 ? rockApi : nullptr, {}, rockApi?1:0)};
+            s_modSettings[index].available = available[i];
         }
         s_providerInputReady.store(true);
         loadRpsSettingsLocked(false); // Read-only snapshot; preview saves are memory-only.

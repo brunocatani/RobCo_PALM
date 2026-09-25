@@ -251,7 +251,7 @@ namespace rock_configurator
 
     rock::api::configuration::Group IniSettingsStore::rockGroup() const noexcept
     {
-        return _mod == RpsMod::RockDeveloper ? rock::api::configuration::Group::Developer : rock::api::configuration::Group::Consumer;
+        return configurationFamily(_mod) == RpsMod::RockDeveloper ? rock::api::configuration::Group::Developer : rock::api::configuration::Group::Consumer;
     }
 
     bool IniSettingsStore::connectRockApi()
@@ -261,7 +261,7 @@ namespace rock_configurator
         if (!_configurationApi) { _useRockApi=false; return true; }
 #endif
         if (!_configurationApi) {
-            const auto connection=configurationConnection();
+            const auto connection=configurationConnection(_mod);
             _configurationApi=connection.api; _configurationOwner=connection.owner;
             _lastProviderStatus=connection.status;
         }

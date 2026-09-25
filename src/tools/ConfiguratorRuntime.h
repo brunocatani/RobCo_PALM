@@ -21,7 +21,7 @@ void onFrameworkPanelFrame(float physicalWidth, panel_resize::Handle hovered, pa
 void initializePreview(const std::filesystem::path& settingsPath = {});
 void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available,
     const rock::api::configuration::ApiV1* rockApi = nullptr, const std::filesystem::path& csahPath = {},
-    const std::filesystem::path& csahCatalog = {});
+    const std::filesystem::path& csahCatalog = {}, bool rockV2 = false, bool paperV2 = false);
 void setPreviewOpen(bool open);
 void drainPreviewActions();
 #endif
