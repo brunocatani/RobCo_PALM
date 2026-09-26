@@ -2,6 +2,7 @@
 #include "Inventory.h"
 #include "WheelConfig.h"
 #include "EquipmentIdentity.h"
+#include "Equipment.h"
 #include "ItemIconPolicy.h"
 #include <array>
 
@@ -44,6 +45,8 @@ std::optional<Category> classify(RE::TESBoundObject* object) {
 }
 namespace detail {
 Item equipmentItem(const RE::BGSInventoryItem& entry,const RE::BGSInventoryItem::Stack& stack,std::uint32_t index) {
+ // No base-name substitute: it could rebind two distinct saved variants.
+ if(!equipmentSupport().names)return {};
  Item result;result.id=entry.object->GetFormID();result.count=stack.GetCount();result.equipped=stack.IsEquipped();result.stackIndex=index;
  const auto* file=entry.object->GetFile(0);
  const auto base=file?stableItemKey(file->filename,result.id):std::string{};
@@ -77,6 +80,7 @@ Item equipmentItem(const RE::BGSInventoryItem& entry,const RE::BGSInventoryItem:
 }
 Model readInventory() {
  Model result;
+ result.equipmentNamesAvailable=equipmentSupport().names;
  auto* player=RE::PlayerCharacter::GetSingleton();
  if(!player || !player->inventoryList) {result.status="Inventory unavailable";return result;}
  {
@@ -87,6 +91,7 @@ Model readInventory() {
    const auto category=classify(entry.object);
    if(!category) continue;
    if(isEquipment(*category)) {
+    if(!result.equipmentNamesAvailable)continue;
     auto& items=result.items[static_cast<unsigned>(*category)];
     std::uint32_t index=0;
     for(auto* stack=entry.stackData.get();stack && index<4096;stack=stack->nextStack.get(),++index) {

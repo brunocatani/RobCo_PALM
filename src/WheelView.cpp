@@ -188,7 +188,8 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
   centered(draw,point(512,886),23*scale,green,hovered->name.c_str());
   centered(draw,point(512,920),16*scale,muted,!hovered->count?"NOT CURRENTLY CARRIED":isEquipment(model.category)?(hovered->equipped?"RELEASE TRIGGER OR GRAB TO UNEQUIP":"RELEASE TRIGGER OR GRAB TO EQUIP"):"RELEASE TRIGGER OR GRAB TO TAKE ONE");
  }else if(!showingItems)centered(draw,point(512,886),20*scale,muted,"Enable wheel sections in Config");
- else if(items.empty())centered(draw,point(512,886),20*scale,muted,"Choose your items in Config");
+ else if(items.empty())centered(draw,point(512,886),20*scale,muted,
+  isEquipment(model.category) && !model.equipmentNamesAvailable?"Equipment unavailable; saved choices are kept":"Choose your items in Config");
  centered(draw,point(512,960),14*scale,muted,model.status.c_str());
  ImGui::End();
  return action;

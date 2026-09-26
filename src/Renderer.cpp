@@ -80,7 +80,10 @@ bool installPanel() {
  std::snprintf(consumer.displayName,sizeof(consumer.displayName),"RobCo PALM");
  consumer.requestedFeatures=p.api->featureBits;
  rpsui::sdk::ConsumerHandleV1 handle;
- if(p.api->registerConsumer(&consumer,&handle)!=rpsui::sdk::ResultV1::Ok)return false;
+ const auto consumerResult=p.api->registerConsumer(&consumer,&handle);
+ if(consumerResult!=rpsui::sdk::ResultV1::Ok){
+  spdlog::error("PALM startup failed: wheel consumer registration rejected ({})",static_cast<unsigned>(consumerResult));return false;
+ }
  p.owner=handle.ownerToken;
  rpsui::sdk::PanelRegistrationV1 panel;
  std::snprintf(panel.panelId,sizeof(panel.panelId),"robco.palm.main");
@@ -90,7 +93,9 @@ bool installPanel() {
  panel.flags=static_cast<std::uint32_t>(rpsui::sdk::PanelFlagV1::Transparent)|
   static_cast<std::uint32_t>(rpsui::sdk::PanelFlagV1::FixedSize)|static_cast<std::uint32_t>(rpsui::sdk::PanelFlagV1::CircularInput);
  panel.sortOrder=300;panel.renderCallback=drawFrame;
- if(p.api->registerPanel(p.owner,&panel,&p.panel)!=rpsui::sdk::ResultV1::Ok) {
+ const auto panelResult=p.api->registerPanel(p.owner,&panel,&p.panel);
+ if(panelResult!=rpsui::sdk::ResultV1::Ok) {
+  spdlog::error("PALM startup failed: wheel panel registration rejected ({})",static_cast<unsigned>(panelResult));
   (void)p.api->unregisterConsumer(p.owner);p.owner=0;return false;
  }
  return true;

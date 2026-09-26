@@ -8,30 +8,71 @@
 
 namespace wheel {
 namespace {
-bool equipmentReady=false; // Initialized before registering the runtime callback.
-template<std::size_t N> bool matches(std::uintptr_t rva,const std::array<unsigned char,N>& bytes) {
- const auto address=REL::Offset(rva).address();
+EquipmentSupport support; // Immutable after startup, before any input/task readers.
+bool readBytes(std::uintptr_t address,void* out,std::size_t size) noexcept {
  MEMORY_BASIC_INFORMATION memory{};
- return VirtualQuery(reinterpret_cast<void*>(address),&memory,sizeof(memory)) && memory.State==MEM_COMMIT &&
+ if(!VirtualQuery(reinterpret_cast<void*>(address),&memory,sizeof(memory)) || memory.State!=MEM_COMMIT ||
+  (memory.Protect&(PAGE_GUARD|PAGE_NOACCESS)) ||
+  size>memory.RegionSize-(address-reinterpret_cast<std::uintptr_t>(memory.BaseAddress)))return false;
+ __try {std::memcpy(out,reinterpret_cast<const void*>(address),size);return true;}
+ __except(EXCEPTION_EXECUTE_HANDLER){return false;}
+}
+bool heisenbergTarget(std::uintptr_t address) noexcept {
+ MEMORY_BASIC_INFORMATION memory{};
+ constexpr DWORD executable=PAGE_EXECUTE|PAGE_EXECUTE_READ|PAGE_EXECUTE_READWRITE|PAGE_EXECUTE_WRITECOPY;
+ HMODULE owner{};
+ const auto heisenberg=GetModuleHandleW(L"Heisenberg_F4VR.dll");
+ return heisenberg && VirtualQuery(reinterpret_cast<void*>(address),&memory,sizeof(memory)) &&
+  memory.State==MEM_COMMIT && memory.Type==MEM_IMAGE && (memory.Protect&executable) &&
   !(memory.Protect&(PAGE_GUARD|PAGE_NOACCESS)) &&
-  address+N<=reinterpret_cast<std::uintptr_t>(memory.BaseAddress)+memory.RegionSize &&
-  std::memcmp(reinterpret_cast<const void*>(address),bytes.data(),N)==0;
+  GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+   reinterpret_cast<LPCWSTR>(address),&owner) && owner==heisenberg;
+}
+std::string hexBytes(std::span<const std::uint8_t> bytes) {
+ std::string result;
+ for(auto byte:bytes){if(!result.empty())result+=' ';result+=std::format("{:02X}",byte);}
+ return result;
+}
+template<std::size_t N> bool validateEntry(const char* name,std::uintptr_t rva,const std::array<std::uint8_t,N>& expected) {
+ std::array<std::uint8_t,N> actual{};
+ const auto address=REL::Offset(rva).address();
+ if(!readBytes(address,actual.data(),actual.size())) {
+  spdlog::warn("PALM native {} unavailable: unreadable entry at RVA {:X}; wheel remains available",name,rva);return false;
+ }
+ bool accepted=equipment_policy::prefixMatches(actual,expected);
+ if constexpr(N==equipment_policy::equipEntry.size()) {
+  std::uintptr_t destination{};
+  if(equipment_policy::heisenbergEquipJump(actual))std::memcpy(&destination,actual.data()+6,sizeof(destination));
+  const auto kind=equipment_policy::classifyEquipEntry(actual,destination && heisenbergTarget(destination));
+  accepted=kind!=equipment_policy::EquipEntry::Unavailable;
+  if(kind==equipment_policy::EquipEntry::Heisenberg) {
+   spdlog::info("PALM native {}: supported Heisenberg_F4VR.dll detour at {:X}; existing hook retained",name,destination);
+   return true;
+  }
+ }
+ if(accepted)spdlog::info("PALM native {} available at RVA {:X}",name,rva);
+ else spdlog::warn("PALM native {} unavailable at RVA {:X}: expected=[{}] actual=[{}]; wheel remains available",
+  name,rva,hexBytes(expected),hexBytes(actual));
+ return accepted;
 }
 }
-bool validateEquipmentRuntime() noexcept {
+void initializeEquipmentRuntime() noexcept {
+ support={};
  try {
-  // VR-only entrypoints; caller/callee disassembly recorded in the workspace audit.
-  equipmentReady=REL::Module::IsVR() && REL::Module::get().version()==F4SE::RUNTIME_VR_1_2_72 &&
-   matches(0xe6fea0,std::array<unsigned char,8>{0x4c,0x8b,0xdc,0x49,0x89,0x53,0x10,0x55}) &&
-   matches(0xe70280,std::array<unsigned char,8>{0x48,0x8b,0xc4,0x48,0x89,0x58,0x18,0x55}) &&
-   matches(0xc15f0,std::array<unsigned char,15>{0x48,0x89,0x5c,0x24,0x08,0x48,0x89,0x74,0x24,0x10,0x57,0x48,0x83,0xec,0x30});
-  spdlog::info("PALM equipment native entrypoint guards: {}",equipmentReady?"accepted":"rejected");
-  return equipmentReady;
- }catch(...){spdlog::error("PALM equipment entrypoint validation failed");return false;}
+  if(!REL::Module::IsVR() || REL::Module::get().version()!=F4SE::RUNTIME_VR_1_2_72) {
+   spdlog::error("PALM native inventory operations unavailable: unsupported runtime");return;
+  }
+  // Do not short-circuit: an equip conflict must not disable unequip or names.
+  support.equip=validateEntry("equip",0xe6fea0,equipment_policy::equipEntry);
+  support.unequip=validateEntry("unequip",0xe70280,equipment_policy::unequipEntry);
+  support.names=validateEntry("display names",0xc15f0,equipment_policy::nameEntry);
+  spdlog::info("PALM native capabilities: equip={} unequip={} names={}; menu startup continues",support.equip,support.unequip,support.names);
+ }catch(...){spdlog::error("PALM native capability initialization interrupted; unavailable operations stay disabled, wheel startup continues");}
 }
+EquipmentSupport equipmentSupport() noexcept {return support;}
 const char* toggleEquipment(const Item& selected,std::uint64_t owner,std::uint32_t inputThread) noexcept {
  try {
-  if(!equipmentReady)return "Equipment support unavailable";
+  if(!support.names)return "Equipment names unavailable; saved choices are preserved";
   auto* player=RE::PlayerCharacter::GetSingleton();
   if(!player || !player->inventoryList)return "Inventory unavailable";
   auto* object=RE::TESForm::GetFormByID<RE::TESBoundObject>(selected.id);
@@ -84,6 +125,7 @@ const char* toggleEquipment(const Item& selected,std::uint64_t owner,std::uint32
    }
   } // Never call the equipment manager while holding the inventory lock.
   if(!found)return "That equipment variant is no longer carried; update its Config selection";
+  if(!support.canToggle(equipped))return equipped?"Unequip unavailable: native function conflict":"Equip unavailable: native function conflict";
   auto* manager=RE::ActorEquipManager::GetSingleton();
   if(!manager)return "Equipment manager unavailable";
   RE::BGSObjectInstance objectInstance(object,instance.get());
@@ -99,7 +141,7 @@ const char* toggleEquipment(const Item& selected,std::uint64_t owner,std::uint32
 }
 const char* useInventoryItem(std::uint32_t id) noexcept {
  try {
-  if(!equipmentReady)return "Inventory actions unavailable";
+  if(!support.equip)return "Item use unavailable: native equip conflict";
   auto* player=RE::PlayerCharacter::GetSingleton();
   auto* object=RE::TESForm::GetFormByID<RE::TESBoundObject>(id);
   if(!player || !player->inventoryList || !object ||

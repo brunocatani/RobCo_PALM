@@ -33,6 +33,7 @@ struct Model {
  Category category{Category::Aid};
  std::array<bool,kCategoryCount> enabled{true,true,true,true,true};
  bool gesturesEnabled{true};
+ bool equipmentNamesAvailable{true};
  std::string status;
  GestureViewState gestures;
  SectionCatalog sections;

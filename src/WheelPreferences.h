@@ -41,6 +41,7 @@ inline std::string stableItemKey(std::string plugin,std::uint32_t form) {
 }
 inline Model curatedInventory(const Model& inventory,const Preferences& prefs) {
  Model result;result.category=inventory.category;result.status=inventory.status;result.enabled=prefs.enabled;result.gesturesEnabled=prefs.gesturesEnabled;
+ result.equipmentNamesAvailable=inventory.equipmentNamesAvailable;
  result.sections=inventory.sections;result.activeSection=inventory.activeSection;
  for(unsigned i=0;i<result.sections.count;++i)result.sections.sections[i].enabled=prefs.sectionEnabled(result.sections.sections[i].id);
  for(unsigned c=0;c<kCategoryCount;++c) {

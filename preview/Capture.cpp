@@ -75,7 +75,21 @@ int main(int argc, char** argv) {
   settle();
   const bool csahOnly = argc > 5 && std::string_view(argv[3]) == "--csah";
   const bool settingsOnly = argc > 3 && std::string_view(argv[3]) == "--settings-only";
-  if (csahOnly) {
+  const bool equipmentUnavailable = argc > 3 && std::string_view(argv[3]) == "--equipment-unavailable";
+  if (equipmentUnavailable) {
+   auto inventory=wheel::demoInventory();wheel::Preferences preferences;
+   for(const unsigned category:{0u,3u,4u}) {
+    const auto& item=inventory.items[category].front();
+    preferences.select(category,{item.key,item.name},true);
+   }
+   inventory.equipmentNamesAvailable=false;inventory.items[3].clear();inventory.items[4].clear();
+   wheel::restoreWheelPreferences(preferences);wheel::publishWheelInventory(inventory);
+   wheelModel=wheel::selectedWheelInventory(inventory);wheelModel.category=wheel::Category::Weapons;
+   showWheel=true;save(L"equipment-unavailable-wheel.png");
+   wheelModel.category=wheel::Category::Aid;save(L"equipment-unavailable-aid.png");
+   showWheel=false;click(100,367);save(L"equipment-unavailable-config.png");
+   tab(1);save(L"equipment-unavailable-settings.png");
+  } else if (csahOnly) {
    rock_configurator::initializeRpsPreview({}, {false,false,false}, nullptr, argv[4], argv[5]);
    rock_configurator::setPreviewOpen(true);settle();
    tab(2);save(L"csah-settings.png");

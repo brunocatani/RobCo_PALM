@@ -487,7 +487,7 @@ void beginGameLoad() {
 }
 void finishGameLoad(bool success){state().sessionReady=success;}
 bool startRuntime() {
- if(!validateEquipmentRuntime())return false;
+ initializeEquipmentRuntime();
  if(!installPanel())return false;
  struct RegistrationRollback {
   bool complete{};
@@ -498,7 +498,9 @@ bool startRuntime() {
 
  auto& s=state();
  s.inputApi=rpsui::sdk::RequestInputApiV1();
- if(!s.inputApi || !s.inputApi->subscribe || !s.inputApi->capture || !s.inputApi->unsubscribe || !s.inputApi->setPointerAim)return false;
+ if(!s.inputApi || !s.inputApi->subscribe || !s.inputApi->capture || !s.inputApi->unsubscribe || !s.inputApi->setPointerAim) {
+  spdlog::error("PALM startup failed: RPS UI independent input API unavailable");return false;
+ }
  PWSTR documents{};
  if(SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents,0,nullptr,&documents))) {
   const auto path=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"Mods_Config"/"RobCo_PALM"/"PALM.ini";
@@ -512,7 +514,9 @@ bool startRuntime() {
  if(GetModuleHandleW(L"VirtualHolsters.dll") && !s.holsters)
   spdlog::warn("PALM Virtual Holsters zone guard disabled: loaded provider has no supported zone API; wheel input remains available");
  else spdlog::info("PALM Virtual Holsters zone guard: {}",s.holsters?"available":"provider absent");
- (void)takePointerAimChange();if(!publishPointerAim())return false;
+ (void)takePointerAimChange();if(!publishPointerAim()) {
+  spdlog::error("PALM startup failed: RPS UI rejected pointer calibration");return false;
+ }
  if(rockServices().connect()) {
   s.owner=rockServices().client.owner();
   if(rockServices().animation && rockServices().input)s.handGestures.initialize();
@@ -520,7 +524,8 @@ bool startRuntime() {
  if(s.rockLoaded && !s.owner)
   spdlog::warn("ROCK integration unavailable; PALM trigger bindings wait for held-weapon state, other bindings and vanilla items remain available");
  s.inputToken=s.inputApi->subscribe(onFrame,nullptr);
- if(!s.inputToken){if(s.owner)(void)rockServices().client.close();s.owner=0;return false;}
+ if(!s.inputToken){if(s.owner)(void)rockServices().client.close();s.owner=0;
+  spdlog::error("PALM startup failed: RPS UI input subscription rejected");return false;}
  rollback.complete=true;
  spdlog::info("PALM standalone input registered; optional ROCK owner={}, controls={}",s.owner,bindingText(s.controls));
  return true;

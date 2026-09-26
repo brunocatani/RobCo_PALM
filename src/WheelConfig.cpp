@@ -138,6 +138,8 @@ void drawWheelConfig() {
  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{26,24});
  ImGui::BeginChild("wheel-category-content",{0,0},ImGuiChildFlags_AlwaysUseWindowPadding);
  visual::heading(categoryName(static_cast<Category>(s.category)), "Choose up to eight items for this category.");
+ const bool namesUnavailable=isEquipment(static_cast<Category>(s.category)) && !s.inventory.equipmentNamesAvailable;
+ if(namesUnavailable){visual::Font font(render::FontRole::Body,18);ImGui::TextWrapped("Equipment names are unavailable this session. Your saved choices are kept; other PALM features remain available.");ImGui::Dummy({0,8});}
  if(!s.prefs.enabled[s.category]){visual::Font font(render::FontRole::Body,18);ImGui::TextColored(visual::muted(),"Hidden from the wheel. Enable it in PALM settings.");ImGui::Dummy({0,8});}
  auto& favorites=s.prefs.slots[s.category];const auto& catalog=s.inventory.items[s.category];
  const float searchWidth=(std::max)(220.0f,ImGui::GetContentRegionAvail().x-280);
@@ -168,7 +170,7 @@ void drawWheelConfig() {
    ImGui::TableSetColumnIndex(1);
    if(available && equipment){visual::Font font(render::FontRole::Medium,20);ImGui::TextColored(equipped?visual::accent():visual::muted(),"%s",equipped?"Equipped":"In inventory");}
    else if(available)ImGui::TextColored(visual::muted(),"%u",carried);
-   else {visual::Font font(render::FontRole::Body,16);ImGui::TextDisabled("Not carried");}
+   else {visual::Font font(render::FontRole::Body,16);ImGui::TextDisabled("%s",namesUnavailable?"Unavailable":"Not carried");}
    if(changed && s.prefs.select(s.category,{std::string(key),std::string(name)},selected))s.changed=true;
    ImGui::PopID();return changed;
   };
