@@ -116,7 +116,8 @@ namespace rock_configurator
             ModSettings{IniSettingsStore({}, RpsMod::Csah)},
             ModSettings{IniSettingsStore({}, RpsMod::RockV2)},
             ModSettings{IniSettingsStore({}, RpsMod::PaperV2)},
-            ModSettings{IniSettingsStore({}, RpsMod::RockV2Developer)}
+            ModSettings{IniSettingsStore({}, RpsMod::RockV2Developer)},
+            ModSettings{IniSettingsStore({}, RpsMod::Diamond)}
         };
         std::size_t s_modIndex = 0;
         ModSettings& activeSettings() { return s_modSettings[s_modIndex]; }
@@ -1253,6 +1254,8 @@ namespace rock_configurator
             const auto tab = s_activeTab.load(std::memory_order_acquire);
             if (tab == ConfiguratorTab::Settings) {
                 ImGui::BeginChild("rps-mod-tabs", {0, 64});
+                const auto visible=static_cast<float>(std::count_if(s_modSettings.begin(),s_modSettings.end(),[](const auto& settings){return settings.available;}));
+                const float chipWidth=(std::min)(156.f,(ImGui::GetContentRegionAvail().x-36.f-12.f*(std::max)(0.f,visible-1.f))/(std::max)(1.f,visible));
                 ImGui::SetCursorPos({18, 4});
                 bool first = true;
                 for (const auto mod : kRpsModDisplayOrder) {
@@ -1260,7 +1263,7 @@ namespace rock_configurator
                     if (!s_modSettings[i].available) continue;
                     if (!first) ImGui::SameLine(0, 12);
                     first = false;
-                    if (tabChip(kRpsMods[i].name, s_modIndex == i, {156, 52}))
+                    if (tabChip(kRpsMods[i].name, s_modIndex == i, {chipWidth, 52}))
                         (void)queueUiAction({.kind = RuntimeActionKind::UiSelectMod, .index = i});
                 }
                 if (first) ImGui::TextUnformatted("No supported RPS mods are loaded.");

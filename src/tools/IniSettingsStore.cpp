@@ -1,5 +1,6 @@
 #include "RockConfigurationClient.h"
 #include "IniSettingsStore.h"
+#include <DIAMOND/Configuration.h>
 
 #include <ShlObj.h>
 
@@ -222,6 +223,10 @@ namespace rock_configurator
         setting.numericValueValid = false;
         if (_mod != RpsMod::Csah) {
             if (!setting.fromRockApi) setting.type = inferType(setting.value);
+            if(_mod==RpsMod::Diamond)if(const auto* entry=diamond::configuration::find(setting.key);entry&&setting.section==entry->section) {
+                setting.type=entry->boolean?SettingType::Boolean:SettingType::Float;
+                setting.label=entry->label;setting.defaultValue=entry->defaultValue;
+            }
             setting.control = setting_control::build(
                 controlValueType(setting.type),
                 setting.key,
@@ -835,10 +840,18 @@ namespace rock_configurator
             line = previousLine;
             setting = previousSetting;
         }
+        std::string message=saved?"saved":_lastError;
+#ifndef WHEEL_DESKTOP_PREVIEW
+        if(saved&&_mod==RpsMod::Diamond) {
+            const auto module=GetModuleHandleW(modInfo(RpsMod::Diamond).module);
+            const auto reload=module?reinterpret_cast<diamond::configuration::ReloadSettings>(GetProcAddress(module,diamond::configuration::kReloadExport)):nullptr;
+            message=reload&&reload()?"saved and applied":"saved; DIAMOND could not apply live—check DIAMOND.log or restart";
+        }
+#endif
         return {
             .changed = true,
             .saved = saved,
-            .message = saved ? "saved" : _lastError,
+            .message = std::move(message),
             .setting = setting,
         };
     }

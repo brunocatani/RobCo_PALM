@@ -1,4 +1,5 @@
 #include "RockSettingControlPolicy.h"
+#include <DIAMOND/Configuration.h>
 
 #include <algorithm>
 #include <array>
@@ -383,6 +384,10 @@ namespace rock_configurator::setting_control
         RpsMod mod)
     {
         mod = configurationFamily(mod);
+        if(mod==RpsMod::Diamond)if(const auto* setting=diamond::configuration::find(key)) {
+            if(setting->boolean)return {.kind=Kind::Checkbox};
+            return {.kind=Kind::Numeric,.bounded=true,.minimum=setting->minimum,.maximum=setting->maximum,.step=setting->step};
+        }
         if (mod != RpsMod::Rock && mod != RpsMod::RockDeveloper) {
             if (type == ValueType::Boolean) return { .kind = Kind::Checkbox };
             if (mod == RpsMod::Paper && key == "sMaximumMode")
