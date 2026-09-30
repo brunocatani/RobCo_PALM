@@ -845,7 +845,7 @@ namespace rock_configurator
         if(saved&&_mod==RpsMod::Diamond) {
             const auto module=GetModuleHandleW(modInfo(RpsMod::Diamond).module);
             const auto reload=module?reinterpret_cast<diamond::configuration::ReloadSettings>(GetProcAddress(module,diamond::configuration::kReloadExport)):nullptr;
-            message=reload&&reload()?"saved and applied":"saved; DIAMOND could not apply live—check DIAMOND.log or restart";
+            message=reload&&reload()?"saved; applying on next frame":"saved; DIAMOND could not apply live—check DIAMOND.log or restart";
         }
 #endif
         return {
