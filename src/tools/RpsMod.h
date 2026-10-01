@@ -23,7 +23,7 @@ inline constexpr std::array kRpsMods{
  RpsModInfo{RpsMod::RockV2,"ROCK V2",L"ROCK_V2.dll","Mods_Config/ROCK_V2","ROCK_V2.ini","Consumer options are saved by ROCK V2 to ROCK_V2.ini"},
  RpsModInfo{RpsMod::PaperV2,"PAPER V2",L"PAPER_V2.dll","Mods_Config/PAPER_V2","PAPER_V2.ini","Changes are saved for PAPER V2's configuration watcher"},
  RpsModInfo{RpsMod::RockV2Developer,"ROCK V2 Dev",L"ROCK_V2.dll","Mods_Config/ROCK_V2","ROCK_V2_Developer.ini","Only changes from defaults are saved by ROCK V2 to ROCK_V2_Developer.ini"},
- RpsModInfo{RpsMod::Diamond,"DIAMOND",L"DIAMOND.dll","Mods_Config/DIAMOND","DIAMOND.ini","Pouch position, pickup area and vibration apply immediately and save to DIAMOND.ini"}
+ RpsModInfo{RpsMod::Diamond,"DIAMOND",L"DIAMOND.dll","Mods_Config/DIAMOND","DIAMOND.ini","Ammo HUD position, pouch position, pickup area and vibration apply immediately and save to DIAMOND.ini"}
 };
 inline constexpr const RpsModInfo& modInfo(RpsMod mod){return kRpsMods[static_cast<std::size_t>(mod)];}
 inline constexpr std::array kRpsModDisplayOrder{
