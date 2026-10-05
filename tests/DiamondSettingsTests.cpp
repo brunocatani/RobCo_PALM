@@ -31,14 +31,24 @@ int main(int argc,char** argv) {
     const auto hud=store.indexForId("AmmoHUD.fOffsetOutwardGame");assert(hud&&store.isSlider(*hud));
     assert(store.settings()[*hud].control.minimum==-30&&store.settings()[*hud].control.maximum==30);
     assert(store.setNumericByIndex(*hud,8.5).saved);
+    const std::array<std::pair<const char*,double>,6> indicatorSettings{{
+        {"fIndicatorRightGame",2.5},{"fIndicatorUpGame",-3},{"fIndicatorOutwardGame",10},
+        {"fIndicatorTiltDegrees",15},{"fIndicatorTurnDegrees",25},{"fIndicatorRollDegrees",35}}};
+    for(const auto& [key,value]:indicatorSettings){
+        const auto index=store.indexForId(std::string("PouchUI.")+key);assert(index&&store.isSlider(*index));
+        assert(store.setNumericByIndex(*index,value).saved&&store.settings()[*index].numericValue==value);
+    }
+    const auto facePlayer=store.indexForId("PouchUI.bIndicatorFacePlayer");assert(facePlayer&&store.setBooleanByIndex(*facePlayer,false).saved);
 #ifdef WHEEL_DESKTOP_PREVIEW
     assert(calls()==0&&read()==before);
 #else
-    assert(calls()==4);const auto saved=read();assert(saved.find("fUpGame = 12.5")!=std::string::npos);
+    assert(calls()==11);const auto saved=read();assert(saved.find("fUpGame = 12.5")!=std::string::npos);
     assert(saved.find("fOffsetOutwardGame = 8.5")!=std::string::npos);
     assert(saved.find("; retained user comment")!=std::string::npos&&saved.find("sNote = keep this")!=std::string::npos);
+    IniSettingsStore reopened(path,RpsMod::Diamond);assert(reopened.load());
+    for(const auto& [key,value]:indicatorSettings){const auto index=reopened.indexForId(std::string("PouchUI.")+key);assert(index&&reopened.settings()[*index].numericValue==value);}
     accept(false);const auto result=store.setNumericByIndex(*rotation,25);
-    assert(result.saved&&result.message.find("could not apply live")!=std::string::npos&&calls()==5);
+    assert(result.saved&&result.message.find("could not apply live")!=std::string::npos&&calls()==12);
 #endif
     assert(FreeLibrary(module));fs::remove(path);
 }
