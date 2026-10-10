@@ -11,6 +11,7 @@
 
 #include <cfloat>
 #include "Fonts.h"
+#include "PanelInput.h"
 
 namespace devui::render
 {
@@ -110,6 +111,7 @@ namespace devui::render
                 }
                 ImGui::SetCurrentContext(state.imguiContext);
                 auto& io = ImGui::GetIO();
+                wheel::configurePanelInput(io);
                 io.IniFilename = nullptr;
                 io.LogFilename = nullptr;
                 io.DisplaySize = {

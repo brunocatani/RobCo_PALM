@@ -4,6 +4,7 @@
 #include "Fonts.h"
 #include "WheelConfig.h"
 #include "IconAtlas.h"
+#include "PanelInput.h"
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
 #include <wrl/client.h>
@@ -41,6 +42,7 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
    render.release();render.device=device;render.imgui.reset(ImGui::CreateContext());
    if(!render.imgui)throw std::runtime_error("ImGui context unavailable");
    ImGui::SetCurrentContext(render.imgui.get());installFonts();
+   configurePanelInput(ImGui::GetIO());
    if(!render.icons.create(device,context))throw std::runtime_error("Embedded wheel icon atlases unavailable");
    if(!ImGui_ImplDX11_Init(device,context))throw std::runtime_error("DX11 backend unavailable");
    render.backend=true;spdlog::info("PALM renderer initialized");
