@@ -3,6 +3,8 @@
 #include "Fonts.h"
 #include "WheelConfig.h"
 #include "WheelSaveRecord.h"
+#include "DeveloperActions.h"
+#include <ShlObj.h>
 #include "tools/ConfiguratorRuntime.h"
 #include <spdlog/sinks/rotating_file_sink.h>
 
@@ -64,6 +66,15 @@ extern "C" __declspec(dllexport) bool F4SEAPI F4SEPlugin_Query(const F4SE::Query
 extern "C" __declspec(dllexport) bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* f4se) noexcept {
  try {
   if(!f4se)return false;F4SE::Init(f4se,false);
+  PWSTR documents{};
+  bool developer=false;
+  if(SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents,0,nullptr,&documents))) {
+   const auto path=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"Mods_Config"/"RobCo_PALM"/"PALM.ini";
+   CoTaskMemFree(documents);
+   developer=GetPrivateProfileIntW(L"Developer",L"bEnabled",0,path.c_str())!=0;
+  }
+  if(!wheel::developerActions().initialize(developer))spdlog::error("PALM Developer section unavailable; existing mod sections preserved");
+  spdlog::info("PALM Developer wheel {} (PALM.ini [Developer] bEnabled; restart required)",developer?"enabled":"disabled");
   const auto* messaging=F4SE::GetMessagingInterface();
   const auto* serialization=F4SE::GetSerializationInterface();
   if(!serialization || !messaging || !messaging->RegisterListener(onMessage))return false;

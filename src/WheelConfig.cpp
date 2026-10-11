@@ -1,4 +1,5 @@
 #include "WheelConfig.h"
+#include "DeveloperActions.h"
 #include "PalmControls.h"
 #include <imgui.h>
 #include "tools/render/ConfigUi.h"
@@ -16,9 +17,12 @@ struct State {
 State& state(){static State s;return s;}
 void limitSections(Model& model) {
  unsigned used=1+static_cast<unsigned>(std::count(model.enabled.begin(),model.enabled.end(),true))+(model.gesturesEnabled?2:0);
- for(unsigned i=0;i<model.sections.count;++i)if(model.sections.sections[i].enabled) {
+ for(unsigned i=0;i<model.sections.count;++i)if(model.sections.sections[i].enabled && !isDeveloperSection(model.sections.sections[i].id)) {
   model.sections.sections[i].enabled=used<palm::api::kMaxVisibleEntries;++used;
  }
+ // Developer mode never silently hides an existing user-selected section.
+ for(unsigned i=0;i<model.sections.count;++i)if(isDeveloperSection(model.sections.sections[i].id))
+  model.sections.sections[i].enabled=developerActions().enabled() && used<palm::api::kMaxVisibleEntries;
  normalizeWheelSelection(model);
 }
 bool matches(std::string_view name,std::string_view needle) {
@@ -40,7 +44,7 @@ Model selectedWheelInventory(const Model& inventory){
  auto& s=state();std::scoped_lock lock(s.mutex);auto result=curatedInventory(inventory,s.prefs);
  result.gesturesEnabled &= gestureIntegrationAvailable();
  if(sectionRegistry().snapshot(result.sections))
-  for(unsigned i=0;i<result.sections.count;++i)result.sections.sections[i].enabled=s.prefs.sectionEnabled(result.sections.sections[i].id);
+  for(unsigned i=0;i<result.sections.count;++i)result.sections.sections[i].enabled=isDeveloperSection(result.sections.sections[i].id)?developerActions().enabled():s.prefs.sectionEnabled(result.sections.sections[i].id);
  limitSections(result);return result;
 }
 void refreshWheelSections(Model& model) {
@@ -48,7 +52,7 @@ void refreshWheelSections(Model& model) {
  if(model.sections.revision==sectionRegistry().revision())return;
  auto& s=state();std::unique_lock lock(s.mutex,std::try_to_lock);if(!lock.owns_lock())return;
  if(!sectionRegistry().snapshot(model.sections))return;
- for(unsigned i=0;i<model.sections.count;++i)model.sections.sections[i].enabled=s.prefs.sectionEnabled(model.sections.sections[i].id);
+ for(unsigned i=0;i<model.sections.count;++i)model.sections.sections[i].enabled=isDeveloperSection(model.sections.sections[i].id)?developerActions().enabled():s.prefs.sectionEnabled(model.sections.sections[i].id);
  limitSections(model);
 }
 bool takeWheelConfigChange(){return state().changed.exchange(false);}
@@ -68,7 +72,7 @@ void drawWheelSettings() {
  SectionCatalog catalog;if(!sectionRegistry().snapshot(catalog)){ImGui::EndChild();ImGui::PopStyleVar();return;}
  const auto enabledCount=[&] {
   unsigned count=1+static_cast<unsigned>(std::count(s.prefs.enabled.begin(),s.prefs.enabled.end(),true))+(s.prefs.gesturesEnabled && gestureIntegrationAvailable()?2:0);
-  for(unsigned i=0;i<catalog.count;++i)count+=s.prefs.sectionEnabled(catalog.sections[i].id)?1:0;
+  for(unsigned i=0;i<catalog.count;++i)count+=(isDeveloperSection(catalog.sections[i].id)?developerActions().enabled():s.prefs.sectionEnabled(catalog.sections[i].id))?1:0;
   return count;
  };
  visual::heading("Wheel sections","Choose which sections appear. Visible sections fill the ring.");
@@ -102,6 +106,7 @@ void drawWheelSettings() {
   }else if(ImGui::BeginTable("mod-section-toggles",2,ImGuiTableFlags_SizingStretchSame)) {
    for(unsigned i=0;i<catalog.count;++i) {
     const auto& section=catalog.sections[i];bool enabled=s.prefs.sectionEnabled(section.id);
+    if(isDeveloperSection(section.id)){ImGui::TableNextColumn();ImGui::TextUnformatted("Developer — controlled by PALM.ini");continue;}
     ImGui::PushID(section.id);
     if(toggle(section.name,section.modName,enabled,1) && s.prefs.setSectionEnabled(section.id,enabled,enabledCount()))s.changed=true;
     ImGui::PopID();

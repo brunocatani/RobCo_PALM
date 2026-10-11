@@ -1,4 +1,5 @@
 #include "WheelConfig.h"
+#include "DeveloperActions.h"
 #include "WheelSaveRecord.h"
 #include <cstring>
 #include <iostream>
@@ -78,6 +79,29 @@ int main(){try {
   check(longest.select(c,{std::to_string(i)+std::string(299,'"'),std::string(512,'"')},true));
  CoSave escaped;check(writeWheelSave(escaped,longest));
  check(readWheelSave(escaped,restored)==SaveReadResult::Loaded && restored.slots[4].size()==8);
- std::cout<<"Per-save round trips, session isolation, missing inventory and invalid records passed\n";
+ check(developerActions().initialize(true));
+ restoreWheelPreferences({});
+ auto developerModel=selectedWheelInventory(inventory);
+ const auto developerVisible=[](const Model& model){
+  for(unsigned i=0;i<model.sections.count;++i)if(isDeveloperSection(model.sections.sections[i].id))return model.sections.sections[i].enabled;
+  return false;
+ };
+ check(developerVisible(developerModel)); // No second settings-page switch.
+ Preferences full;full.gesturesEnabled=false;
+ for(unsigned i=0;i<4;++i) {
+  palm::api::SectionV1 section;std::snprintf(section.id,sizeof(section.id),"fixture.full.%u",i);
+  std::strcpy(section.name,"Existing section");std::strcpy(section.modName,"Fixture");
+  section.onSelect=[](std::uint32_t,std::uint64_t,void*) noexcept {};
+  palm::api::SectionHandle handle{};check(sectionRegistry().registerSection(&section,&handle)==palm::api::Result::Ok);
+  full.sections.emplace_back(section.id);
+ }
+ restoreWheelPreferences(full);developerModel=selectedWheelInventory(inventory);
+ check(!developerVisible(developerModel));
+ unsigned retained{};for(unsigned i=0;i<developerModel.sections.count;++i)
+  retained+=!isDeveloperSection(developerModel.sections.sections[i].id) && developerModel.sections.sections[i].enabled;
+ check(retained==4); // Never evict another mod to force Developer into a full ring.
+ restoreWheelPreferences({});check(developerVisible(selectedWheelInventory(inventory)));
+ check(developerActions().initialize(false));check(!developerVisible(selectedWheelInventory(inventory)));
+ std::cout<<"Per-save isolation, invalid records and developer visibility/capacity passed\n";
  return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

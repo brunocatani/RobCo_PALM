@@ -1,4 +1,5 @@
 #include "SectionRegistry.h"
+#include "DeveloperActions.h"
 #include <spdlog/spdlog.h>
 
 namespace {
@@ -19,4 +20,22 @@ const ApiV1 api{kVersion,sizeof(ApiV1),registerSection,unregisterSection,setItem
 }
 extern "C" __declspec(dllexport) const palm::api::ApiV1* GetPALMMenuApi(std::uint32_t version) noexcept {
  return version==palm::api::kVersion?&api:nullptr;
+}
+
+namespace {
+bool developerEnabled() noexcept {return wheel::developerActions().enabled();}
+palm::developer::Result registerDeveloper(const palm::developer::ActionV1* action,palm::developer::Handle* out) noexcept {
+ try {
+  const auto result=wheel::developerActions().add(action,out);
+  if(result==palm::developer::Result::CapacityReached)spdlog::warn("Developer wheel full (8 actions); existing actions preserved. Ask the user which action may be removed before replacing one.");
+  return result;
+ }catch(...){if(out)*out=0;spdlog::error("Developer action registration failed");return palm::developer::Result::InternalError;}
+}
+palm::developer::Result removeDeveloper(palm::developer::Handle handle) noexcept {
+ try{return wheel::developerActions().remove(handle);}catch(...){spdlog::error("Developer action removal failed");return palm::developer::Result::InternalError;}
+}
+const palm::developer::ApiV1 developerApi{palm::developer::kVersion,sizeof(palm::developer::ApiV1),developerEnabled,registerDeveloper,removeDeveloper};
+}
+extern "C" __declspec(dllexport) const palm::developer::ApiV1* GetPALMDeveloperApi(std::uint32_t version) noexcept {
+ return version==palm::developer::kVersion?&developerApi:nullptr;
 }

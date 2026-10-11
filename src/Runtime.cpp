@@ -2,6 +2,7 @@
 #include "RockServices.h"
 #include "PCH.h"
 #include "Runtime.h"
+#include "DeveloperActions.h"
 #include "PalmControls.h"
 #include "api/VirtualHolstersAPI.h"
 #include "RPSUIInputApi.h"
@@ -261,6 +262,7 @@ void openHeldWheel(const rpsui::sdk::InputFrameV1& frame) {
   auto& s=state();
   if(!s.sessionReady.load() || !s.inputReady.load() || !s.held.load() || s.generation.load()!=ticket)return;
   try {
+   developerActions().refresh();
    auto inventory=readInventory();auto& shared=sharedModel();
    {std::scoped_lock lock(shared.mutex);
     if(!s.sessionReady.load() || s.generation.load()!=ticket)return;
@@ -283,7 +285,7 @@ void selectWheel(bool closeAfterSelect,const std::optional<Action>& clicked) {
  auto& s=state();std::scoped_lock lock(s.presentationMutex);
  const auto hover=closeAfterSelect?s.selection.drawn:clicked;
  if(!closeAfterSelect && (!hover || (!hover->cancelHovered && !hover->configHovered && !hover->hoveredGesture && !hover->section && !hover->hoveredItem)))return;
- const bool close=closeAfterSelect || (hover && (hover->configHovered || hover->cancelHovered));
+ const bool close=closeAfterSelect || (hover && (hover->configHovered || hover->cancelHovered || developerActions().ownsSection(hover->section)));
  auto ticket=s.generation.load();
  if(close) {
   ticket=++s.generation;(void)s.selection.release();
