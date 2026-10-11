@@ -5,7 +5,7 @@
 #include <string_view>
 
 namespace rock_configurator {
-enum class RpsMod : std::uint8_t { Rock, Paper, Scissors, RockDeveloper, Csah, RockV2, PaperV2, RockV2Developer, Diamond };
+enum class RpsMod : std::uint8_t { Rock, Paper, Scissors, RockDeveloper, Csah, RockV2, PaperV2, RockV2Developer, Diamond, Emitters };
 struct RpsModInfo {
  RpsMod id;
  const char* name;
@@ -23,12 +23,13 @@ inline constexpr std::array kRpsMods{
  RpsModInfo{RpsMod::RockV2,"ROCK V2",L"ROCK_V2.dll","Mods_Config/ROCK_V2","ROCK_V2.ini","Consumer options are saved by ROCK V2 to ROCK_V2.ini"},
  RpsModInfo{RpsMod::PaperV2,"PAPER V2",L"PAPER_V2.dll","Mods_Config/PAPER_V2","PAPER_V2.ini","Changes are saved for PAPER V2's configuration watcher"},
  RpsModInfo{RpsMod::RockV2Developer,"ROCK V2 Dev",L"ROCK_V2.dll","Mods_Config/ROCK_V2","ROCK_V2_Developer.ini","Only changes from defaults are saved by ROCK V2 to ROCK_V2_Developer.ini"},
- RpsModInfo{RpsMod::Diamond,"DIAMOND",L"DIAMOND.dll","Mods_Config/DIAMOND","DIAMOND.ini","PouchUI moves and rotates the pouch indicator. Enable Show grab zone boundary to preview while adjusting. Changes apply immediately and save to DIAMOND.ini"}
+ RpsModInfo{RpsMod::Diamond,"DIAMOND",L"DIAMOND.dll","Mods_Config/DIAMOND","DIAMOND.ini","PouchUI moves and rotates the pouch indicator. Enable Show grab zone boundary to preview while adjusting. Changes apply immediately and save to DIAMOND.ini"},
+ RpsModInfo{RpsMod::Emitters,"Emitters",L"ROCK_Emitters.dll","Mods_Config/ROCK_Emitters","ROCK_Emitters.ini","Changes save to ROCK_Emitters.ini and apply live within about 250 ms"}
 };
 inline constexpr const RpsModInfo& modInfo(RpsMod mod){return kRpsMods[static_cast<std::size_t>(mod)];}
 inline constexpr std::array kRpsModDisplayOrder{
  RpsMod::Rock,RpsMod::RockDeveloper,RpsMod::RockV2,RpsMod::RockV2Developer,
- RpsMod::Paper,RpsMod::PaperV2,RpsMod::Scissors,RpsMod::Csah,RpsMod::Diamond
+ RpsMod::Paper,RpsMod::PaperV2,RpsMod::Scissors,RpsMod::Csah,RpsMod::Diamond,RpsMod::Emitters
 };
 inline constexpr RpsMod configurationFamily(RpsMod mod) {
  switch(mod) {

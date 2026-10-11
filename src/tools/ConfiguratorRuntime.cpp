@@ -3,6 +3,7 @@
 #include "ConfiguratorRuntime.h"
 
 #include "IniSettingsStore.h"
+#include "LoadedRpsMods.h"
 #include "PanelResizePolicy.h"
 #include "SpawnBrowser.h"
 #include "WheelConfig.h"
@@ -117,7 +118,8 @@ namespace rock_configurator
             ModSettings{IniSettingsStore({}, RpsMod::RockV2)},
             ModSettings{IniSettingsStore({}, RpsMod::PaperV2)},
             ModSettings{IniSettingsStore({}, RpsMod::RockV2Developer)},
-            ModSettings{IniSettingsStore({}, RpsMod::Diamond)}
+            ModSettings{IniSettingsStore({}, RpsMod::Diamond)},
+            ModSettings{IniSettingsStore({}, RpsMod::Emitters)}
         };
         std::size_t s_modIndex = 0;
         ModSettings& activeSettings() { return s_modSettings[s_modIndex]; }
@@ -276,7 +278,7 @@ namespace rock_configurator
                 auto& settings = s_modSettings[i];
 #ifndef WHEEL_DESKTOP_PREVIEW
                 // F4SEVR unloads rejected plugins. Inspect loaded modules, not files in MO2.
-                settings.available = GetModuleHandleW(kRpsMods[i].module) != nullptr;
+                settings.available = configurationModLoaded(kRpsMods[i].id);
 #endif
                 if (settings.available)
                     (void)readStoreLocked(settings.store, settings.loaded, settings.activeIndex,

@@ -1,6 +1,7 @@
 #include "RockConfigurationClient.h"
 #include "IniSettingsStore.h"
 #include <DIAMOND/Configuration.h>
+#include "EmitterSettings.h"
 
 #include <ShlObj.h>
 
@@ -227,6 +228,12 @@ namespace rock_configurator
                 setting.type=entry->boolean?SettingType::Boolean:SettingType::Float;
                 setting.label=entry->label;setting.defaultValue=entry->defaultValue;
             }
+            if(_mod==RpsMod::Emitters && equalsIgnoreCase(setting.section,"Main"))
+                if(const auto* entry=emitter_settings::find(setting.key)) {
+                    setting.type=entry->type==emitter_settings::Type::Toggle?SettingType::Boolean:
+                        entry->type==emitter_settings::Type::Color?SettingType::String:SettingType::Float;
+                    setting.label=entry->label;
+                }
             setting.control = setting_control::build(
                 controlValueType(setting.type),
                 setting.key,
