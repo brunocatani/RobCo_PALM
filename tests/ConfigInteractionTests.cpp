@@ -1,5 +1,6 @@
 #include "ConfiguratorRuntime.h"
 #include "WheelConfig.h"
+#include "PanelInput.h"
 #include "render/UiVisualStyle.h"
 #include "render/ConfigUi.h"
 #include <imgui.h>
@@ -41,6 +42,22 @@ void scroll(ImGuiWindow* target) {
     for (int i = 0; i < 30; ++i) { io.AddMouseWheelEvent(0, -0.1f); frame(); }
     require(target->Scroll.y > before, "hovered column did not scroll without a click");
 }
+void sustainedSettingsScroll(ImGuiWindow* target) {
+    require(target && target->ScrollMax.y > 1000, "sustained scroll fixture is too short");
+    auto& io = ImGui::GetIO();
+    for (float direction : {-1.0f, 1.0f}) {
+        for (int i = 0; i < 120; ++i) {
+            io.AddMousePosEvent(target->InnerRect.Min.x + 24 + (i % 17), target->InnerRect.Min.y + 80);
+            io.AddMouseWheelEvent(0, direction * 5.5f * io.DeltaTime);
+            const float before = target->Scroll.y;
+            frame();
+            if (direction < 0 && before < target->ScrollMax.y - 10)
+                require(target->Scroll.y > before, "held stick stalled over settings rows");
+            if (direction > 0 && before > 10)
+                require(target->Scroll.y < before, "held reverse stick stalled over settings rows");
+        }
+    }
+}
 std::string renderedText() {
     ImGui::NewFrame();
     ImGui::LogToBuffer();
@@ -73,6 +90,7 @@ int main(int argc, char** argv) {
     ImGui::CreateContext();
     try {
         auto& io = ImGui::GetIO();
+        wheel::configurePanelInput(io);
         io.IniFilename = nullptr; io.LogFilename = nullptr;
         io.DisplaySize = {1440, 540}; io.DeltaTime = 1.0f / 90;
         io.FontDefault = io.Fonts->AddFontDefaultVector();
@@ -119,6 +137,7 @@ int main(int argc, char** argv) {
         auto* rows = window("settings-rows");
         const float railBefore = rail ? rail->Scroll.y : 0;
         scroll(rows);
+        sustainedSettingsScroll(rows);
         require(!rail || rail->Scroll.y == railBefore, "settings scroll moved the navigation column");
         frame(true); frame();
         require(rock_configurator::isOpen() && window("wheel-category-content"), "back did not return to Config home");

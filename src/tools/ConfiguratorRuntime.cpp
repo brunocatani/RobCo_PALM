@@ -881,21 +881,29 @@ namespace rock_configurator
             ImGui::PushID(static_cast<int>(index));
             const bool active = index == activeIndex;
             constexpr float rowHeight = 66.0f;
-            // A row is not a scroll owner: wheel input belongs to the enclosing column.
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, active ? accentColor(0.055f) : ImVec4(0, 0, 0, 0));
-            ImGui::BeginChild("setting", {0, rowHeight}, ImGuiChildFlags_None,
-                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-            const ImVec2 windowPosition = ImGui::GetWindowPos();
-            const float windowWidth = ImGui::GetWindowWidth();
+            // Keep rows in the scrolling window. Separate child windows can
+            // strand continuous wheel ownership on the parent when hand motion
+            // expires ImGui's wheel lock while a row is hovered.
+            const ImVec2 rowStart = ImGui::GetCursorPos();
+            const ImVec2 windowPosition = ImGui::GetCursorScreenPos();
+            const float windowWidth = ImGui::GetContentRegionAvail().x;
+            const auto rowCursor = [&](float x, float y) {
+                ImGui::SetCursorPos({rowStart.x + x, rowStart.y + y});
+            };
+            ImGui::BeginGroup();
+            ImGui::PushClipRect(windowPosition,
+                {windowPosition.x + windowWidth, windowPosition.y + rowHeight}, true);
             const float controlsWidth = (std::min)(420.0f, windowWidth * 0.48f);
             const float controlsStart = windowWidth - controlsWidth;
             auto* draw = ImGui::GetWindowDrawList();
+            if (active) draw->AddRectFilled(windowPosition,
+                {windowPosition.x + windowWidth, windowPosition.y + rowHeight}, packed(accentColor(0.055f)));
             draw->AddLine({windowPosition.x + 12, windowPosition.y + rowHeight - 1},
                 {windowPosition.x + windowWidth - 12, windowPosition.y + rowHeight - 1},
                 packed(mutedColor(0.15f)));
             draw->PushClipRect({windowPosition.x + 12, windowPosition.y},
                 {windowPosition.x + controlsStart - 14, windowPosition.y + rowHeight}, true);
-            ImGui::SetCursorPos({14, 8});
+            rowCursor(14, 8);
             {
                 ScopedFont font(devui::render::FontRole::Medium, 25);
                 if (!setting.label.empty()) ImGui::TextUnformatted(setting.label.c_str());
@@ -918,7 +926,7 @@ namespace rock_configurator
                 ImGui::PopTextWrapPos();
                 ImGui::EndTooltip();
             }
-            ImGui::SetCursorPos({14, 37});
+            rowCursor(14, 37);
             draw->PushClipRect({windowPosition.x + 12, windowPosition.y}, {windowPosition.x + controlsStart - 14, windowPosition.y + rowHeight}, true);
             {
                 ScopedFont font(devui::render::FontRole::Body, 18);
@@ -931,7 +939,7 @@ namespace rock_configurator
             case setting_control::Kind::Checkbox: {
                 bool enabled = setting_control::equalsIgnoreCase(setting.value, "true") ||
                                setting.value == "1";
-                ImGui::SetCursorPos({ windowWidth - 61.0f, 10.0f });
+                rowCursor(windowWidth - 61.0f, 10.0f);
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 6.0f, 6.0f });
                 if (devui::visual::checkbox("##checkbox", &enabled)) {
                     (void)queueUiAction({
@@ -946,7 +954,7 @@ namespace rock_configurator
                 break;
             }
             case setting_control::Kind::Numeric: {
-                ImGui::SetCursorPos({ controlsStart, 10.0f });
+                rowCursor(controlsStart, 10.0f);
                 if (devui::visual::button("-", { 36.0f, 36.0f })) {
                     (void)queueUiAction({
                         .kind = RuntimeActionKind::UiAdjustRow,
@@ -1021,7 +1029,7 @@ namespace rock_configurator
                     *setting.selectedOptionIndex < setting.control.options.size()) {
                     preview = setting.control.options[*setting.selectedOptionIndex].label.c_str();
                 }
-                ImGui::SetCursorPos({ controlsStart, 10.0f });
+                rowCursor(controlsStart, 10.0f);
                 ImGui::SetNextItemWidth(controlsWidth - 20.0f);
                 if (ImGui::BeginCombo("##dropdown", preview)) {
                     for (std::size_t optionIndex = 0;
@@ -1078,8 +1086,10 @@ namespace rock_configurator
             }
             }
 
-            ImGui::EndChild();
-            ImGui::PopStyleColor();
+            ImGui::PopClipRect();
+            ImGui::EndGroup();
+            ImGui::SetCursorPos(rowStart);
+            ImGui::Dummy({windowWidth, rowHeight});
             ImGui::PopID();
         }
 
