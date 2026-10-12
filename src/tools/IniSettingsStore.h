@@ -3,6 +3,7 @@
 #include "RockSettingControlPolicy.h"
 #include "RpsMod.h"
 #include <ROCK/Configuration.h>
+#include <SCISSORS_Redux/Configuration.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -54,8 +55,9 @@ namespace rock_configurator
     {
     public:
         explicit IniSettingsStore(std::filesystem::path path = {}, RpsMod mod = RpsMod::Rock,
-            const rock::api::configuration::ApiV1* api = nullptr, std::filesystem::path catalogPath = {}, rock::api::OwnerToken owner = 0) :
-            _path(std::move(path)), _catalogPath(std::move(catalogPath)), _mod(mod), _configurationApi(api), _configurationOwner(owner),
+            const rock::api::configuration::ApiV1* api = nullptr, std::filesystem::path catalogPath = {}, rock::api::OwnerToken owner = 0,
+            const scissors::configuration::ApiV1* reduxApi = nullptr) :
+            _path(std::move(path)), _catalogPath(std::move(catalogPath)), _mod(mod), _configurationApi(api), _configurationOwner(owner), _reduxApi(reduxApi),
             _useRockApi(api || (_path.empty() && isRockConfiguration(mod))) {}
 
         [[nodiscard]] bool load();
@@ -96,6 +98,8 @@ namespace rock_configurator
         void refreshControl(SettingRecord& setting) const;
         [[nodiscard]] bool connectRockApi();
         [[nodiscard]] bool reloadRockSnapshot();
+        [[nodiscard]] bool loadReduxSettings();
+        [[nodiscard]] bool saveReduxSetting(const SettingRecord& setting, bool value);
         [[nodiscard]] bool loadCsahSettings();
         [[nodiscard]] bool saveCsahSetting(const SettingRecord& setting, std::string_view value);
         [[nodiscard]] rock::api::configuration::Group rockGroup() const noexcept;
@@ -112,6 +116,7 @@ namespace rock_configurator
         const rock::api::configuration::ApiV1* _configurationApi = nullptr;
         rock::api::OwnerToken _configurationOwner{};
         rock::api::Status _lastProviderStatus{rock::api::Status::Ok};
+        const scissors::configuration::ApiV1* _reduxApi = nullptr;
         bool _useRockApi = false;
         std::uint64_t _loadedRevision = 0;
         std::vector<IniLine> _lines;

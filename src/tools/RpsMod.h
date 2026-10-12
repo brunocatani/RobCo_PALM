@@ -5,7 +5,7 @@
 #include <string_view>
 
 namespace rock_configurator {
-enum class RpsMod : std::uint8_t { Rock, Paper, Scissors, RockDeveloper, Csah, RockV2, PaperV2, RockV2Developer, Diamond, Emitters };
+enum class RpsMod : std::uint8_t { Rock, Paper, Scissors, RockDeveloper, Csah, RockV2, PaperV2, RockV2Developer, Diamond, Emitters, ScissorsRedux, ScissorsReduxDeveloper };
 struct RpsModInfo {
  RpsMod id;
  const char* name;
@@ -24,12 +24,14 @@ inline constexpr std::array kRpsMods{
  RpsModInfo{RpsMod::PaperV2,"PAPER V2",L"PAPER_V2.dll","Mods_Config/PAPER_V2","PAPER_V2.ini","Changes are saved for PAPER V2's configuration watcher"},
  RpsModInfo{RpsMod::RockV2Developer,"ROCK V2 Dev",L"ROCK_V2.dll","Mods_Config/ROCK_V2","ROCK_V2_Developer.ini","Only changes from defaults are saved by ROCK V2 to ROCK_V2_Developer.ini"},
  RpsModInfo{RpsMod::Diamond,"DIAMOND",L"DIAMOND.dll","Mods_Config/DIAMOND","DIAMOND.ini","PouchUI moves and rotates the pouch indicator. Enable Show grab zone boundary to preview while adjusting. Changes apply immediately and save to DIAMOND.ini"},
- RpsModInfo{RpsMod::Emitters,"Emitters",L"ROCK_Emitters.dll","Mods_Config/ROCK_Emitters","ROCK_Emitters.ini","Changes save to ROCK_Emitters.ini and apply live within about 250 ms"}
+ RpsModInfo{RpsMod::Emitters,"Emitters",L"ROCK_Emitters.dll","Mods_Config/ROCK_Emitters","ROCK_Emitters.ini","Changes save to ROCK_Emitters.ini and apply live within about 250 ms"},
+ RpsModInfo{RpsMod::ScissorsRedux,"SCISSORS Redux",L"SCISSORS_Redux.dll","Mods_Config/SCISSORS_Redux","SCISSORS_Redux.ini","NPC settings are saved by SCISSORS Redux and apply next frame"},
+ RpsModInfo{RpsMod::ScissorsReduxDeveloper,"SCISSORS Redux Dev",L"SCISSORS_Redux.dll","Mods_Config/SCISSORS_Redux","SCISSORS_Redux_Developer.ini","NPC visualization is independent of ROCK. Only developer overrides are saved by SCISSORS Redux"}
 };
 inline constexpr const RpsModInfo& modInfo(RpsMod mod){return kRpsMods[static_cast<std::size_t>(mod)];}
 inline constexpr std::array kRpsModDisplayOrder{
  RpsMod::Rock,RpsMod::RockDeveloper,RpsMod::RockV2,RpsMod::RockV2Developer,
- RpsMod::Paper,RpsMod::PaperV2,RpsMod::Scissors,RpsMod::Csah,RpsMod::Diamond,RpsMod::Emitters
+ RpsMod::Paper,RpsMod::PaperV2,RpsMod::Scissors,RpsMod::Csah,RpsMod::Diamond,RpsMod::Emitters,RpsMod::ScissorsRedux,RpsMod::ScissorsReduxDeveloper
 };
 inline constexpr RpsMod configurationFamily(RpsMod mod) {
  switch(mod) {
@@ -41,6 +43,9 @@ inline constexpr RpsMod configurationFamily(RpsMod mod) {
 }
 inline constexpr bool isRockConfiguration(RpsMod mod) {
  return configurationFamily(mod)==RpsMod::Rock || configurationFamily(mod)==RpsMod::RockDeveloper;
+}
+inline constexpr bool isReduxConfiguration(RpsMod mod) {
+ return mod==RpsMod::ScissorsRedux || mod==RpsMod::ScissorsReduxDeveloper;
 }
 inline constexpr bool isV2Rock(RpsMod mod) { return mod==RpsMod::RockV2 || mod==RpsMod::RockV2Developer; }
 // Item/gesture integration follows V2 when loaded. Configuration pages always

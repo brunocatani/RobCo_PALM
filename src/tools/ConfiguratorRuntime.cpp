@@ -119,7 +119,9 @@ namespace rock_configurator
             ModSettings{IniSettingsStore({}, RpsMod::PaperV2)},
             ModSettings{IniSettingsStore({}, RpsMod::RockV2Developer)},
             ModSettings{IniSettingsStore({}, RpsMod::Diamond)},
-            ModSettings{IniSettingsStore({}, RpsMod::Emitters)}
+            ModSettings{IniSettingsStore({}, RpsMod::Emitters)},
+            ModSettings{IniSettingsStore({}, RpsMod::ScissorsRedux)},
+            ModSettings{IniSettingsStore({}, RpsMod::ScissorsReduxDeveloper)}
         };
         std::size_t s_modIndex = 0;
         ModSettings& activeSettings() { return s_modSettings[s_modIndex]; }

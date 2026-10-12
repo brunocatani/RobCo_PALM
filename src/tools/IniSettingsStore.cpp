@@ -287,6 +287,10 @@ namespace rock_configurator
 
     bool IniSettingsStore::needsReload() const noexcept
     {
+        if (_reduxApi) {
+            scissors::configuration::SnapshotV1 snapshot;
+            return _reduxApi->snapshot(&snapshot)!=scissors::configuration::Status::Ok || snapshot.revision!=_loadedRevision;
+        }
         std::uint64_t revision{};
         return _configurationApi && (_configurationApi->revision(_configurationOwner,&revision)!=rock::api::Status::Ok || revision != _loadedRevision);
     }
@@ -356,6 +360,7 @@ namespace rock_configurator
             return false;
         }
 
+        if (isReduxConfiguration(_mod)) return loadReduxSettings();
         if (_useRockApi && !connectRockApi()) return false;
         if (_useRockApi) return reloadRockSnapshot();
         if (_mod == RpsMod::Csah) return loadCsahSettings();
@@ -802,6 +807,14 @@ namespace rock_configurator
                 .message = "value unchanged",
                 .setting = setting,
             };
+        }
+        if (isReduxConfiguration(_mod)) {
+            if (!saveReduxSetting(setting, *normalizedValue=="true"))
+                return { .message = _lastError, .setting = setting };
+            setting.value = *normalizedValue;
+            setting.overridden = setting.value != setting.defaultValue;
+            refreshControl(setting);
+            return { .changed = true, .saved = true, .message = "saved; applying next frame", .setting = setting };
         }
         if (_mod == RpsMod::Csah) {
             if (!saveCsahSetting(setting, *normalizedValue))

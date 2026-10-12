@@ -3,9 +3,10 @@ set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE FILEP
 set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "")
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "")
 project(RobCoPALM VERSION 1.2.1 LANGUAGES CXX RC)
-get_filename_component(WORKSPACE "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+get_filename_component(WORKSPACE "${CMAKE_CURRENT_SOURCE_DIR}/../../PROJECT_ROCK_V2" ABSOLUTE)
 # Shared DIAMOND setting names/ranges keep its native INI and PALM controls aligned.
-include_directories("${WORKSPACE}/main_projects/DIAMOND/include")
+include_directories("${WORKSPACE}/main_projects/DIAMOND/include"
+ "${WORKSPACE}/my_frameworks_and_sdks/RPS_SDK/SDK/SCISSORS_Redux/include")
 set(COMMON_LIB_F4VR_PATH "${WORKSPACE}/libraries_and_tools/CommonLibF4VR" CACHE PATH "")
 set(ENABLE_FALLOUT_VR ON CACHE BOOL "" FORCE)
 set(ENABLE_FALLOUT_F4 OFF CACHE BOOL "" FORCE)
@@ -26,7 +27,7 @@ add_library(wheel_view STATIC src/WheelView.cpp src/Fonts.cpp src/WheelConfig.cp
 target_include_directories(wheel_view PUBLIC src external/F4VR-Input
  "${WORKSPACE}/libraries_and_tools/F4VR-CommonFramework/external/openvr")
 target_link_libraries(wheel_view PUBLIC wheel_imgui windowscodecs ole32)
-set(WORKSHOP_SOURCES src/tools/ConfiguratorRuntime.cpp src/tools/IniSettingsStore.cpp src/tools/CsahSettings.cpp
+set(WORKSHOP_SOURCES src/tools/ConfiguratorRuntime.cpp src/tools/IniSettingsStore.cpp src/tools/ReduxSettings.cpp src/tools/CsahSettings.cpp
  src/tools/RockSettingControlPolicy.cpp src/tools/SpawnBrowser.cpp)
 foreach(target wheel_workshop wheel_workshop_preview)
  add_library(${target} STATIC ${WORKSHOP_SOURCES})
@@ -46,7 +47,7 @@ set_source_files_properties(src/Gestures.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS 
 set_source_files_properties(src/MenuApi.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_include_directories(RobCoPALM PRIVATE src
  "${WORKSPACE}/my_frameworks_and_sdks/RPS_SDK/SDK/ROCK/include"
- "${WORKSPACE}/my_frameworks_and_sdks/RPS_UI_Framework/SDK/include")
+ "${CMAKE_CURRENT_SOURCE_DIR}/../RPS_UI_Framework/SDK/include")
 target_link_libraries(RobCoPALM PRIVATE CommonLibF4::CommonLibF4 spdlog::spdlog wheel_view wheel_workshop shell32 version bcrypt)
 target_precompile_headers(RobCoPALM PRIVATE src/PCH.h)
 target_compile_options(RobCoPALM PRIVATE /MP2 /Zi /wd4715 /utf-8)
@@ -63,6 +64,21 @@ if(NOT COPY_PLUGIN_BASE_PATH STREQUAL "")
  COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_PDB_FILE:RobCoPALM>" "${COPY_PLUGIN_BASE_PATH}/F4SE/Plugins/")
 endif()
 enable_testing()
+add_library(ReduxConfigurationStub SHARED tests/ReduxConfigurationStub.cpp)
+target_compile_features(ReduxConfigurationStub PRIVATE cxx_std_23)
+set_target_properties(ReduxConfigurationStub PROPERTIES OUTPUT_NAME SCISSORS_Redux RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test-providers")
+foreach(mode Runtime Preview)
+ add_executable(WheelRedux${mode}Tests tests/ReduxSettingsTests.cpp src/tools/IniSettingsStore.cpp src/tools/ReduxSettings.cpp
+  src/tools/CsahSettings.cpp src/tools/RockSettingControlPolicy.cpp)
+ target_include_directories(WheelRedux${mode}Tests PRIVATE src/tools "${WORKSPACE}/my_frameworks_and_sdks/RPS_SDK/SDK/ROCK/include")
+ target_compile_features(WheelRedux${mode}Tests PRIVATE cxx_std_23)
+ target_compile_definitions(WheelRedux${mode}Tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+ target_compile_options(WheelRedux${mode}Tests PRIVATE /UNDEBUG /utf-8)
+ target_link_libraries(WheelRedux${mode}Tests PRIVATE shell32 nlohmann_json::nlohmann_json)
+ add_dependencies(WheelRedux${mode}Tests ReduxConfigurationStub)
+ add_test(NAME Wheel.Redux${mode} COMMAND WheelRedux${mode}Tests "$<TARGET_FILE:ReduxConfigurationStub>")
+endforeach()
+target_compile_definitions(WheelReduxPreviewTests PRIVATE WHEEL_DESKTOP_PREVIEW)
 add_executable(PALMDeveloperActionsTests tests/DeveloperActionsTests.cpp src/DeveloperActions.cpp src/SectionRegistry.cpp)
 target_include_directories(PALMDeveloperActionsTests PRIVATE src)
 target_compile_features(PALMDeveloperActionsTests PRIVATE cxx_std_23)
@@ -104,14 +120,14 @@ foreach(policy SpawnPluginIdentity RockSettingControlPolicy IniSettingsStoreCont
  add_test(NAME Wheel.${policy} COMMAND Wheel${policy}Tests)
 endforeach()
 target_sources(WheelRockSettingControlPolicyTests PRIVATE src/tools/RockSettingControlPolicy.cpp)
-target_sources(WheelIniSettingsStoreControlTests PRIVATE src/tools/IniSettingsStore.cpp src/tools/RockSettingControlPolicy.cpp)
+target_sources(WheelIniSettingsStoreControlTests PRIVATE src/tools/IniSettingsStore.cpp src/tools/ReduxSettings.cpp src/tools/RockSettingControlPolicy.cpp)
 target_compile_definitions(WheelIniSettingsStoreControlTests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_link_libraries(WheelIniSettingsStoreControlTests PRIVATE shell32)
-target_sources(WheelRockConfigurationBridgeTests PRIVATE src/tools/IniSettingsStore.cpp src/tools/RockSettingControlPolicy.cpp)
+target_sources(WheelRockConfigurationBridgeTests PRIVATE src/tools/IniSettingsStore.cpp src/tools/ReduxSettings.cpp src/tools/RockSettingControlPolicy.cpp)
 target_compile_definitions(WheelRockConfigurationBridgeTests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_link_libraries(WheelRockConfigurationBridgeTests PRIVATE shell32)
 add_executable(WheelPreviewIsolationTests tests/PreviewIsolationTests.cpp
- src/tools/IniSettingsStore.cpp src/tools/RockSettingControlPolicy.cpp)
+ src/tools/IniSettingsStore.cpp src/tools/ReduxSettings.cpp src/tools/RockSettingControlPolicy.cpp)
 target_include_directories(WheelPreviewIsolationTests PRIVATE src/tools "${WORKSPACE}/my_frameworks_and_sdks/RPS_SDK/SDK/ROCK/include")
 target_compile_features(WheelPreviewIsolationTests PRIVATE cxx_std_23)
 target_compile_definitions(WheelPreviewIsolationTests PRIVATE WHEEL_DESKTOP_PREVIEW WIN32_LEAN_AND_MEAN NOMINMAX)
@@ -119,7 +135,7 @@ target_link_libraries(WheelPreviewIsolationTests PRIVATE shell32)
 add_test(NAME Wheel.PreviewIsolation COMMAND WheelPreviewIsolationTests)
 
 foreach(mode Runtime Preview)
- add_executable(WheelCsah${mode}Tests tests/CsahSettingsTests.cpp src/tools/IniSettingsStore.cpp
+ add_executable(WheelCsah${mode}Tests tests/CsahSettingsTests.cpp src/tools/IniSettingsStore.cpp src/tools/ReduxSettings.cpp
   src/tools/CsahSettings.cpp src/tools/RockSettingControlPolicy.cpp)
  target_include_directories(WheelCsah${mode}Tests PRIVATE src/tools "${WORKSPACE}/my_frameworks_and_sdks/RPS_SDK/SDK/ROCK/include")
  target_compile_features(WheelCsah${mode}Tests PRIVATE cxx_std_23)
@@ -131,7 +147,7 @@ target_compile_definitions(WheelCsahPreviewTests PRIVATE WHEEL_DESKTOP_PREVIEW)
 add_library(DiamondReloadStub SHARED tests/DiamondReloadStub.cpp)
 set_target_properties(DiamondReloadStub PROPERTIES OUTPUT_NAME DIAMOND RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test-providers")
 foreach(mode Runtime Preview)
- add_executable(WheelDiamond${mode}Tests tests/DiamondSettingsTests.cpp src/tools/IniSettingsStore.cpp
+ add_executable(WheelDiamond${mode}Tests tests/DiamondSettingsTests.cpp src/tools/IniSettingsStore.cpp src/tools/ReduxSettings.cpp
   src/tools/CsahSettings.cpp src/tools/RockSettingControlPolicy.cpp)
  target_include_directories(WheelDiamond${mode}Tests PRIVATE src/tools "${WORKSPACE}/my_frameworks_and_sdks/RPS_SDK/SDK/ROCK/include")
  target_compile_features(WheelDiamond${mode}Tests PRIVATE cxx_std_23)
@@ -145,7 +161,7 @@ target_compile_definitions(WheelDiamondPreviewTests PRIVATE WHEEL_DESKTOP_PREVIE
 add_library(EmittersModuleStub SHARED tests/EmittersModuleStub.cpp)
 set_target_properties(EmittersModuleStub PROPERTIES OUTPUT_NAME ROCK_Emitters RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test-providers")
 foreach(mode Runtime Preview)
- add_executable(WheelEmitters${mode}Tests tests/EmittersSettingsTests.cpp src/tools/IniSettingsStore.cpp
+ add_executable(WheelEmitters${mode}Tests tests/EmittersSettingsTests.cpp src/tools/IniSettingsStore.cpp src/tools/ReduxSettings.cpp
   src/tools/CsahSettings.cpp src/tools/RockSettingControlPolicy.cpp)
  target_include_directories(WheelEmitters${mode}Tests PRIVATE src/tools "${WORKSPACE}/my_frameworks_and_sdks/RPS_SDK/SDK/ROCK/include")
  target_compile_features(WheelEmitters${mode}Tests PRIVATE cxx_std_23)
