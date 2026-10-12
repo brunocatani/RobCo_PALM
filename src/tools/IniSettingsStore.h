@@ -3,7 +3,7 @@
 #include "RockSettingControlPolicy.h"
 #include "RpsMod.h"
 #include <ROCK/Configuration.h>
-#include <SCISSORS_Redux/Configuration.h>
+#include <SCISSORS_Redux/ConfigurationV1_1.h>
 
 #include <cstdint>
 #include <filesystem>
