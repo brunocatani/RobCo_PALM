@@ -15,14 +15,10 @@ inline ConfigurationConnection configurationConnection(std::optional<RpsMod> req
 #ifndef WHEEL_DESKTOP_PREVIEW
     const auto selected = requested ? requested : loadedRockMod();
     if (!selected || !isRockConfiguration(*selected)) return {};
-    // Separate process-lifetime registrations for the two providers; each is
-    // shared only by that provider's consumer/developer pages.
-    // Connection and visits are performed on the game thread.
-    static auto* clients=new std::array<rock::api::Client, 2>();
-    static std::array<const rock::api::configuration::ApiV1*, 2> apis{};
-    const auto index = isV2Rock(*selected) ? 1u : 0u;
-    auto* client=&(*clients)[index];
-    auto& api=apis[index];
+    // One process-lifetime registration shared by ROCK's consumer and developer
+    // pages. Connection and visits are performed on the game thread.
+    static auto* client=new rock::api::Client();
+    static const rock::api::configuration::ApiV1* api{};
     if (!api) {
         const auto module=GetModuleHandleW(modInfo(*selected).module);
         const auto query=module?reinterpret_cast<rock::api::QueryInterfaceV1>(GetProcAddress(module,rock::api::kQueryExportName)):nullptr;

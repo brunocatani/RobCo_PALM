@@ -154,9 +154,9 @@ int main(int argc, char** argv) {
         frame(true);
         require(!rock_configurator::isOpen(), "back at Config home did not close it");
         // Every loaded-mod combination, including none, uses the real tab widgets.
-        for (const bool rockV2 : {false,true}) for (const bool paperV2 : {false,true}) for (unsigned mask = 0; mask < 8; ++mask) {
+        for (unsigned mask = 0; mask < 8; ++mask) {
             rock_configurator::initializeRpsPreview({path, path, path},
-                {(mask & 1) != 0, (mask & 2) != 0, (mask & 4) != 0},nullptr,{},{},rockV2,paperV2);
+                {(mask & 1) != 0, (mask & 2) != 0, (mask & 4) != 0});
             rock_configurator::setPreviewOpen(true);frame();frame();
             click(railWidth + 440, 50);
             auto* firstRows = window("settings-rows");
@@ -177,8 +177,7 @@ int main(int argc, char** argv) {
             require(window("settings-rows")->ID == firstId, "hidden mod tab remained clickable");
         }
         const rock::api::configuration::ApiV1 configApi{fixtureRevision, fixtureVisit, fixtureWrite};
-        for (const bool rockV2 : {false,true}) {
-        rock_configurator::initializeRpsPreview({path, {}, {}}, {true, false, false}, &configApi,{},{},rockV2,false);
+        rock_configurator::initializeRpsPreview({path, {}, {}}, {true, false, false}, &configApi);
         rock_configurator::setPreviewOpen(true); frame(); frame();
         click(railWidth + 440, 50);
         const auto consumerText = renderedText();
@@ -194,7 +193,6 @@ int main(int argc, char** argv) {
         require(window("settings-rows")->ID != consumerWorkspace, "Developer page reused the consumer workspace");
         click(45, 120);
         require(window("settings-rows")->ID == consumerWorkspace, "ROCK tab did not restore the consumer workspace");
-        }
         if (argc > 1) {
             // Exercise the shipped CSAH catalog in the real RPS tab, both alone
             // and alongside every existing page. All edits remain in memory.

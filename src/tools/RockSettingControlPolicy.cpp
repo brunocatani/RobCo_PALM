@@ -384,7 +384,6 @@ namespace rock_configurator::setting_control
         std::string_view description,
         RpsMod mod)
     {
-        mod = configurationFamily(mod);
         if(mod==RpsMod::Emitters)if(const auto* setting=emitter_settings::find(key)) {
             if(setting->type==emitter_settings::Type::Toggle)return {.kind=Kind::Checkbox};
             if(setting->type==emitter_settings::Type::Color)

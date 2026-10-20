@@ -263,7 +263,7 @@ namespace rock_configurator
 
     rock::api::configuration::Group IniSettingsStore::rockGroup() const noexcept
     {
-        return configurationFamily(_mod) == RpsMod::RockDeveloper ? rock::api::configuration::Group::Developer : rock::api::configuration::Group::Consumer;
+        return _mod == RpsMod::RockDeveloper ? rock::api::configuration::Group::Developer : rock::api::configuration::Group::Consumer;
     }
 
     bool IniSettingsStore::connectRockApi()
