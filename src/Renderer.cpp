@@ -60,6 +60,8 @@ void RPSUI_CALL drawFrame(const rpsui::sdk::PanelRenderFrameV1* frame,void*) noe
   {auto& shared=sharedModel();std::unique_lock modelLock(shared.mutex,std::try_to_lock);
    if(modelLock.owns_lock()){refreshWheelSections(shared.model);action=drawWheel(shared.model,shared.view,{},{},render.icons.ids());}}
   ImGui::Render();ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+  action.hand=frame->pointerHand==rpsui::sdk::PhysicalHandV1::Left?PointerHand::Left:
+   frame->pointerHand==rpsui::sdk::PhysicalHandV1::Right?PointerHand::Right:PointerHand::None;
   publishWheelSelection(ticket,action);
   const bool fresh=render.clickGeneration==ticket && !render.primaryDown && frame->primaryDown;
   render.clickGeneration=ticket;render.primaryDown=frame->primaryDown!=0;

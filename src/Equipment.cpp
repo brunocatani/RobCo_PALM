@@ -3,6 +3,7 @@
 #include "Equipment.h"
 #include "Inventory.h"
 #include "RockFrame.h"
+#include "WheelConfig.h"
 #include "tools/LoadedRpsMods.h"
 #include <array>
 #include <cstring>
@@ -93,38 +94,33 @@ void initializeEquipmentRuntime() noexcept {
  }catch(...){spdlog::error("PALM native capability initialization interrupted; unavailable operations stay disabled, wheel startup continues");}
 }
 EquipmentSupport equipmentSupport() noexcept {return support;}
-const char* toggleEquipment(const Item& selected,std::uint64_t owner,std::uint32_t inputThread) noexcept {
+const char* submitRockEquip(std::uint64_t owner,const RockEquip& equip,std::uint64_t& outCommand) noexcept {
+ outCommand=0;
+ try {
+  const auto& services=rockServices();
+  if(!owner || !services.client.owner() || !services.weapon)return "ROCK weapon interface unavailable";
+  rock::api::weapon::EquipRequest request;
+  request.hand=equip.hand==PointerHand::Left?rock::api::Hand::Left:rock::api::Hand::Right;
+  using rock::api::Status;
+  auto status=services.weapon->captureInventoryWeapon(owner,equip.form,equip.stackIndex,&request.item);
+  if(status==Status::Ok)status=services.weapon->requestInventoryEquip(owner,&request,&outCommand);
+  spdlog::info("PALM inventory equip {:08X} stack {} hand {}: status {} command {}",equip.form,equip.stackIndex,
+   equip.hand==PointerHand::Left?"left":"right",static_cast<unsigned>(status),outCommand);
+  if(status==Status::RequestQueued)return equip.hand==PointerHand::Left?"Equipping into left hand":"Equipping into right hand";
+  outCommand=0;
+  return status==Status::Busy?"Another weapon change is in progress":
+   status==Status::TargetUnavailable?"That equipment variant is no longer carried; update its Config selection":
+   status==Status::NotReady?"Weapon change unavailable right now":"ROCK refused that weapon change";
+ }catch(...){spdlog::error("PALM ROCK equip request failed");outCommand=0;return "Equipment change failed";}
+}
+const char* toggleEquipment(const Item& selected,std::uint64_t owner,PointerHand hand,std::uint32_t inputThread,RockEquip& outRock) noexcept {
+ outRock={};
  try {
   if(!support.names)return "Equipment names unavailable; saved choices are preserved";
   auto* player=RE::PlayerCharacter::GetSingleton();
   if(!player || !player->inventoryList)return "Inventory unavailable";
   auto* object=RE::TESForm::GetFormByID<RE::TESBoundObject>(selected.id);
   if(!object || (!object->Is(RE::ENUM_FORM_ID::kWEAP) && !object->Is(RE::ENUM_FORM_ID::kARMO)))return "Equipment no longer available";
-  if(owner && object->Is(RE::ENUM_FORM_ID::kWEAP)) {
-
-   for(const auto hand:{rock::api::Hand::Left,rock::api::Hand::Right}) {
-    rock::api::grab::HandInteractionState interaction{};
-    const auto& services=rockServices();
-    const auto status=services.client.owner() && services.grab?
-     services.grab->getHandInteractionState(owner,hand,&interaction):rock::api::Status::NotReady;
-    if(status!=rock::api::Status::Ok ||
-       !(interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::Valid))) {
-     // One report per explicit equipment action, never per input/render frame.
-     spdlog::warn("PALM equipment hand query rejected: weapon={:08X} hand={} status={} flags={:X} owner={:016X} inputThread={} taskThread={} frame={} generations[world,skeleton,provider]=[{},{},{}]",
-      selected.id,hand==rock::api::Hand::Left?"left":"right",static_cast<unsigned>(status),interaction.flags,owner,
-      inputThread,GetCurrentThreadId(),interaction.frameIndex,interaction.worldGeneration,interaction.skeletonGeneration,interaction.providerGeneration);
-     return "Hand state unavailable";
-    }
-    constexpr auto loose=static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::LooseObject)|
-     static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::LooseWeapon);
-    // LooseObject is also set for a merely highlighted world object. Only an
-    // active handoff/hold (or detached part carry) owns the hand against equip.
-    const bool holding=interaction.phase!=rock::api::grab::HandInteractionPhase::Idle &&
-     interaction.phase!=rock::api::grab::HandInteractionPhase::Touching && interaction.phase!=rock::api::grab::HandInteractionPhase::Selecting;
-    if(((interaction.flags&loose) && holding) ||
-       (interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::PartCarry)))return "Put down the held object before changing weapons";
-   }
-  }
   std::uint32_t stackIndex=0;bool found=false,equipped=false;
   RE::BSTSmartPointer<RE::TBO_InstanceData> instance;
   {
@@ -148,6 +144,38 @@ const char* toggleEquipment(const Item& selected,std::uint64_t owner,std::uint32
    }
   } // Never call the equipment manager while holding the inventory lock.
   if(!found)return "That equipment variant is no longer carried; update its Config selection";
+  if(owner && !equipped && object->Is(RE::ENUM_FORM_ID::kWEAP)) {
+   // ROCK owns hand placement: the weapon goes into the selecting hand and
+   // replaces the weapon that hand holds; the other hand's weapon stays.
+   // ROCK's weapon calls run on its owner thread, so only the stack is chosen here.
+   if(hand==PointerHand::None)return "Selecting hand unknown; point at the weapon and select again";
+   outRock={selected.id,stackIndex,hand};
+   return hand==PointerHand::Left?"Equipping into left hand":"Equipping into right hand";
+  }
+  if(owner && equipped && object->Is(RE::ENUM_FORM_ID::kWEAP)) {
+   for(const auto side:{rock::api::Hand::Left,rock::api::Hand::Right}) {
+    rock::api::grab::HandInteractionState interaction{};
+    const auto& services=rockServices();
+    const auto status=services.client.owner() && services.grab?
+     services.grab->getHandInteractionState(owner,side,&interaction):rock::api::Status::NotReady;
+    if(status!=rock::api::Status::Ok ||
+       !(interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::Valid))) {
+     // One report per explicit equipment action, never per input/render frame.
+     spdlog::warn("PALM equipment hand query rejected: weapon={:08X} hand={} status={} flags={:X} owner={:016X} inputThread={} taskThread={} frame={} generations[world,skeleton,provider]=[{},{},{}]",
+      selected.id,side==rock::api::Hand::Left?"left":"right",static_cast<unsigned>(status),interaction.flags,owner,
+      inputThread,GetCurrentThreadId(),interaction.frameIndex,interaction.worldGeneration,interaction.skeletonGeneration,interaction.providerGeneration);
+     return "Hand state unavailable";
+    }
+    constexpr auto loose=static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::LooseObject)|
+     static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::LooseWeapon);
+    // LooseObject is also set for a merely highlighted world object. Only an
+    // active handoff/hold (or detached part carry) owns the hand against equip.
+    const bool holding=interaction.phase!=rock::api::grab::HandInteractionPhase::Idle &&
+     interaction.phase!=rock::api::grab::HandInteractionPhase::Touching && interaction.phase!=rock::api::grab::HandInteractionPhase::Selecting;
+    if(((interaction.flags&loose) && holding) ||
+       (interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::PartCarry)))return "Put down the held object before changing weapons";
+   }
+  }
   if(!support.canToggle(equipped))return equipped?"Unequip unavailable: native function conflict":"Equip unavailable: native function conflict";
   auto* manager=RE::ActorEquipManager::GetSingleton();
   if(!manager)return "Equipment manager unavailable";
@@ -161,6 +189,50 @@ const char* toggleEquipment(const Item& selected,std::uint64_t owner,std::uint32
   if(!accepted)return "The game refused that equipment change";
   return equipped?"Unequip requested":"Equip requested";
  }catch(...){spdlog::error("PALM equipment change failed");return "Equipment change failed";}
+}
+const char* addHeldWeaponToWheel(std::uint32_t equipIndex,unsigned slot) noexcept {
+ try {
+  if(!support.names)return "Equipment names unavailable";
+  auto* player=RE::PlayerCharacter::GetSingleton();
+  auto* middle=player && player->currentProcess?player->currentProcess->middleHigh:nullptr;
+  if(!middle || !player->inventoryList)return "Equipped weapon unavailable";
+  // Identity comparison witnesses only; never dereferenced after the lock.
+  const RE::TESForm* weapon{};const RE::TBO_InstanceData* instance{};
+  {
+   RE::BSAutoLock<RE::BSSpinLock> lock{middle->equippedItemsLock};
+   if(middle->equippedItems.size()<=32)for(const auto& entry:middle->equippedItems)
+    if(entry.equipIndex.index==equipIndex && entry.item.object && entry.item.object->IsWeapon()) {
+     const auto* data=static_cast<const RE::TESObjectWEAP*>(entry.item.object);
+     const auto type=entry.item.instanceData?static_cast<const RE::TESObjectWEAP::InstanceData*>(entry.item.instanceData.get())->type:data->weaponData.type;
+     if(type==RE::WEAPON_TYPE::kGrenade || type==RE::WEAPON_TYPE::kMine)break;
+     weapon=entry.item.object;instance=entry.item.instanceData.get();break;
+    }
+  }
+  if(!weapon)return "No weapon held in that hand";
+  // The equipped stack holding this exact instance; a native equip may clone
+  // the instance payload, so a single equipped stack of the form also names it.
+  Item exact,only;unsigned equippedStacks{};
+  {
+   const RE::BSAutoReadLock lock{player->inventoryList->rwLock};
+   for(const auto& entry:player->inventoryList->data) {
+    if(entry.object!=weapon)continue;
+    std::uint32_t index=0;
+    for(auto* stack=entry.stackData.get();stack && index<4096;stack=stack->nextStack.get(),++index) {
+     if(!stack->GetCount() || !stack->IsEquipped())continue;
+     const auto* extra=stack->extra?stack->extra->GetByType<RE::ExtraInstanceData>():nullptr;
+     auto item=detail::equipmentItem(entry,*stack,index);
+     if((extra?extra->data.get():nullptr)==instance)exact=item;
+     ++equippedStacks;only=std::move(item);
+    }
+    break;
+   }
+  }
+  const auto& item=!exact.key.empty()?exact:equippedStacks==1?only:exact;
+  if(item.key.empty() || item.name.empty())return "That weapon cannot be identified for the wheel";
+  const auto* message=addWheelFavorite(Category::Weapons,item,slot);
+  spdlog::info("PALM add held weapon index {} {:08X} '{}' to slot {}: {}",equipIndex,item.id,item.name,slot,message);
+  return message;
+ }catch(...){spdlog::error("PALM add held weapon failed");return "Adding the weapon failed";}
 }
 const char* useInventoryItem(std::uint32_t id) noexcept {
  try {

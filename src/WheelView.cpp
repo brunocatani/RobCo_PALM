@@ -70,9 +70,15 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
  auto& items=model.items[category];
  const int hit=hitSlot(mx,my,inner,outer);
  const std::size_t index=hit>=0 ? hit : items.size();
- const Item* hovered=showingItems && index<items.size()? &items[index]:nullptr;
+ // Ring slots are positional: an id-0 entry is a gap kept for an uncarried choice.
+ const auto occupied=[&](std::size_t slot){return slot<items.size() && items[slot].id!=0;};
+ const Item* hovered=showingItems && occupied(index)? &items[index]:nullptr;
  const auto* externalHover=external && hit>=0 && static_cast<unsigned>(hit)<external->count?&external->items[hit]:nullptr;
  const unsigned hand=gestures.left?1:0;
+ // An empty weapon slot adds the weapon held in the pointing hand.
+ const bool addHover=showingItems && model.category==Category::Weapons && model.equipmentNamesAvailable &&
+  hit>=0 && !occupied(index);
+ const bool addSlotFree=addHover && (model.freeWeaponSlots>>hit&1u);
 
  for(std::size_t slot=0;(showingItems || showingGestures || external) && slot<kSlots;++slot) {
   const float mid=-kPi/2+static_cast<float>(slot)*kPi/4;
@@ -109,10 +115,12 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
    if(selected)centered(draw,{p.x,p.y+49*scale},12*scale,over?dark:green,"ACTIVE");
    continue;
   }
-  const bool available=itemIndex<items.size();
-  const bool active=available && items[itemIndex].count>0 && hit==static_cast<int>(slot);
+  const bool available=occupied(itemIndex);
+  const bool adding=addSlotFree && hit==static_cast<int>(slot);
+  const bool active=(available && items[itemIndex].count>0 && hit==static_cast<int>(slot)) || adding;
   sector(draw,center,inner,outer,start,end,active?green:surface,active?green:available?boundary:phosphor(alpha/8));
   const ImVec2 slotCenter{center.x+std::cos(mid)*258*scale,center.y+std::sin(mid)*258*scale};
+  if(adding){centered(draw,{slotCenter.x,slotCenter.y-12*scale},44*scale,dark,"+");centered(draw,{slotCenter.x,slotCenter.y+22*scale},16*scale,dark,"ADD HELD");}
   if(!available)continue;
   const auto& item=items[itemIndex];
   const auto ink=active?dark:green;
@@ -188,7 +196,12 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
   centered(draw,point(512,886),23*scale,green,hovered->name.c_str());
   centered(draw,point(512,920),16*scale,muted,!hovered->count?"NOT CURRENTLY CARRIED":isEquipment(model.category)?(hovered->equipped?"RELEASE TRIGGER OR GRAB TO UNEQUIP":"RELEASE TRIGGER OR GRAB TO EQUIP"):"RELEASE TRIGGER OR GRAB TO TAKE ONE");
  }else if(!showingItems)centered(draw,point(512,886),20*scale,muted,"Enable wheel sections in Config");
- else if(items.empty())centered(draw,point(512,886),20*scale,muted,
+ else if(addHover) {
+  action.addHeldWeapon=addSlotFree?static_cast<unsigned>(hit)+1:0;
+  centered(draw,point(512,886),23*scale,green,addSlotFree?"ADD HELD WEAPON":"SLOT KEPT FOR A WEAPON NOT CARRIED");
+  centered(draw,point(512,920),16*scale,muted,addSlotFree?"RELEASE TRIGGER OR GRAB TO ADD THE WEAPON IN THIS HAND":
+   "CHANGE IT IN CONFIG");
+ }else if(std::none_of(items.begin(),items.end(),[](const Item& item){return item.id!=0;}))centered(draw,point(512,886),20*scale,muted,
   isEquipment(model.category) && !model.equipmentNamesAvailable?"Equipment unavailable; saved choices are kept":"Choose your items in Config");
  centered(draw,point(512,960),14*scale,muted,model.status.c_str());
  ImGui::End();

@@ -125,7 +125,7 @@ Model readInventory() {
   }
  }
  for(auto& items:result.items) std::sort(items.begin(),items.end(),[](const Item& a,const Item& b){return a.name==b.name?a.id<b.id:a.name<b.name;});
- publishWheelInventory(result);
+ if(const auto removed=publishWheelInventory(result))spdlog::info("PALM removed {} weapon choice(s) no longer carried",removed);
  return selectedWheelInventory(result);
 }
 }

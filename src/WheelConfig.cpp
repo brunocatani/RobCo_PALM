@@ -39,7 +39,33 @@ void restoreWheelPreferences(Preferences prefs) {
  s.prefs=std::move(prefs);s.inventory={};s.changed=false;s.category=0;s.search[0]='\0';
  s.status="Saved with your game";
 }
-void publishWheelInventory(const Model& inventory){auto& s=state();std::scoped_lock lock(s.mutex);s.inventory=inventory;}
+std::size_t publishWheelInventory(const Model& inventory){
+ auto& s=state();std::scoped_lock lock(s.mutex);std::size_t removed{};
+ // A weapon choice carried in the previous complete read and absent from this
+ // one left the inventory (dropped, stored, sold, scrapped or modified into
+ // another variant): it frees its slot. A partial read never removes a choice;
+ // a load clears the previous read, so restored choices are never pruned.
+ constexpr auto weapons=static_cast<unsigned>(Category::Weapons);
+ const auto complete=[](const Model& model){return model.status.empty() && model.equipmentNamesAvailable && model.items[weapons].size()<kMaxItems;};
+ const auto carried=[](const Model& model,const std::string& key) {
+  return std::any_of(model.items[weapons].begin(),model.items[weapons].end(),[&](const Item& item){return item.key==key;});
+ };
+ if(complete(s.inventory) && complete(inventory)) {
+  auto& favorites=s.prefs.slots[weapons];
+  removed=std::erase_if(favorites,[&](const Favorite& f){return carried(s.inventory,f.key) && !carried(inventory,f.key);});
+  if(removed)s.changed=true;
+ }
+ s.inventory=inventory;return removed;
+}
+const char* addWheelFavorite(Category category,const Item& item,unsigned slot) {
+ auto& s=state();std::scoped_lock lock(s.mutex);
+ const auto c=static_cast<unsigned>(category);
+ auto& favorites=s.prefs.slots[c];
+ if(std::any_of(favorites.begin(),favorites.end(),[&](const Favorite& f){return f.key==item.key;}))return "That weapon is already on the wheel";
+ if(!s.prefs.slotFree(c,slot))return "That slot is already taken";
+ if(!s.prefs.place(c,{item.key,item.name},slot))return "That weapon cannot be added";
+ s.changed=true;return "Added to the wheel";
+}
 Model selectedWheelInventory(const Model& inventory){
  auto& s=state();std::scoped_lock lock(s.mutex);auto result=curatedInventory(inventory,s.prefs);
  result.gesturesEnabled &= gestureIntegrationAvailable();

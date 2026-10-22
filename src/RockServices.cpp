@@ -20,7 +20,7 @@ bool RockServices::connect() {
     const char* failed{};
     auto status=Status::Ok;
     if((status=client.acquire(bits(api::grab::Permission::Read,api::grab::Permission::Write),grab))!=Status::Ok) failed="Grab";
-    else if((status=client.acquire(bits(api::weapon::Permission::Read),weapon))!=Status::Ok) failed="Weapon";
+    else if((status=client.acquire(bits(api::weapon::Permission::Read,api::weapon::Permission::Write),weapon))!=Status::Ok) failed="Weapon";
     else if((status=client.acquire(bits(api::hands::Permission::Read),hands))!=Status::Ok) failed="Hands";
     else if((status=client.acquire(bits(api::input::Permission::Read),input))!=Status::Ok) failed="Input";
     if(failed) {

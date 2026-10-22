@@ -23,7 +23,9 @@
 namespace wheel {
 namespace {
 
-constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kSectionChoice=3,kItemChoice=std::uint64_t{1}<<63;
+// kAddWeaponChoice+slot (slots 0..7) stays below the gesture choices at 16.
+constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kSectionChoice=3,kAddWeaponChoice=4,kItemChoice=std::uint64_t{1}<<63;
+constexpr bool isAddWeaponChoice(std::uint64_t choice){return choice>=kAddWeaponChoice && choice<kAddWeaponChoice+kSlots;}
 struct RuntimeState {
  std::atomic_bool open{false},held{false},inputReady{false};
  std::atomic_bool gameActionPending{false};
@@ -32,6 +34,11 @@ struct RuntimeState {
  std::atomic_bool sessionReady{false},sessionResetPending{true};
  std::atomic_uint64_t generation{1},choice{0},choiceGeneration{0};
  std::atomic_uint64_t sectionChoice{0};
+ std::atomic<PointerHand> choiceHand{PointerHand::None};
+ // RockEquip::pack(), written by the equipment task and submitted by the input
+ // callback on ROCK's owner thread; equipCommand is owned by that callback.
+ std::atomic_uint64_t pendingEquip{0};
+ std::uint64_t equipCommand{};
  // Serializes panel open/close on the game task and provider callback threads,
  // and short selection publication from the renderer. Never acquires the model
  // or render mutex while held; framework callbacks run outside its own lock.
@@ -131,6 +138,35 @@ void serviceCommand() {
  spdlog::info("PALM handoff {}: {} (query {}, failure {})",s.command,message,static_cast<unsigned>(query),static_cast<unsigned>(result.failure));
  if(query!=rock::api::Status::Ok)cancelCommand();else s.command=0;
 }
+void serviceEquipCommand() {
+ auto& s=state();
+ if(const auto pending=s.pendingEquip.exchange(0)) {
+  // A new selection supersedes the result of an earlier one.
+  std::uint64_t command{};
+  actionStatus(submitRockEquip(s.owner,RockEquip::unpack(pending),command));
+  s.equipCommand=command;
+  if(!command){refreshWheelInventory();return;}
+ }
+ const auto command=s.equipCommand;
+ if(!command || !rockServices().weapon)return;
+ rock::api::weapon::EquipResult result;
+ const auto query=rockServices().weapon->getInventoryEquipResult(s.owner,command,&result);
+ using State=rock::api::weapon::EquipState;
+ if(query==rock::api::Status::Ok && (result.state==State::Queued || result.state==State::Switching))return;
+ s.equipCommand=0;
+ using Failure=rock::api::weapon::EquipFailure;
+ const bool left=result.hand==rock::api::Hand::Left;
+ const char* message=query!=rock::api::Status::Ok?"Weapon change result unavailable":
+  result.state==State::Succeeded?(left?"Equipped in left hand":"Equipped in right hand"):
+  result.failure==Failure::HandBusy?"That hand is busy — put down what it holds":
+  result.failure==Failure::HandUnavailable?"That hand is unavailable":
+  result.failure==Failure::InventoryChanged?"That weapon is no longer carried":
+  result.state==State::Cancelled?"Weapon change cancelled":"The weapon change failed";
+ actionStatus(message);
+ spdlog::info("PALM inventory equip {}: {} (query {}, state {}, failure {}, slot {}, incoming {:08X}, outgoing {:08X})",command,message,
+  static_cast<unsigned>(query),static_cast<unsigned>(result.state),static_cast<unsigned>(result.failure),result.weaponSlot,result.incomingFormId,result.outgoingFormId);
+ refreshWheelInventory();
+}
 
 std::optional<rpsui::sdk::PanelPoseV1> poseFor(const rpsui::sdk::InputFrameV1& frame) {
  const auto& t=frame.hands[physicalHand(state().controls.binding.hand,frame.leftHanded)];
@@ -185,6 +221,30 @@ void submitChoice(const wheel::RockFrame& frame) {
     if(result!=palm::api::Result::Ok){actionStatus("Mod selection is no longer available");spdlog::warn("PALM mod action rejected: section={}, item={}, result={}",section,item,static_cast<unsigned>(result));}
    }catch(...){spdlog::error("PALM mod action dispatch failed");}
   });}catch(...){s.gameActionPending=false;throw;}
+ }else if(isAddWeaponChoice(choice)) {
+  const auto slot=static_cast<unsigned>(choice-kAddWeaponChoice);
+  s.handGestures.clear(s.owner);
+  // The weapon whose grip the pointing hand holds; with that hand empty, the
+  // weapon the other hand holds. Without ROCK only the native weapon exists.
+  std::uint32_t equipIndex=0;
+  if(s.rockReady.load()) {
+   using rock::api::Hand;using rock::api::hands::kNoWeaponSlot;
+   const auto pointing=s.choiceHand.load()==PointerHand::Left?Hand::Left:Hand::Right;
+   const auto other=pointing==Hand::Left?Hand::Right:Hand::Left;
+   equipIndex=handRole(frame.roles,pointing).weaponSlot;
+   if(equipIndex==kNoWeaponSlot)equipIndex=handRole(frame.roles,other).weaponSlot;
+   if(equipIndex==kNoWeaponSlot){actionStatus("Hold the weapon you want to add");return;}
+  }
+  const auto* tasks=F4SE::GetTaskInterface();
+  if(!tasks){actionStatus("Equipment task queue unavailable");return;}
+  s.gameActionPending=true;
+  try { tasks->AddTask([ticket,equipIndex,slot] {
+   auto& runtime=state();
+   struct Finish {RuntimeState& state;~Finish(){state.gameActionPending=false;}} finish{runtime};
+   if(!runtime.sessionReady.load() || !runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
+   try { actionStatus(addHeldWeaponToWheel(equipIndex,slot)); refreshWheelInventory(); }
+   catch(...){spdlog::error("PALM add held weapon publication failed");}
+  }); } catch(...) {s.gameActionPending=false;throw;}
  }else if(isGestureChoice(choice)) {
   const auto* message=s.handGestures.select(s.owner,static_cast<unsigned>(choice),frame);
   actionStatus(message);
@@ -206,11 +266,16 @@ void submitChoice(const wheel::RockFrame& frame) {
    const auto* tasks=F4SE::GetTaskInterface();
    if(!tasks){actionStatus("Equipment task queue unavailable");return;}
    s.gameActionPending=true;
-   try { tasks->AddTask([ticket,item=*equipment,inputThread=GetCurrentThreadId()] {
+   try { tasks->AddTask([ticket,item=*equipment,hand=s.choiceHand.load(),inputThread=GetCurrentThreadId()] {
     auto& runtime=state();
     struct Finish {RuntimeState& state;~Finish(){state.gameActionPending=false;}} finish{runtime};
     if(!runtime.sessionReady.load() || !runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
-    try { actionStatus(toggleEquipment(item,runtime.rockReady.load()?runtime.owner:0,inputThread)); refreshWheelInventory(); }
+    try {
+     RockEquip rock;
+     actionStatus(toggleEquipment(item,runtime.rockReady.load()?runtime.owner:0,hand,inputThread,rock));
+     if(rock.form)runtime.pendingEquip=rock.pack();
+     else refreshWheelInventory();
+    }
     catch(...){spdlog::error("Equipment result publication failed");}
    }); } catch(...) {s.gameActionPending=false;throw;}
    return;
@@ -284,7 +349,7 @@ void openHeldWheel(const rpsui::sdk::InputFrameV1& frame) {
 void selectWheel(bool closeAfterSelect,const std::optional<Action>& clicked) {
  auto& s=state();std::scoped_lock lock(s.presentationMutex);
  const auto hover=closeAfterSelect?s.selection.drawn:clicked;
- if(!closeAfterSelect && (!hover || (!hover->cancelHovered && !hover->configHovered && !hover->hoveredGesture && !hover->section && !hover->hoveredItem)))return;
+ if(!closeAfterSelect && (!hover || (!hover->cancelHovered && !hover->configHovered && !hover->hoveredGesture && !hover->section && !hover->hoveredItem && !hover->addHeldWeapon)))return;
  const bool close=closeAfterSelect || (hover && (hover->configHovered || hover->cancelHovered || developerActions().ownsSection(hover->section)));
  auto ticket=s.generation.load();
  if(close) {
@@ -294,8 +359,10 @@ void selectWheel(bool closeAfterSelect,const std::optional<Action>& clicked) {
  }
  s.choiceGeneration=ticket;
  if(hover && hover->section)s.sectionChoice=(static_cast<std::uint64_t>(hover->section)<<32)|hover->sectionItem;
+ s.choiceHand=hover?hover->hand:PointerHand::None;
  s.choice=hover?(hover->configHovered?kConfigChoice:hover->hoveredGesture?hover->hoveredGesture:
-  hover->section?kSectionChoice:hover->hoveredItem?(kItemChoice|hover->hoveredItem):kCancelChoice):kCancelChoice;
+  hover->section?kSectionChoice:hover->hoveredItem?(kItemChoice|hover->hoveredItem):
+  hover->addHeldWeapon?kAddWeaponChoice+hover->addHeldWeapon-1:kCancelChoice):kCancelChoice;
  // Release may arrive before the first draw, including a skipped depth frame.
  // Cancelling this opening is not evidence that presentation is unavailable.
  if(!hover)spdlog::info("PALM opening cancelled before a rendered selection; waiting for both buttons to release");
@@ -333,16 +400,16 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
   s.inputReady=usable;rock_configurator::setAvailable(usable);
   const bool reset=s.sessionResetPending.exchange(false);
   if(providerChanged) {
-   s.handGestures.clear(s.owner);publishGestureState();cancelCommand();
+   s.handGestures.clear(s.owner);publishGestureState();cancelCommand();s.pendingEquip=0;s.equipCommand=0;
    s.world=s.rockFrame.sample.worldGeneration;s.skeleton=s.rockFrame.sample.skeletonGeneration;s.provider=s.rockFrame.sample.providerGeneration;
    refreshWheelInventory();
   }
   if(!usable || reset) {
-   s.handGestures.clear(s.owner);publishGestureState();closeWheel();cancelCommand();clearSuppression();s.gesture={};s.rockyPriority={};s.clickRequested=false;
+   s.handGestures.clear(s.owner);publishGestureState();closeWheel();cancelCommand();s.pendingEquip=0;s.equipCommand=0;clearSuppression();s.gesture={};s.rockyPriority={};s.clickRequested=false;
    s.world=s.rockFrame.sample.worldGeneration;s.skeleton=s.rockFrame.sample.skeletonGeneration;s.provider=s.rockFrame.sample.providerGeneration;
    return;
   }
-  serviceCommand();
+  serviceCommand();serviceEquipCommand();
   if(rock_configurator::takeInventoryRefreshRequest())refreshWheelInventory();
   const bool gameActionPending=s.gameActionPending.load(),configOpen=rock_configurator::isOpen(),configOpening=rock_configurator::isOpening();
   const bool eligible=!s.command && !gameActionPending && !configOpen && !configOpening;

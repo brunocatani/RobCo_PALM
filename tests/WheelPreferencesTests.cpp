@@ -41,9 +41,17 @@ int main(){try {
  check(loaded.slots[0].size()==8); // Hiding is not deletion of a saved choice.
  inventory.items[0]={{555,"Reacquired 2",1,false,"plugin|2"},{999,"Reacquired 0",1,false,"plugin|0"}};
  visible=curatedInventory(inventory,loaded);
- check(visible.items[0].size()==2 && visible.items[0][0].id==999 && visible.items[0][1].id==555);
+ // Ring slots are fixed: the uncarried choice in slot 1 leaves a gap.
+ check(visible.items[0].size()==3 && visible.items[0][0].id==999 && visible.items[0][1].id==0 && visible.items[0][2].id==555);
  check(loaded.select(0,{"plugin|0","Item 0"},false));
- check(loaded.select(0,{"plugin|8","Ninth item"},true));
+ check(loaded.select(0,{"plugin|8","Ninth item"},true) && loaded.slots[0].back().slot==0);
+ // A placed slot survives a save round trip; a version 1 record keeps its order.
+ Preferences placed;check(placed.place(3,{"rifle","Rifle"},6) && !placed.place(3,{"pistol","Pistol"},6));
+ std::ostringstream placedOut;writePreferences(placedOut,placed);
+ Preferences placedIn;std::istringstream placedSource(placedOut.str());
+ check(readPreferences(placedSource,placedIn) && placedIn.slots[3].size()==1 && placedIn.slots[3][0].slot==6);
+ std::istringstream version1("PALMItems 1\ncategory 0 1\nitem 0 \"a\" \"A\"\nitem 0 \"b\" \"B\"\ncategory 1 1\ncategory 2 1\ncategory 3 1\ncategory 4 1\n");
+ Preferences ordered;check(readPreferences(version1,ordered) && ordered.slots[0][0].slot==0 && ordered.slots[0][1].slot==1);
  std::istringstream invalid("PALMItems 1\ncategory 0 1\nitem 0 \"same\" \"A\"\nitem 0 \"same\" \"B\"\ncategory 1 1\ncategory 2 1\ncategory 3 1\ncategory 4 1\n");
  check(!readPreferences(invalid,loaded));check(loaded.slots[0].size()==8);
  std::cout<<"Slot limit, persistence, stable identity and unavailable-item behavior passed\n";return 0;
