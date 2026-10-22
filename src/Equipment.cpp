@@ -197,21 +197,26 @@ const char* addHeldWeaponToWheel(std::uint32_t equipIndex,unsigned slot) noexcep
   auto* middle=player && player->currentProcess?player->currentProcess->middleHigh:nullptr;
   if(!middle || !player->inventoryList)return "Equipped weapon unavailable";
   // Identity comparison witnesses only; never dereferenced after the lock.
-  const RE::TESForm* weapon{};const RE::TBO_InstanceData* instance{};
-  {
+  // The equip slot is a persistent form: the hand leaf this index wears.
+  const RE::TESForm* weapon{};const RE::TBO_InstanceData* instance{};const RE::BGSEquipSlot* equipSlot{};
+  const auto worn=[&]{
+   const RE::TESForm* found{};
    RE::BSAutoLock<RE::BSSpinLock> lock{middle->equippedItemsLock};
    if(middle->equippedItems.size()<=32)for(const auto& entry:middle->equippedItems)
     if(entry.equipIndex.index==equipIndex && entry.item.object && entry.item.object->IsWeapon()) {
      const auto* data=static_cast<const RE::TESObjectWEAP*>(entry.item.object);
      const auto type=entry.item.instanceData?static_cast<const RE::TESObjectWEAP::InstanceData*>(entry.item.instanceData.get())->type:data->weaponData.type;
      if(type==RE::WEAPON_TYPE::kGrenade || type==RE::WEAPON_TYPE::kMine)break;
-     weapon=entry.item.object;instance=entry.item.instanceData.get();break;
+     found=entry.item.object;instance=entry.item.instanceData.get();equipSlot=entry.equipSlot;break;
     }
-  }
+   return found;
+  };
+  weapon=worn();
   if(!weapon)return "No weapon held in that hand";
   // The equipped stack holding this exact instance; a native equip may clone
   // the instance payload, so a single equipped stack of the form also names it.
-  Item exact,only;unsigned equippedStacks{};
+  struct Candidate {Item item;RE::BSTSmartPointer<RE::TBO_InstanceData> instance;};
+  Candidate exact,only;unsigned equippedStacks{};
   {
    const RE::BSAutoReadLock lock{player->inventoryList->rwLock};
    for(const auto& entry:player->inventoryList->data) {
@@ -220,18 +225,31 @@ const char* addHeldWeaponToWheel(std::uint32_t equipIndex,unsigned slot) noexcep
     for(auto* stack=entry.stackData.get();stack && index<4096;stack=stack->nextStack.get(),++index) {
      if(!stack->GetCount() || !stack->IsEquipped())continue;
      const auto* extra=stack->extra?stack->extra->GetByType<RE::ExtraInstanceData>():nullptr;
-     auto item=detail::equipmentItem(entry,*stack,index);
-     if((extra?extra->data.get():nullptr)==instance)exact=item;
-     ++equippedStacks;only=std::move(item);
+     Candidate candidate{detail::equipmentItem(entry,*stack,index),extra?extra->data:nullptr};
+     if(candidate.instance.get()==instance)exact=candidate;
+     ++equippedStacks;only=std::move(candidate);
     }
     break;
    }
   }
-  const auto& item=!exact.key.empty()?exact:equippedStacks==1?only:exact;
+  const auto& chosen=!exact.item.key.empty()?exact:equippedStacks==1?only:exact;
+  const auto& item=chosen.item;
   if(item.key.empty() || item.name.empty())return "That weapon cannot be identified for the wheel";
-  const auto* message=addWheelFavorite(Category::Weapons,item,slot);
+  const char* message{};
+  const bool added=addWheelFavorite(Category::Weapons,item,slot,message);
   spdlog::info("PALM add held weapon index {} {:08X} '{}' to slot {}: {}",equipIndex,item.id,item.name,slot,message);
-  return message;
+  if(!added)return message;
+  // Stored on the wheel like a dropped weapon: the exact stack leaves this
+  // hand's leaf, so another index's weapon is untouched.
+  auto* manager=RE::ActorEquipManager::GetSingleton();
+  auto* object=RE::TESForm::GetFormByID<RE::TESBoundObject>(item.id);
+  if(!support.unequip || !manager || !object)return "Added to the wheel; it could not be put away";
+  RE::BGSObjectInstance objectInstance(object,chosen.instance.get());
+  (void)manager->UnequipObject(player,&objectInstance,1,equipSlot,item.stackIndex,false,false,true,true,nullptr);
+  // The native return does not report ROCK-routed unequips; the worn index does.
+  const bool putAway=worn()!=weapon;
+  spdlog::info("PALM add held weapon put away index {} {:08X}: {}",equipIndex,item.id,putAway);
+  return putAway?"Added to the wheel and put away":"Added to the wheel; it could not be put away";
  }catch(...){spdlog::error("PALM add held weapon failed");return "Adding the weapon failed";}
 }
 const char* useInventoryItem(std::uint32_t id) noexcept {

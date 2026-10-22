@@ -57,14 +57,14 @@ std::size_t publishWheelInventory(const Model& inventory){
  }
  s.inventory=inventory;return removed;
 }
-const char* addWheelFavorite(Category category,const Item& item,unsigned slot) {
+bool addWheelFavorite(Category category,const Item& item,unsigned slot,const char*& message) {
  auto& s=state();std::scoped_lock lock(s.mutex);
  const auto c=static_cast<unsigned>(category);
  auto& favorites=s.prefs.slots[c];
- if(std::any_of(favorites.begin(),favorites.end(),[&](const Favorite& f){return f.key==item.key;}))return "That weapon is already on the wheel";
- if(!s.prefs.slotFree(c,slot))return "That slot is already taken";
- if(!s.prefs.place(c,{item.key,item.name},slot))return "That weapon cannot be added";
- s.changed=true;return "Added to the wheel";
+ if(std::any_of(favorites.begin(),favorites.end(),[&](const Favorite& f){return f.key==item.key;})){message="That weapon is already on the wheel";return false;}
+ if(!s.prefs.slotFree(c,slot)){message="That slot is already taken";return false;}
+ if(!s.prefs.place(c,{item.key,item.name},slot)){message="That weapon cannot be added";return false;}
+ s.changed=true;message="Added to the wheel";return true;
 }
 Model selectedWheelInventory(const Model& inventory){
  auto& s=state();std::scoped_lock lock(s.mutex);auto result=curatedInventory(inventory,s.prefs);
