@@ -169,11 +169,12 @@ const char* toggleEquipment(const Item& selected,std::uint64_t owner,PointerHand
     constexpr auto loose=static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::LooseObject)|
      static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::LooseWeapon);
     // LooseObject is also set for a merely highlighted world object. Only an
-    // active handoff/hold (or detached part carry) owns the hand against equip.
+    // active handoff/hold owns the hand against the unequip. A part carry is an
+    // equipped weapon's own state (akimbo: often the other weapon); ROCK's
+    // unequip path owns its release.
     const bool holding=interaction.phase!=rock::api::grab::HandInteractionPhase::Idle &&
      interaction.phase!=rock::api::grab::HandInteractionPhase::Touching && interaction.phase!=rock::api::grab::HandInteractionPhase::Selecting;
-    if(((interaction.flags&loose) && holding) ||
-       (interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::PartCarry)))return "Put down the held object before changing weapons";
+    if((interaction.flags&loose) && holding)return "Put down the held object before changing weapons";
    }
   }
   if(!support.canToggle(equipped))return equipped?"Unequip unavailable: native function conflict":"Equip unavailable: native function conflict";
