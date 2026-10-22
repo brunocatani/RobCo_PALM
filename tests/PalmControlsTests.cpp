@@ -45,10 +45,10 @@ int main(){try {
  }
  {
 
-  using Flag=rock::api::grab::HandInteractionFlagV1;
-  wheel::RockFrame frame;frame.frameIndex=5;frame.worldGeneration=1;frame.skeletonGeneration=2;frame.providerGeneration=3;
+  using Flag=rock::api::grab::HandInteractionFlag;
+  wheel::RockFrame frame;frame.sample.frameIndex=5;frame.sample.worldGeneration=1;frame.sample.skeletonGeneration=2;frame.sample.providerGeneration=3;
   for(const auto hand:{rock::api::Hand::Left,rock::api::Hand::Right}) {
-   rock::api::grab::HandInteractionStateV1 interaction;interaction.hand=hand;interaction.frameIndex=frame.frameIndex;
+   rock::api::grab::HandInteractionState interaction;interaction.hand=hand;interaction.frameIndex=frame.sample.frameIndex;
    interaction.worldGeneration=1;interaction.skeletonGeneration=2;interaction.providerGeneration=3;
    interaction.flags=static_cast<unsigned>(Flag::Valid);
    const auto allowed=[&]{return triggerEquipAllowsOpening(interaction,frame,hand);};
@@ -109,10 +109,9 @@ int main(){try {
  }
  {
 
-  using Flag=rock::api::weapon::EquippedWeaponStateFlagV1;
-  wheel::RockFrame frame;frame.frameIndex=5;frame.worldGeneration=1;frame.skeletonGeneration=2;frame.providerGeneration=3;
-  rock::api::weapon::EquippedWeaponStateV1 weapon;weapon.frameIndex=frame.frameIndex;
-  weapon.worldGeneration=frame.worldGeneration;weapon.skeletonGeneration=frame.skeletonGeneration;weapon.providerGeneration=frame.providerGeneration;
+  using Flag=rock::api::weapon::WeaponStateFlag;
+  wheel::RockFrame frame;frame.sample.frameIndex=5;frame.sample.worldGeneration=1;frame.sample.skeletonGeneration=2;frame.sample.providerGeneration=3;
+  rock::api::weapon::WeaponState weapon;weapon.sample=frame.sample;
   weapon.flags=static_cast<std::uint32_t>(Flag::Valid);
   check(bipodAllowsOpening(weapon,frame),"disabled/inactive bipod blocked opening");
   const auto step=[&](bool down,double time){return gesture.update(true,controls,down,down,false,time,bipodAllowsOpening(weapon,frame));};
@@ -127,19 +126,17 @@ int main(){try {
   }
   weapon.flags=0;check(!bipodAllowsOpening(weapon,frame),"invalid weapon observation granted opening");
   weapon.flags=static_cast<std::uint32_t>(Flag::Valid);
-  --weapon.frameIndex;check(!bipodAllowsOpening(weapon,frame),"stale bipod frame granted opening");++weapon.frameIndex;
-  ++weapon.worldGeneration;check(!bipodAllowsOpening(weapon,frame),"old world granted opening");--weapon.worldGeneration;
-  ++weapon.skeletonGeneration;check(!bipodAllowsOpening(weapon,frame),"old skeleton granted opening");--weapon.skeletonGeneration;
-  ++weapon.providerGeneration;check(!bipodAllowsOpening(weapon,frame),"old provider granted opening");
+  --weapon.sample.frameIndex;check(!bipodAllowsOpening(weapon,frame),"stale bipod frame granted opening");++weapon.sample.frameIndex;
+  ++weapon.sample.worldGeneration;check(!bipodAllowsOpening(weapon,frame),"old world granted opening");--weapon.sample.worldGeneration;
+  ++weapon.sample.skeletonGeneration;check(!bipodAllowsOpening(weapon,frame),"old skeleton granted opening");--weapon.sample.skeletonGeneration;
+  ++weapon.sample.providerGeneration;check(!bipodAllowsOpening(weapon,frame),"old provider granted opening");
   gesture={};
  }
  {
-  wheel::RockFrame frame;frame.frameIndex=5;frame.worldGeneration=1;frame.skeletonGeneration=2;frame.providerGeneration=3;
-  rock::api::input::v1_1::PlacementClickState decoration;
-  decoration.sample.frameIndex=frame.frameIndex;decoration.sample.worldGeneration=frame.worldGeneration;
-  decoration.sample.skeletonGeneration=frame.skeletonGeneration;decoration.sample.providerGeneration=frame.providerGeneration;
+  wheel::RockFrame frame;frame.sample.frameIndex=5;frame.sample.worldGeneration=1;frame.sample.skeletonGeneration=2;frame.sample.providerGeneration=3;
+  rock::api::input::PlacementClickState decoration;decoration.sample=frame.sample;
   check(placementAllowsOpening(decoration,frame),"inactive decoration blocked PALM");
-  decoration.flags=static_cast<std::uint32_t>(rock::api::input::v1_1::PlacementClickFlag::InputReserved);
+  decoration.flags=static_cast<std::uint32_t>(rock::api::input::PlacementClickFlag::InputReserved);
   check(!placementAllowsOpening(decoration,frame),"decoration click opened PALM");
   gesture={};
   gesture.update(true,controls,false,false,false,0,true);

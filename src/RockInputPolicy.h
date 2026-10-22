@@ -1,34 +1,30 @@
 #pragma once
 #include "RockFrame.h"
-#include <ROCK/InputV1_1.h>
 #include <array>
 
 namespace wheel {
-inline bool placementAllowsOpening(const rock::api::input::v1_1::PlacementClickState& state,
+inline bool placementAllowsOpening(const rock::api::input::PlacementClickState& state,
  const wheel::RockFrame& frame) {
- using Flag=rock::api::input::v1_1::PlacementClickFlag;
- return state.sample.frameIndex==frame.frameIndex && state.sample.worldGeneration==frame.worldGeneration &&
-  state.sample.skeletonGeneration==frame.skeletonGeneration && state.sample.providerGeneration==frame.providerGeneration &&
-  !(state.flags&static_cast<std::uint32_t>(Flag::InputReserved));
+ using Flag=rock::api::input::PlacementClickFlag;
+ return sameRockSample(state.sample,frame) && !(state.flags&static_cast<std::uint32_t>(Flag::InputReserved));
 }
-// ROCK owns the enabled setting and contact/latch decision. A failed or stale
-// query cannot grant an opening click against an active provider.
-inline bool bipodAllowsOpening(const rock::api::weapon::EquippedWeaponStateV1& weapon,
+// ROCK owns the enabled setting and contact/latch decision for the primary
+// weapon (slot 0). A failed or stale query cannot grant an opening click
+// against an active provider.
+inline bool bipodAllowsOpening(const rock::api::weapon::WeaponState& weapon,
  const wheel::RockFrame& frame) {
- using Flag=rock::api::weapon::EquippedWeaponStateFlagV1;
- return (weapon.flags&static_cast<std::uint32_t>(Flag::Valid)) &&
-  weapon.frameIndex==frame.frameIndex && weapon.worldGeneration==frame.worldGeneration &&
-  weapon.skeletonGeneration==frame.skeletonGeneration && weapon.providerGeneration==frame.providerGeneration &&
+ using Flag=rock::api::weapon::WeaponStateFlag;
+ return (weapon.flags&static_cast<std::uint32_t>(Flag::Valid)) && sameRockSample(weapon.sample,frame) &&
   !(weapon.flags&static_cast<std::uint32_t>(Flag::BipodInputReserved));
 }
 // Query only physical hands whose trigger participates in the opening binding.
 // A current empty hand permits capture; an unknown hand cannot take equip input.
-inline bool triggerEquipAllowsOpening(const rock::api::grab::HandInteractionStateV1& state,
+inline bool triggerEquipAllowsOpening(const rock::api::grab::HandInteractionState& state,
  const wheel::RockFrame& frame,rock::api::Hand hand) {
- using Flag=rock::api::grab::HandInteractionFlagV1;
+ using Flag=rock::api::grab::HandInteractionFlag;
  return (state.flags&static_cast<std::uint32_t>(Flag::Valid)) && state.hand==hand &&
-  state.frameIndex==frame.frameIndex && state.worldGeneration==frame.worldGeneration &&
-  state.skeletonGeneration==frame.skeletonGeneration && state.providerGeneration==frame.providerGeneration &&
+  state.frameIndex==frame.sample.frameIndex && state.worldGeneration==frame.sample.worldGeneration &&
+  state.skeletonGeneration==frame.sample.skeletonGeneration && state.providerGeneration==frame.sample.providerGeneration &&
   !(state.flags&static_cast<std::uint32_t>(Flag::LooseWeapon));
 }
 // ROCK admits Rocky mode from physical levels. Relinquish PALM even if its

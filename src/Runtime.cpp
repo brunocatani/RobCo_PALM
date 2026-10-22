@@ -115,18 +115,18 @@ bool claimInput(const rpsui::sdk::InputFrameV1& frame,bool owned) {
 }
 void cancelCommand() {
  auto& s=state();
- if(s.command && rockServices().client.owner())(void)rockServices().grab->cancelInteractionCommandV1(s.owner,s.command);
+ if(s.command && rockServices().client.owner())(void)rockServices().grab->cancelInteractionCommand(s.owner,s.command);
  s.command=0;
 }
 void serviceCommand() {
  auto& s=state();if(!s.command)return;
- rock::api::grab::InteractionCommandResultV1 result;
- const auto query=rockServices().grab->getInteractionCommandResultV1(s.owner,s.command,&result);
- if(query==rock::api::Status::Ok && result.state==rock::api::grab::InteractionCommandStateV1::Queued)return;
- const bool success=query==rock::api::Status::Ok && result.state==rock::api::grab::InteractionCommandStateV1::Succeeded;
+ rock::api::grab::InteractionCommandResult result;
+ const auto query=rockServices().grab->getInteractionCommandResult(s.owner,s.command,&result);
+ if(query==rock::api::Status::Ok && result.state==rock::api::grab::InteractionCommandState::Queued)return;
+ const bool success=query==rock::api::Status::Ok && result.state==rock::api::grab::InteractionCommandState::Succeeded;
  const char* message=success?(result.hand==rock::api::Hand::Left?"Taken into left hand":"Taken into right hand"):
-  result.failure==rock::api::grab::InteractionFailureV1::HandBusy?"No free hand — put something down and try again":
-  result.failure==rock::api::grab::InteractionFailureV1::TargetAlreadyOwned?"A throwable is already held or attaching":"Item handoff failed";
+  result.failure==rock::api::grab::InteractionFailure::HandBusy?"No free hand — put something down and try again":
+  result.failure==rock::api::grab::InteractionFailure::TargetAlreadyOwned?"A throwable is already held or attaching":"Item handoff failed";
  actionStatus(message);
  spdlog::info("PALM handoff {}: {} (query {}, failure {})",s.command,message,static_cast<unsigned>(query),static_cast<unsigned>(result.failure));
  if(query!=rock::api::Status::Ok)cancelCommand();else s.command=0;
@@ -146,10 +146,10 @@ std::optional<rpsui::sdk::PanelPoseV1> poseFor(const rpsui::sdk::InputFrameV1& f
 }
 void requestInventoryHandoff(std::uint32_t id,const wheel::RockFrame& frame) {
  auto& s=state();
- rock::api::grab::InventoryGrabRequestV1 request;
+ rock::api::grab::InventoryGrabRequest request;
  request.baseFormId=id;
- request.worldGeneration=frame.worldGeneration;request.skeletonGeneration=frame.skeletonGeneration;
- request.providerGeneration=frame.providerGeneration;
+ request.worldGeneration=frame.sample.worldGeneration;request.skeletonGeneration=frame.sample.skeletonGeneration;
+ request.providerGeneration=frame.sample.providerGeneration;
  const auto result=rockServices().grab->requestInventoryGrab(s.owner,&request,&s.command);
  if(result!=rock::api::Status::RequestQueued) {
   s.command=0;actionStatus(result==rock::api::Status::HandBusy?"Hands are busy — try again":"Item handoff unavailable");
@@ -319,7 +319,7 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
   RockSnapshotDiagnostic snapshotDiagnostic;
   const bool rockReady=s.owner && rockServices().client.owner() && rockServices().snapshot(s.rockFrame,&snapshotDiagnostic) && s.rockFrame.providerReady;
   const bool providerChanged=s.rockReady.exchange(rockReady)!=rockReady ||
-   (rockReady && (s.world!=s.rockFrame.worldGeneration || s.skeleton!=s.rockFrame.skeletonGeneration || s.provider!=s.rockFrame.providerGeneration));
+   (rockReady && (s.world!=s.rockFrame.sample.worldGeneration || s.skeleton!=s.rockFrame.sample.skeletonGeneration || s.provider!=s.rockFrame.sample.providerGeneration));
   setGestureIntegrationAvailable(rockReady && s.handGestures.available());
   const bool sessionReady=s.sessionReady.load(),uiReady=frameworkReady(),presentationFailed=s.presentationFailed.load();
   const bool usable=sessionReady && frame->ready && uiReady && !presentationFailed;
@@ -334,12 +334,12 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
   const bool reset=s.sessionResetPending.exchange(false);
   if(providerChanged) {
    s.handGestures.clear(s.owner);publishGestureState();cancelCommand();
-   s.world=s.rockFrame.worldGeneration;s.skeleton=s.rockFrame.skeletonGeneration;s.provider=s.rockFrame.providerGeneration;
+   s.world=s.rockFrame.sample.worldGeneration;s.skeleton=s.rockFrame.sample.skeletonGeneration;s.provider=s.rockFrame.sample.providerGeneration;
    refreshWheelInventory();
   }
   if(!usable || reset) {
    s.handGestures.clear(s.owner);publishGestureState();closeWheel();cancelCommand();clearSuppression();s.gesture={};s.rockyPriority={};s.clickRequested=false;
-   s.world=s.rockFrame.worldGeneration;s.skeleton=s.rockFrame.skeletonGeneration;s.provider=s.rockFrame.providerGeneration;
+   s.world=s.rockFrame.sample.worldGeneration;s.skeleton=s.rockFrame.sample.skeletonGeneration;s.provider=s.rockFrame.sample.providerGeneration;
    return;
   }
   serviceCommand();
@@ -362,27 +362,27 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
   if(holstersReady)for(unsigned hand=0;hand<2;++hand)
    if(masks.buttons[hand])inHolster[hand]=s.holsters->IsHandInHolsterZone(hand==0);
   bool bipodAllows=true;
-  rock::api::weapon::EquippedWeaponStateV1 weapon;
+  rock::api::weapon::WeaponState weapon;
   int weaponStatus=-1;
   if(rockReady) {
-   bipodAllows=(rockServices().weapon!=nullptr) && rockServices().weapon->getEquippedWeaponStateV1 &&
-    (weaponStatus=static_cast<int>(rockServices().weapon->getEquippedWeaponStateV1(s.owner,&weapon)))==static_cast<int>(rock::api::Status::Ok) &&
+   bipodAllows=(rockServices().weapon!=nullptr) &&
+    (weaponStatus=static_cast<int>(rockServices().weapon->getWeaponState(s.owner,0,&weapon)))==static_cast<int>(rock::api::Status::Ok) &&
     bipodAllowsOpening(weapon,s.rockFrame);
   }
   bool triggerEquipAllows=true;
-  std::array<rock::api::grab::HandInteractionStateV1,2> interactions;
+  std::array<rock::api::grab::HandInteractionState,2> interactions;
   std::array<int,2> interactionStatus{-1,-1};
   for(unsigned hand=0;hand<2;++hand)if(s.rockLoaded && (masks.buttons[hand]&(1ull<<33))) {
    const auto physical=hand==0?rock::api::Hand::Left:rock::api::Hand::Right;
    auto& interaction=interactions[hand];
-   triggerEquipAllows &= rockReady && (rockServices().grab!=nullptr) && rockServices().grab->getHandInteractionStateV1 &&
-    (interactionStatus[hand]=static_cast<int>(rockServices().grab->getHandInteractionStateV1(s.owner,physical,&interaction)))==static_cast<int>(rock::api::Status::Ok) &&
+   triggerEquipAllows &= rockReady && (rockServices().grab!=nullptr) &&
+    (interactionStatus[hand]=static_cast<int>(rockServices().grab->getHandInteractionState(s.owner,physical,&interaction)))==static_cast<int>(rock::api::Status::Ok) &&
     triggerEquipAllowsOpening(interaction,s.rockFrame,physical);
   }
   bool placementAllows=true;
-  if(rockReady && (masks.buttons[1]&(1ull<<32)) && rockServices().placementInput) {
-   rock::api::input::v1_1::PlacementClickState placement;
-   placementAllows=rockServices().placementInput->getPlacementClickState(s.owner,&placement)==rock::api::Status::Ok &&
+  if(rockReady && (masks.buttons[1]&(1ull<<32))) {
+   rock::api::input::PlacementClickState placement;
+   placementAllows=rockServices().input->getPlacementClickState(s.owner,&placement)==rock::api::Status::Ok &&
     placementAllowsOpening(placement,s.rockFrame);
   }
   const bool openingAllowed=bipodAllows && placementAllows && triggerEquipAllows && openingInputAllowed(masks,pressed,handValid,inHolster);
@@ -410,17 +410,17 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
     if(rockLoaded && !rockReady) {
      const auto& observed=snapshotDiagnostic.observed;
      spdlog::info("PALM opening ROCK snapshot: inputFrame={} stage={} status={} (-1=not-called,0=ok,17=wrong-thread) expected[frame,world,skeleton,provider]=[{},{},{},{}] observed=[{},{},{},{}]",
-      sequence,snapshotDiagnostic.stage,snapshotDiagnostic.status,rockFrame.frameIndex,rockFrame.worldGeneration,rockFrame.skeletonGeneration,rockFrame.providerGeneration,
+      sequence,snapshotDiagnostic.stage,snapshotDiagnostic.status,rockFrame.sample.frameIndex,rockFrame.sample.worldGeneration,rockFrame.sample.skeletonGeneration,rockFrame.sample.providerGeneration,
       observed.frameIndex,observed.worldGeneration,observed.skeletonGeneration,observed.providerGeneration);
     }
     if(!bipodAllows)spdlog::info("PALM opening bipod: inputFrame={} status={} flags={:X} expected[frame,world,skeleton,provider]=[{},{},{},{}] observed=[{},{},{},{}]",
-     sequence,weaponStatus,weapon.flags,rockFrame.frameIndex,rockFrame.worldGeneration,rockFrame.skeletonGeneration,rockFrame.providerGeneration,
-     weapon.frameIndex,weapon.worldGeneration,weapon.skeletonGeneration,weapon.providerGeneration);
+     sequence,weaponStatus,weapon.flags,rockFrame.sample.frameIndex,rockFrame.sample.worldGeneration,rockFrame.sample.skeletonGeneration,rockFrame.sample.providerGeneration,
+     weapon.sample.frameIndex,weapon.sample.worldGeneration,weapon.sample.skeletonGeneration,weapon.sample.providerGeneration);
     if(!triggerEquipAllows)for(unsigned hand=0;hand<2;++hand)if(masks.buttons[hand]&(1ull<<33)) {
      const auto& interaction=interactions[hand];
      spdlog::info("PALM opening trigger: inputFrame={} physicalHand={} status={} reportedHand={} flags={:X} expected[frame,world,skeleton,provider]=[{},{},{},{}] observed=[{},{},{},{}]",
       sequence,hand==0?"left":"right",interactionStatus[hand],static_cast<unsigned>(interaction.hand),interaction.flags,
-      rockFrame.frameIndex,rockFrame.worldGeneration,rockFrame.skeletonGeneration,rockFrame.providerGeneration,
+      rockFrame.sample.frameIndex,rockFrame.sample.worldGeneration,rockFrame.sample.skeletonGeneration,rockFrame.sample.providerGeneration,
       interaction.frameIndex,interaction.worldGeneration,interaction.skeletonGeneration,interaction.providerGeneration);
     }
    });

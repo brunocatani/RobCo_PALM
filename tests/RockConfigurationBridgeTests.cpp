@@ -19,35 +19,35 @@ namespace
     std::string grenadeMode = "false";
     bool publishGrenade = true;
     bool grenadeVisitSucceeds = true;
-    Status visitGrenade(rock::api::OwnerToken owner,Group group, VisitorV1 callback, void* context) noexcept
+    Status visitGrenade(rock::api::OwnerToken owner,Group group, Visitor callback, void* context) noexcept
     {
         if(owner!=1)return Status::OwnerNotRegistered;
         if (!grenadeVisitSucceeds || group != Group::Consumer) return Status::NotReady;
-        const SettingV1 unrelated{"RealisticWeapons", "bOther", "true", "true", "", "", ValueType::Boolean, 0};
+        const Setting unrelated{"RealisticWeapons", "bOther", "true", "true", "", "", ValueType::Boolean, 0};
         callback(&unrelated, context);
         if (publishGrenade) {
-            const SettingV1 setting{"RealisticWeapons", "bImmersiveGrenades", grenadeMode.c_str(), "true", "", "", ValueType::Boolean, 0};
+            const Setting setting{"RealisticWeapons", "bImmersiveGrenades", grenadeMode.c_str(), "true", "", "", ValueType::Boolean, 0};
             callback(&setting, context);
         }
         return Status::Ok;
     }
     Status currentRevision(rock::api::OwnerToken owner,std::uint64_t* out) noexcept { if(owner!=1)return Status::OwnerNotRegistered; *out=revision; return Status::Ok; }
-    Status visit(rock::api::OwnerToken owner,Group group, VisitorV1 callback, void* context) noexcept
+    Status visit(rock::api::OwnerToken owner,Group group, Visitor callback, void* context) noexcept
     {
         if(owner!=1)return Status::OwnerNotRegistered;
         if(visitStatus!=Status::Ok)return visitStatus;
         if (group == Group::Consumer) {
-            const SettingV1 logging{"Logging", "iLogLevel", "6", "6",
+            const Setting logging{"Logging", "iLogLevel", "6", "6",
                 "01. Logging", "Log detail", ValueType::Integer, 0};
-            const SettingV1 weapon{"ImmersiveWeapons", "bBipodMode", "true", "true",
+            const Setting weapon{"ImmersiveWeapons", "bBipodMode", "true", "true",
                 "04. Weapon Handling", "Surface latch", ValueType::Boolean, 0};
             callback(&logging, context);
             callback(&weapon, context);
             return Status::Ok;
         }
-        const SettingV1 toggle{"Debug", "bDeveloperModeEnabled", configured.c_str(), "false",
+        const Setting toggle{"Debug", "bDeveloperModeEnabled", configured.c_str(), "false",
             "Developer", "Enables developer controls", ValueType::Boolean, configured == "false" ? 0u : 1u};
-        const SettingV1 number{"PhysicsInteraction", "fDebugVideoSyncMarkerSize", "4", "4",
+        const Setting number{"PhysicsInteraction", "fDebugVideoSyncMarkerSize", "4", "4",
             "Developer", "Marker size", ValueType::Float, 0};
         callback(&toggle, context);
         callback(&number, context);
@@ -72,7 +72,7 @@ int main()
 {
     using namespace rock_configurator;
     try {
-        const rock::api::configuration::ApiV1 grenadeApi{currentRevision, visitGrenade, nullptr};
+        const rock::api::configuration::Api grenadeApi{currentRevision, visitGrenade, nullptr};
         require(wheel::immersiveGrenadesEnabled(&grenadeApi,1) == false, "disabled immersive grenades did not select vanilla mode");
         grenadeMode = "true";
         require(wheel::immersiveGrenadesEnabled(&grenadeApi,1) == true, "enabled immersive grenades did not select handoff mode");
@@ -83,7 +83,7 @@ int main()
         publishGrenade = true; grenadeVisitSucceeds = false;
         require(!wheel::immersiveGrenadesEnabled(&grenadeApi,1).has_value(), "failed setting visit enabled handoff");
         require(!wheel::immersiveGrenadesEnabled(nullptr,0).has_value(), "missing ROCK configuration API was accepted");
-        const rock::api::configuration::ApiV1 api{currentRevision, visit, set};
+        const rock::api::configuration::Api api{currentRevision, visit, set};
         const auto absent = std::filesystem::temp_directory_path() / "ROCK-absent-developer-bridge.ini";
         require(!std::filesystem::exists(absent), "fixture path must not exist");
         IniSettingsStore store(absent, RpsMod::RockDeveloper, &api, {}, 1);

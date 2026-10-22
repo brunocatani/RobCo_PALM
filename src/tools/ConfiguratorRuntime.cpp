@@ -1543,7 +1543,7 @@ namespace rock_configurator
     }
 
     void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available,
-        const rock::api::configuration::ApiV1* rockApi, const std::filesystem::path& csahPath,
+        const rock::api::configuration::Api* rockApi, const std::filesystem::path& csahPath,
         const std::filesystem::path& csahCatalog)
     {
         std::scoped_lock lock(s_runtimeMutex);

@@ -69,12 +69,12 @@ std::string renderedText() {
     return result;
 }
 rock::api::Status fixtureRevision(rock::api::OwnerToken owner,std::uint64_t* out) noexcept { if(owner!=1)return rock::api::Status::OwnerNotRegistered; *out=1; return rock::api::Status::Ok; }
-rock::api::Status fixtureVisit(rock::api::OwnerToken owner,rock::api::configuration::Group group, rock::api::configuration::VisitorV1 visitor, void* context) noexcept {
+rock::api::Status fixtureVisit(rock::api::OwnerToken owner,rock::api::configuration::Group group, rock::api::configuration::Visitor visitor, void* context) noexcept {
     using namespace rock::api::configuration;
     using rock::api::Status;
     if(owner!=1)return Status::OwnerNotRegistered;
-    const SettingV1 consumer{"PhysicsInteraction", "bConsumerFixture", "true", "true", "01. Consumer Controls", "consumer-fixture", ValueType::Boolean, 0};
-    const SettingV1 developer{"PhysicsInteraction", "fMovedFixture", "4", "4", "01. Developer Controls", "developer-fixture", ValueType::Float, 0};
+    const Setting consumer{"PhysicsInteraction", "bConsumerFixture", "true", "true", "01. Consumer Controls", "consumer-fixture", ValueType::Boolean, 0};
+    const Setting developer{"PhysicsInteraction", "fMovedFixture", "4", "4", "01. Developer Controls", "developer-fixture", ValueType::Float, 0};
     visitor(group == Group::Consumer ? &consumer : &developer, context);
     return Status::Ok;
 }
@@ -176,7 +176,7 @@ int main(int argc, char** argv) {
             click(45.0f + count * 168.0f, 120);
             require(window("settings-rows")->ID == firstId, "hidden mod tab remained clickable");
         }
-        const rock::api::configuration::ApiV1 configApi{fixtureRevision, fixtureVisit, fixtureWrite};
+        const rock::api::configuration::Api configApi{fixtureRevision, fixtureVisit, fixtureWrite};
         rock_configurator::initializeRpsPreview({path, {}, {}}, {true, false, false}, &configApi);
         rock_configurator::setPreviewOpen(true); frame(); frame();
         click(railWidth + 440, 50);

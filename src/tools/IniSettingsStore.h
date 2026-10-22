@@ -55,7 +55,7 @@ namespace rock_configurator
     {
     public:
         explicit IniSettingsStore(std::filesystem::path path = {}, RpsMod mod = RpsMod::Rock,
-            const rock::api::configuration::ApiV1* api = nullptr, std::filesystem::path catalogPath = {}, rock::api::OwnerToken owner = 0,
+            const rock::api::configuration::Api* api = nullptr, std::filesystem::path catalogPath = {}, rock::api::OwnerToken owner = 0,
             const scissors::configuration::ApiV1* reduxApi = nullptr) :
             _path(std::move(path)), _catalogPath(std::move(catalogPath)), _mod(mod), _configurationApi(api), _configurationOwner(owner), _reduxApi(reduxApi),
             _useRockApi(api || (_path.empty() && isRockConfiguration(mod))) {}
@@ -113,7 +113,7 @@ namespace rock_configurator
         std::filesystem::path _path;
         std::filesystem::path _catalogPath;
         RpsMod _mod;
-        const rock::api::configuration::ApiV1* _configurationApi = nullptr;
+        const rock::api::configuration::Api* _configurationApi = nullptr;
         rock::api::OwnerToken _configurationOwner{};
         rock::api::Status _lastProviderStatus{rock::api::Status::Ok};
         const scissors::configuration::ApiV1* _reduxApi = nullptr;

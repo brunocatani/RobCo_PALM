@@ -16,13 +16,12 @@ void Gestures::initialize() {
  const auto* api=Frik::inst;
  _available=!error && api && api->isSkeletonReady && api->getHandPoseLocalTransformsForPose &&
   api->getCurrentHandPose && api->isConfigOpen && api->isWristPipboyOpen && api->isOffHandGrippingWeapon &&
-  rockServices().animation && rockServices().input && rockServices().animation->setHandVisualAuthorityV1 && rockServices().animation->clearHandVisualAuthorityV1 &&
-  (rockServices().animation!=nullptr);
+  rockServices().animation && rockServices().input && rockServices().grab;
  spdlog::info("PALM gestures: {} (skeleton pose resolver result {})",_available?"available through ROCK":"unavailable",error);
 }
 void Gestures::clearHand(std::uint64_t owner,unsigned hand,const char* reason) {
  if(!_view.active[hand])return;
- const auto result=rockServices().animation->clearHandVisualAuthorityV1(owner,physicalHand(hand));
+ const auto result=rockServices().animation->clearHandVisualAuthority(owner,physicalHand(hand));
  spdlog::info("PALM gesture cleared: hand={}, reason={}, result={}",hand?"left":"right",reason,static_cast<unsigned>(result));
  // Even if explicit cleanup is rejected, stopping renewal expires ROCK's lease.
  _view.active[hand]=0;
@@ -33,9 +32,9 @@ void Gestures::clear(std::uint64_t owner) {
 }
 bool Gestures::publish(std::uint64_t owner,unsigned hand,const wheel::RockFrame& frame) {
  auto& request=_requests[hand];
- request.worldGeneration=frame.worldGeneration;request.skeletonGeneration=frame.skeletonGeneration;
- request.providerGeneration=frame.providerGeneration;
- const auto result=rockServices().animation->setHandVisualAuthorityV1(owner,&request);
+ request.worldGeneration=frame.sample.worldGeneration;request.skeletonGeneration=frame.sample.skeletonGeneration;
+ request.providerGeneration=frame.sample.providerGeneration;
+ const auto result=rockServices().animation->setHandVisualAuthority(owner,&request);
  if(result==rock::api::Status::Ok)return true;
  spdlog::warn("PALM gesture publication rejected: hand={}, result={}",hand?"left":"right",static_cast<unsigned>(result));
  clearHand(owner,hand,"publication rejected");return false;
@@ -44,16 +43,16 @@ void Gestures::update(std::uint64_t owner,const wheel::RockFrame& frame,bool usa
  if(!usable || !_available || !frame.frikSkeletonReady || !Frik::inst->isSkeletonReady()) {clear(owner);return;}
  const bool uiBusy=Frik::inst->isConfigOpen() || Frik::inst->isWristPipboyOpen();
  for(unsigned hand=0;hand<2;++hand) {
-  rock::api::grab::HandInteractionStateV1 interaction;
-  const bool queryOk=rockServices().grab->getHandInteractionStateV1(owner,physicalHand(hand),&interaction)==rock::api::Status::Ok &&
+  rock::api::grab::HandInteractionState interaction;
+  const bool queryOk=rockServices().grab->getHandInteractionState(owner,physicalHand(hand),&interaction)==rock::api::Status::Ok &&
    interaction.hand==physicalHand(hand);
   bool inputAvailable=true,actionHeld=false;
   // The wheel's captured right trigger/grab chord is UI input through both
   // releases. It must not mark a free pose hand busy or cancel a new pose.
   for(const unsigned button:{2u,33u,7u,1u,32u}) {
    if(hand==0 && wheelInputOwned && (button==2 || button==33))continue;
-   rock::api::input::RawWandButtonStateV1 raw;
-   inputAvailable&=rockServices().input->getRawWandButtonStateV1(owner,physicalHand(hand),button,&raw)==rock::api::Status::Ok && raw.available;
+   rock::api::input::RawWandButtonState raw;
+   inputAvailable&=rockServices().input->getRawWandButtonState(owner,physicalHand(hand),button,&raw)==rock::api::Status::Ok && raw.available;
    actionHeld|=raw.held!=0;
   }
   const auto pose=Frik::inst->getCurrentHandPose(skeletonHand(hand));
@@ -62,7 +61,7 @@ void Gestures::update(std::uint64_t owner,const wheel::RockFrame& frame,bool usa
   const bool occupiedPose=pose==Frik::HandPoseKind::Custom || pose==Frik::HandPoseKind::HoldingWeapon ||
    pose==Frik::HandPoseKind::HoldingGun || pose==Frik::HandPoseKind::HoldingMelee ||
    pose==Frik::HandPoseKind::OffhandGrip || pose==Frik::HandPoseKind::Attaboy;
-  const bool poseBusy=uiBusy || (physicalHand(hand)==frame.offhandHand && Frik::inst->isOffHandGrippingWeapon()) ||
+  const bool poseBusy=uiBusy || (physicalHand(hand)==primaryOffhand(frame.roles) && Frik::inst->isOffHandGrippingWeapon()) ||
    (_view.active[hand]?pose!=Frik::HandPoseKind::Custom:occupiedPose);
   _view.availability[hand]=gestureHandAvailability(frame,interaction,queryOk,inputAvailable,actionHeld,true,poseBusy);
   if(_view.active[hand]) {
@@ -89,7 +88,7 @@ const char* Gestures::select(std::uint64_t owner,unsigned choice,const wheel::Ro
  if(!Frik::inst->getHandPoseLocalTransformsForPose(skeletonHand(hand),pose,&locals) ||
     locals.enabledMask!=((1u << rock::api::hands::kFingerLocalTransformCount) - 1u))return "Gesture finger transforms unavailable";
  auto& request=_requests[hand];request={};request.hand=physicalHand(hand);
- request.flags=static_cast<unsigned>(rock::api::animation::HandVisualAuthorityFlagV1::FingerLocalTransforms);
+ request.flags=static_cast<unsigned>(rock::api::animation::HandVisualAuthorityFlag::FingerLocalTransforms);
  request.priority=1; // Yield to ordinary interaction poses, including FRIK's internal poses.
  request.leaseFrames=3;request.fingerLocalTransformMask=locals.enabledMask;
  for(unsigned i=0;i<15;++i) {
@@ -103,7 +102,7 @@ const char* Gestures::select(std::uint64_t owner,unsigned choice,const wheel::Ro
  }
  _view.active[hand]=choice;
  if(!publish(owner,hand,frame))return "ROCK could not activate this gesture";
- spdlog::info("PALM gesture activated: hand={}, pose={}, frame={}",hand?"left":"right",gesture.name,frame.frameIndex);
+ spdlog::info("PALM gesture activated: hand={}, pose={}, frame={}",hand?"left":"right",gesture.name,frame.sample.frameIndex);
  return hand?"Gesture active on left hand":"Gesture active on right hand";
 }
 }

@@ -80,26 +80,26 @@ const char* toggleEquipment(const Item& selected,std::uint64_t owner,std::uint32
   if(owner && object->Is(RE::ENUM_FORM_ID::kWEAP)) {
 
    for(const auto hand:{rock::api::Hand::Left,rock::api::Hand::Right}) {
-    rock::api::grab::HandInteractionStateV1 interaction{};
+    rock::api::grab::HandInteractionState interaction{};
     const auto& services=rockServices();
-    const auto status=services.client.owner() && services.grab && services.grab->getHandInteractionStateV1?
-     services.grab->getHandInteractionStateV1(owner,hand,&interaction):rock::api::Status::NotReady;
+    const auto status=services.client.owner() && services.grab?
+     services.grab->getHandInteractionState(owner,hand,&interaction):rock::api::Status::NotReady;
     if(status!=rock::api::Status::Ok ||
-       !(interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlagV1::Valid))) {
+       !(interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::Valid))) {
      // One report per explicit equipment action, never per input/render frame.
      spdlog::warn("PALM equipment hand query rejected: weapon={:08X} hand={} status={} flags={:X} owner={:016X} inputThread={} taskThread={} frame={} generations[world,skeleton,provider]=[{},{},{}]",
       selected.id,hand==rock::api::Hand::Left?"left":"right",static_cast<unsigned>(status),interaction.flags,owner,
       inputThread,GetCurrentThreadId(),interaction.frameIndex,interaction.worldGeneration,interaction.skeletonGeneration,interaction.providerGeneration);
      return "Hand state unavailable";
     }
-    constexpr auto loose=static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlagV1::LooseObject)|
-     static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlagV1::LooseWeapon);
+    constexpr auto loose=static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::LooseObject)|
+     static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::LooseWeapon);
     // LooseObject is also set for a merely highlighted world object. Only an
     // active handoff/hold (or detached part carry) owns the hand against equip.
-    const bool holding=interaction.phase!=rock::api::grab::HandInteractionPhaseV1::Idle &&
-     interaction.phase!=rock::api::grab::HandInteractionPhaseV1::Touching && interaction.phase!=rock::api::grab::HandInteractionPhaseV1::Selecting;
+    const bool holding=interaction.phase!=rock::api::grab::HandInteractionPhase::Idle &&
+     interaction.phase!=rock::api::grab::HandInteractionPhase::Touching && interaction.phase!=rock::api::grab::HandInteractionPhase::Selecting;
     if(((interaction.flags&loose) && holding) ||
-       (interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlagV1::PartCarry)))return "Put down the held object before changing weapons";
+       (interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::PartCarry)))return "Put down the held object before changing weapons";
    }
   }
   std::uint32_t stackIndex=0;bool found=false,equipped=false;

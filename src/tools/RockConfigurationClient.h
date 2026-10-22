@@ -7,7 +7,7 @@
 #endif
 namespace rock_configurator {
 struct ConfigurationConnection {
-    const rock::api::configuration::ApiV1* api{};
+    const rock::api::configuration::Api* api{};
     rock::api::OwnerToken owner{};
     rock::api::Status status{rock::api::Status::NotReady};
 };
@@ -18,7 +18,7 @@ inline ConfigurationConnection configurationConnection(std::optional<RpsMod> req
     // One process-lifetime registration shared by ROCK's consumer and developer
     // pages. Connection and visits are performed on the game thread.
     static auto* client=new rock::api::Client();
-    static const rock::api::configuration::ApiV1* api{};
+    static const rock::api::configuration::Api* api{};
     if (!api) {
         const auto module=GetModuleHandleW(modInfo(*selected).module);
         const auto query=module?reinterpret_cast<rock::api::QueryInterfaceV1>(GetProcAddress(module,rock::api::kQueryExportName)):nullptr;

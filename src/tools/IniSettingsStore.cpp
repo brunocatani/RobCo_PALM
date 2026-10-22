@@ -298,7 +298,7 @@ namespace rock_configurator
     bool IniSettingsStore::reloadRockSnapshot()
     {
         struct Snapshot { IniSettingsStore* store; std::vector<SettingRecord> settings; bool failed = false; } snapshot{this, {}};
-        const auto visitor = [](const rock::api::configuration::SettingV1* entry, void* context) noexcept {
+        const auto visitor = [](const rock::api::configuration::Setting* entry, void* context) noexcept {
             auto& snapshot = *static_cast<Snapshot*>(context);
             if (snapshot.failed) return;
             try {

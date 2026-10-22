@@ -17,6 +17,6 @@ private:
  bool publish(std::uint64_t owner,unsigned hand,const wheel::RockFrame& frame);
  bool _available{};
  GestureViewState _view;
- std::array<rock::api::animation::HandVisualAuthorityRequestV1,2> _requests;
+ std::array<rock::api::animation::HandVisualAuthorityRequest,2> _requests;
 };
 }
