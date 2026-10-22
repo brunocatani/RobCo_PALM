@@ -3,6 +3,7 @@
 #include "Equipment.h"
 #include "Inventory.h"
 #include "RockFrame.h"
+#include "tools/LoadedRpsMods.h"
 #include <array>
 #include <cstring>
 
@@ -17,36 +18,58 @@ bool readBytes(std::uintptr_t address,void* out,std::size_t size) noexcept {
  __try {std::memcpy(out,reinterpret_cast<const void*>(address),size);return true;}
  __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
-bool heisenbergTarget(std::uintptr_t address) noexcept {
+// The detour target must be executable image code of that loaded module.
+bool moduleTarget(std::uintptr_t address,HMODULE module) noexcept {
  MEMORY_BASIC_INFORMATION memory{};
  constexpr DWORD executable=PAGE_EXECUTE|PAGE_EXECUTE_READ|PAGE_EXECUTE_READWRITE|PAGE_EXECUTE_WRITECOPY;
  HMODULE owner{};
- const auto heisenberg=GetModuleHandleW(L"Heisenberg_F4VR.dll");
- return heisenberg && VirtualQuery(reinterpret_cast<void*>(address),&memory,sizeof(memory)) &&
+ return module && VirtualQuery(reinterpret_cast<void*>(address),&memory,sizeof(memory)) &&
   memory.State==MEM_COMMIT && memory.Type==MEM_IMAGE && (memory.Protect&executable) &&
   !(memory.Protect&(PAGE_GUARD|PAGE_NOACCESS)) &&
   GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-   reinterpret_cast<LPCWSTR>(address),&owner) && owner==heisenberg;
+   reinterpret_cast<LPCWSTR>(address),&owner) && owner==module;
+}
+std::uintptr_t jumpDestination(std::span<const std::uint8_t> actual) noexcept {
+ std::uintptr_t destination{};
+ if(actual.size()>=6+sizeof(destination))std::memcpy(&destination,actual.data()+6,sizeof(destination));
+ return destination;
+}
+HMODULE rockModule() noexcept {
+ const auto rock=rock_configurator::loadedRockMod();
+ return rock?GetModuleHandleW(rock_configurator::modInfo(*rock).module):nullptr;
 }
 std::string hexBytes(std::span<const std::uint8_t> bytes) {
  std::string result;
  for(auto byte:bytes){if(!result.empty())result+=' ';result+=std::format("{:02X}",byte);}
  return result;
 }
-template<std::size_t N> bool validateEntry(const char* name,std::uintptr_t rva,const std::array<std::uint8_t,N>& expected) {
+// The one supported foreign detour of each entry; any other modification fails closed.
+enum class KnownDetour {None,Heisenberg,Rock};
+template<std::size_t N> bool validateEntry(const char* name,std::uintptr_t rva,const std::array<std::uint8_t,N>& expected,
+ KnownDetour detour=KnownDetour::None) {
  std::array<std::uint8_t,N> actual{};
  const auto address=REL::Offset(rva).address();
  if(!readBytes(address,actual.data(),actual.size())) {
   spdlog::warn("PALM native {} unavailable: unreadable entry at RVA {:X}; wheel remains available",name,rva);return false;
  }
  bool accepted=equipment_policy::prefixMatches(actual,expected);
- if constexpr(N==equipment_policy::equipEntry.size()) {
-  std::uintptr_t destination{};
-  if(equipment_policy::heisenbergEquipJump(actual))std::memcpy(&destination,actual.data()+6,sizeof(destination));
-  const auto kind=equipment_policy::classifyEquipEntry(actual,destination && heisenbergTarget(destination));
+ if(detour==KnownDetour::Heisenberg) {
+  const auto destination=equipment_policy::heisenbergEquipJump(actual)?jumpDestination(actual):0;
+  const auto kind=equipment_policy::classifyEquipEntry(actual,destination &&
+   moduleTarget(destination,GetModuleHandleW(L"Heisenberg_F4VR.dll")));
   accepted=kind!=equipment_policy::EquipEntry::Unavailable;
   if(kind==equipment_policy::EquipEntry::Heisenberg) {
    spdlog::info("PALM native {}: supported Heisenberg_F4VR.dll detour at {:X}; existing hook retained",name,destination);
+   return true;
+  }
+ }else if(detour==KnownDetour::Rock) {
+  // Calls through ROCK's detour reach the native function inside ROCK's
+  // player inventory scope, which its hand-slot mapping requires.
+  const auto destination=equipment_policy::rockUnequipJump(actual)?jumpDestination(actual):0;
+  const auto kind=equipment_policy::classifyUnequipEntry(actual,destination && moduleTarget(destination,rockModule()));
+  accepted=kind!=equipment_policy::UnequipEntry::Unavailable;
+  if(kind==equipment_policy::UnequipEntry::Rock) {
+   spdlog::info("PALM native {}: supported ROCK detour at {:X}; existing hook retained",name,destination);
    return true;
   }
  }
@@ -63,8 +86,8 @@ void initializeEquipmentRuntime() noexcept {
    spdlog::error("PALM native inventory operations unavailable: unsupported runtime");return;
   }
   // Do not short-circuit: an equip conflict must not disable unequip or names.
-  support.equip=validateEntry("equip",0xe6fea0,equipment_policy::equipEntry);
-  support.unequip=validateEntry("unequip",0xe70280,equipment_policy::unequipEntry);
+  support.equip=validateEntry("equip",0xe6fea0,equipment_policy::equipEntry,KnownDetour::Heisenberg);
+  support.unequip=validateEntry("unequip",0xe70280,equipment_policy::unequipEntry,KnownDetour::Rock);
   support.names=validateEntry("display names",0xc15f0,equipment_policy::nameEntry);
   spdlog::info("PALM native capabilities: equip={} unequip={} names={}; menu startup continues",support.equip,support.unequip,support.names);
  }catch(...){spdlog::error("PALM native capability initialization interrupted; unavailable operations stay disabled, wheel startup continues");}
