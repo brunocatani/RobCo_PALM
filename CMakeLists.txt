@@ -172,7 +172,7 @@ foreach(mode Runtime Preview)
  target_link_libraries(WheelEmitters${mode}Tests PRIVATE shell32 nlohmann_json::nlohmann_json)
  add_dependencies(WheelEmitters${mode}Tests EmittersModuleStub)
  add_test(NAME Wheel.Emitters${mode} COMMAND WheelEmitters${mode}Tests "$<TARGET_FILE:EmittersModuleStub>"
-  "${WORKSPACE}/../experimental_mods/ROCK_Emitters/data/mod/ROCK_Emitters_Config/ROCK_Emitters.ini")
+  "${WORKSPACE}/../experimental_mods/ROCK_Emitters/data/config/ROCK_Emitters.ini")
 endforeach()
 target_compile_definitions(WheelEmittersPreviewTests PRIVATE WHEEL_DESKTOP_PREVIEW)
 foreach(target WheelIniSettingsStoreControlTests WheelRockConfigurationBridgeTests WheelPreviewIsolationTests)
