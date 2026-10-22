@@ -266,13 +266,13 @@ void submitChoice(const wheel::RockFrame& frame) {
    const auto* tasks=F4SE::GetTaskInterface();
    if(!tasks){actionStatus("Equipment task queue unavailable");return;}
    s.gameActionPending=true;
-   try { tasks->AddTask([ticket,item=*equipment,hand=s.choiceHand.load(),inputThread=GetCurrentThreadId()] {
+   try { tasks->AddTask([ticket,item=*equipment,hand=s.choiceHand.load()] {
     auto& runtime=state();
     struct Finish {RuntimeState& state;~Finish(){state.gameActionPending=false;}} finish{runtime};
     if(!runtime.sessionReady.load() || !runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
     try {
      RockEquip rock;
-     actionStatus(toggleEquipment(item,runtime.rockReady.load()?runtime.owner:0,hand,inputThread,rock));
+     actionStatus(toggleEquipment(item,runtime.rockReady.load()?runtime.owner:0,hand,rock));
      if(rock.form)runtime.pendingEquip=rock.pack();
      else refreshWheelInventory();
     }

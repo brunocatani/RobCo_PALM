@@ -20,8 +20,7 @@ struct RockEquip {
 // With ROCK (owner set) an unequipped weapon is returned in outRock for
 // submitRockEquip, which puts it into `hand` and replaces that hand's weapon.
 // Equipped items and armor toggle natively.
-const char* toggleEquipment(const Item& selected, std::uint64_t owner, PointerHand hand, std::uint32_t inputThread,
- RockEquip& outRock) noexcept;
+const char* toggleEquipment(const Item& selected, std::uint64_t owner, PointerHand hand, RockEquip& outRock) noexcept;
 // ROCK's owner thread (the input frame callback): capture and request the equip.
 const char* submitRockEquip(std::uint64_t owner, const RockEquip& equip, std::uint64_t& outCommand) noexcept;
 const char* useInventoryItem(std::uint32_t id) noexcept;

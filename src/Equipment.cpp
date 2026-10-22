@@ -113,7 +113,7 @@ const char* submitRockEquip(std::uint64_t owner,const RockEquip& equip,std::uint
    status==Status::NotReady?"Weapon change unavailable right now":"ROCK refused that weapon change";
  }catch(...){spdlog::error("PALM ROCK equip request failed");outCommand=0;return "Equipment change failed";}
 }
-const char* toggleEquipment(const Item& selected,std::uint64_t owner,PointerHand hand,std::uint32_t inputThread,RockEquip& outRock) noexcept {
+const char* toggleEquipment(const Item& selected,std::uint64_t owner,PointerHand hand,RockEquip& outRock) noexcept {
  outRock={};
  try {
   if(!support.names)return "Equipment names unavailable; saved choices are preserved";
@@ -152,31 +152,9 @@ const char* toggleEquipment(const Item& selected,std::uint64_t owner,PointerHand
    outRock={selected.id,stackIndex,hand};
    return hand==PointerHand::Left?"Equipping into left hand":"Equipping into right hand";
   }
-  if(owner && equipped && object->Is(RE::ENUM_FORM_ID::kWEAP)) {
-   for(const auto side:{rock::api::Hand::Left,rock::api::Hand::Right}) {
-    rock::api::grab::HandInteractionState interaction{};
-    const auto& services=rockServices();
-    const auto status=services.client.owner() && services.grab?
-     services.grab->getHandInteractionState(owner,side,&interaction):rock::api::Status::NotReady;
-    if(status!=rock::api::Status::Ok ||
-       !(interaction.flags&static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::Valid))) {
-     // One report per explicit equipment action, never per input/render frame.
-     spdlog::warn("PALM equipment hand query rejected: weapon={:08X} hand={} status={} flags={:X} owner={:016X} inputThread={} taskThread={} frame={} generations[world,skeleton,provider]=[{},{},{}]",
-      selected.id,side==rock::api::Hand::Left?"left":"right",static_cast<unsigned>(status),interaction.flags,owner,
-      inputThread,GetCurrentThreadId(),interaction.frameIndex,interaction.worldGeneration,interaction.skeletonGeneration,interaction.providerGeneration);
-     return "Hand state unavailable";
-    }
-    constexpr auto loose=static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::LooseObject)|
-     static_cast<std::uint32_t>(rock::api::grab::HandInteractionFlag::LooseWeapon);
-    // LooseObject is also set for a merely highlighted world object. Only an
-    // active handoff/hold owns the hand against the unequip. A part carry is an
-    // equipped weapon's own state (akimbo: often the other weapon); ROCK's
-    // unequip path owns its release.
-    const bool holding=interaction.phase!=rock::api::grab::HandInteractionPhase::Idle &&
-     interaction.phase!=rock::api::grab::HandInteractionPhase::Touching && interaction.phase!=rock::api::grab::HandInteractionPhase::Selecting;
-    if((interaction.flags&loose) && holding)return "Put down the held object before changing weapons";
-   }
-  }
+  // An unequip needs no free hand: an object held in either hand is not the
+  // weapon, and the hand holding the weapon cannot also hold one (ROCK reports
+  // that hand as weapon-occupied). ROCK's unequip path releases its grips.
   if(!support.canToggle(equipped))return equipped?"Unequip unavailable: native function conflict":"Equip unavailable: native function conflict";
   auto* manager=RE::ActorEquipManager::GetSingleton();
   if(!manager)return "Equipment manager unavailable";
