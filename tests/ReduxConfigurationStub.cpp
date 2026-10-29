@@ -1,7 +1,9 @@
 #include <SCISSORS_Redux/Configuration.h>
 namespace config=scissors::configuration;
 namespace {
-    config::Snapshot state{sizeof(config::Snapshot),1,1};
+    // Starts from Redux's compiled defaults, as the real module does without INIs.
+    constexpr std::uint32_t defaults() {std::uint32_t bits=0;for(const auto& s:config::kSettings)if(s.defaultValue)bits|=config::bit(s.id);return bits;}
+    config::Snapshot state{sizeof(config::Snapshot),defaults(),1};
     config::Status snapshot(config::Snapshot* result) noexcept {if(!result)return config::Status::InvalidArgument;*result=state;return config::Status::Ok;}
     config::Status set(config::Setting id,std::uint32_t value,char*,std::uint32_t) noexcept {
         if(static_cast<std::uint32_t>(id)>=config::kSettings.size()||value>1)return config::Status::InvalidArgument;
