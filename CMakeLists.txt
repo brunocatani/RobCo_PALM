@@ -4,9 +4,10 @@ set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "")
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "")
 project(RobCoPALM VERSION 1.2.1 LANGUAGES CXX RC)
 get_filename_component(WORKSPACE "${CMAKE_CURRENT_SOURCE_DIR}/../../PROJECT_ROCK_V2" ABSOLUTE)
+# SCISSORS_Redux publishes its Configuration API from its own include/ directory.
+set(SCISSORS_REDUX_INCLUDE_DIR "${WORKSPACE}/main_projects/SCISSORS_Redux/include" CACHE PATH "SCISSORS_Redux public include directory")
 # Shared DIAMOND setting names/ranges keep its native INI and PALM controls aligned.
-include_directories("${WORKSPACE}/main_projects/DIAMOND/include"
- "${WORKSPACE}/my_frameworks_and_sdks/RPS_SDK/SDK/SCISSORS_Redux/include")
+include_directories("${WORKSPACE}/main_projects/DIAMOND/include" "${SCISSORS_REDUX_INCLUDE_DIR}")
 # ROCK publishes its provider API from its own include/ directory.
 set(ROCK_INCLUDE_DIR "${WORKSPACE}/main_projects/ROCK/include" CACHE PATH "ROCK public include directory")
 set(COMMON_LIB_F4VR_PATH "${WORKSPACE}/libraries_and_tools/CommonLibF4VR" CACHE PATH "")

@@ -3,7 +3,7 @@
 #include "RockSettingControlPolicy.h"
 #include "RpsMod.h"
 #include <ROCK/Configuration.h>
-#include <SCISSORS_Redux/ConfigurationV1_1.h>
+#include <SCISSORS_Redux/Configuration.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -56,7 +56,7 @@ namespace rock_configurator
     public:
         explicit IniSettingsStore(std::filesystem::path path = {}, RpsMod mod = RpsMod::Rock,
             const rock::api::configuration::Api* api = nullptr, std::filesystem::path catalogPath = {}, rock::api::OwnerToken owner = 0,
-            const scissors::configuration::ApiV1* reduxApi = nullptr) :
+            const scissors::configuration::Api* reduxApi = nullptr) :
             _path(std::move(path)), _catalogPath(std::move(catalogPath)), _mod(mod), _configurationApi(api), _configurationOwner(owner), _reduxApi(reduxApi),
             _useRockApi(api || (_path.empty() && isRockConfiguration(mod))) {}
 
@@ -116,7 +116,7 @@ namespace rock_configurator
         const rock::api::configuration::Api* _configurationApi = nullptr;
         rock::api::OwnerToken _configurationOwner{};
         rock::api::Status _lastProviderStatus{rock::api::Status::Ok};
-        const scissors::configuration::ApiV1* _reduxApi = nullptr;
+        const scissors::configuration::Api* _reduxApi = nullptr;
         bool _useRockApi = false;
         std::uint64_t _loadedRevision = 0;
         std::vector<IniLine> _lines;

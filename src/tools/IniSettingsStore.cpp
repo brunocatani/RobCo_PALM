@@ -288,7 +288,7 @@ namespace rock_configurator
     bool IniSettingsStore::needsReload() const noexcept
     {
         if (_reduxApi) {
-            scissors::configuration::SnapshotV1 snapshot;
+            scissors::configuration::Snapshot snapshot;
             return _reduxApi->snapshot(&snapshot)!=scissors::configuration::Status::Ok || snapshot.revision!=_loadedRevision;
         }
         std::uint64_t revision{};

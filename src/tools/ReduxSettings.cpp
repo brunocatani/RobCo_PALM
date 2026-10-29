@@ -9,20 +9,20 @@ namespace rock_configurator {
         if(!_reduxApi) {
             const auto module=GetModuleHandleW(L"SCISSORS_Redux.dll");
             const auto query=module?reinterpret_cast<config::Query>(GetProcAddress(module,config::kQueryExport)):nullptr;
-            if(query)_reduxApi=query(1,1,sizeof(config::ApiV1));
+            if(query)_reduxApi=query(config::kMajor,config::kMinor,sizeof(config::Api));
         }
 #endif
-        if(!_reduxApi || _reduxApi->major!=1 || _reduxApi->minor<1 || _reduxApi->structSize<sizeof(config::ApiV1) ||
+        if(!_reduxApi || _reduxApi->major!=config::kMajor || _reduxApi->minor<config::kMinor || _reduxApi->size<sizeof(config::Api) ||
             !_reduxApi->snapshot || !_reduxApi->setValue) {
-            _reduxApi=nullptr;_lastError="SCISSORS Redux Configuration 1.1 is unavailable";return false;
+            _reduxApi=nullptr;_lastError="SCISSORS Redux Configuration 2.0 is unavailable";return false;
         }
-        config::SnapshotV1 snapshot;
+        config::Snapshot snapshot;
         if(_reduxApi->snapshot(&snapshot)!=config::Status::Ok) {
             _lastError="SCISSORS Redux configuration is not ready";return false;
         }
         const auto group=_mod==RpsMod::ScissorsReduxDeveloper?config::Group::Developer:config::Group::Consumer;
         std::vector<SettingRecord> settings;
-        for(const auto& metadata:config::v1_1::kSettings) {
+        for(const auto& metadata:config::kSettings) {
             if(metadata.group!=group)continue;
             SettingRecord setting;
             setting.section="PhysicsInteraction";setting.key=metadata.key;setting.id=setting.section+"."+setting.key;
@@ -38,7 +38,7 @@ namespace rock_configurator {
     bool IniSettingsStore::saveReduxSetting(const SettingRecord& setting,bool value) {
         namespace config=scissors::configuration;
         const auto group=_mod==RpsMod::ScissorsReduxDeveloper?config::Group::Developer:config::Group::Consumer;
-        for(const auto& metadata:config::v1_1::kSettings) {
+        for(const auto& metadata:config::kSettings) {
             if(metadata.group!=group || setting.key!=metadata.key)continue;
 #ifndef WHEEL_DESKTOP_PREVIEW
             std::array<char,512> error{};
