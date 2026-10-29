@@ -23,7 +23,7 @@ int main(int argc,char** argv) {
     IniSettingsStore consumer("never-read.ini",RpsMod::ScissorsRedux,nullptr,{},0,fixture);
     IniSettingsStore developer("never-read-dev.ini",RpsMod::ScissorsReduxDeveloper,nullptr,{},0,fixture);
     assert(consumer.load()&&developer.load());
-    assert(consumer.settings().size()==2&&developer.settings().size()==5);
+    assert(consumer.settings().size()==2&&developer.settings().size()==6);
     assert(consumer.settings()[0].key=="npcDynamicCollisions"&&consumer.settings()[0].value=="true");
     for(const auto& setting:developer.settings())assert(setting.type==SettingType::Boolean&&setting.value=="false");
     assert(developer.settings()[4].key=="bPhysicalMelee");
