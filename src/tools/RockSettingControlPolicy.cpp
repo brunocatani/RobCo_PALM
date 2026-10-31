@@ -311,6 +311,26 @@ namespace rock_configurator::setting_control
                     { "white", "White" },
                 });
             }
+            // ROCK [Controls] button layout: the physical input behind each ROCK button.
+            if ((key.starts_with("sLeft") || key.starts_with("sRight")) && key.ends_with("Button")) {
+                const bool left = key.starts_with("sLeft");
+                return dropdown({
+                    { "trigger", "Trigger" },
+                    { "grip", "Grip" },
+                    { left ? "x" : "a", left ? "X (lower face)" : "A (lower face)" },
+                    { left ? "y" : "b", left ? "Y (upper face)" : "B (upper face)" },
+                    { "thumbstick", "Stick / trackpad click" },
+                    { "grip_click", "Grip click (Axis2)" },
+                    { "axis3", "Axis3 click (bumper)" },
+                    { "axis4", "Axis4 click" },
+                    { "pad_up", "Trackpad up" },
+                    { "pad_down", "Trackpad down" },
+                    { "pad_left", "Trackpad left" },
+                    { "pad_right", "Trackpad right" },
+                    { "pad_center", "Trackpad centre" },
+                    { "none", "None" },
+                });
+            }
             if (key == "iDebugSkeletonBoneMode") {
                 return dropdown({
                     { "0", "Mode 0" },
