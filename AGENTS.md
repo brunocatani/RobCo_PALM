@@ -3,7 +3,6 @@
 RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM's runtime identity is defined in the UI workspace instructions.
 
 - Build with `cmake --preset custom-fast`, then `cmake --build build-fast --config Release --target RobCoPALM`. Targeted CTest suites also use `build-fast`, Release. Deploys `wheelmenu.dll` and its PDB only to `F4SE/Plugins` under the mod folder set by `COPY_PLUGIN_BASE_PATH` in `CMakeUserPresets.json`.
-- Docs: the UI workspace's `Docs/ROCK_Whell_Menu/docs`. Older documents may remain in the ROCK suite workspace's `Docs/ROCK_Whell_Menu/docs`; check their relevance before use.
 
 ## Provider pages
 
