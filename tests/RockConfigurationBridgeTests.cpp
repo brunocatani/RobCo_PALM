@@ -23,10 +23,10 @@ namespace
     {
         if(owner!=1)return Status::OwnerNotRegistered;
         if (!grenadeVisitSucceeds || group != Group::Consumer) return Status::NotReady;
-        const Setting unrelated{"RealisticWeapons", "bOther", "true", "true", "", "", ValueType::Boolean, 0};
+        const Setting unrelated{"Grenades", "bOther", "true", "true", "", "", ValueType::Boolean, 0};
         callback(&unrelated, context);
         if (publishGrenade) {
-            const Setting setting{"RealisticWeapons", "bImmersiveGrenades", grenadeMode.c_str(), "true", "", "", ValueType::Boolean, 0};
+            const Setting setting{"Grenades", "bImmersiveGrenades", grenadeMode.c_str(), "true", "", "", ValueType::Boolean, 0};
             callback(&setting, context);
         }
         return Status::Ok;

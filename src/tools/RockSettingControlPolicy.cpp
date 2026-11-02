@@ -311,6 +311,12 @@ namespace rock_configurator::setting_control
                     { "white", "White" },
                 });
             }
+            if (key == "sDefaultHand") {
+                return dropdown({
+                    { "right", "Right" },
+                    { "left", "Left" },
+                });
+            }
             // ROCK [Controls] button layout: the physical input behind each ROCK button.
             if ((key.starts_with("sLeft") || key.starts_with("sRight")) && key.ends_with("Button")) {
                 const bool left = key.starts_with("sLeft");
