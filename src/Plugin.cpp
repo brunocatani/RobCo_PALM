@@ -6,6 +6,7 @@
 #include "DeveloperActions.h"
 #include <ShlObj.h>
 #include "tools/ConfiguratorRuntime.h"
+#include <RPS/Runtime/RequiredUpdate.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 
 namespace {
@@ -44,6 +45,9 @@ void onMessage(F4SE::MessagingInterface::Message* message) noexcept {
   }
   if(message->type!=F4SE::MessagingInterface::kGameDataReady)return;
   static bool started=false;if(started)return;started=true;
+  // Before the ROCK connection in startRuntime can find a version mismatch.
+  if(!RPS::Runtime::RequiredUpdate::watchMainMenu(L"RobCo PALM: update required"))
+   spdlog::error("PALM: the UI is unavailable; a ROCK version mismatch cannot stop the game at the main menu");
   wheel::prepareFonts();
   if(!wheel::startRuntime())spdlog::critical("PALM menu initialization failed; see the preceding subsystem error");
   else {rock_configurator::onGameDataReady();spdlog::info("PALM and workshop ready for gameplay input");}

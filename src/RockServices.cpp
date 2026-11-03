@@ -1,16 +1,38 @@
 #include "PCH.h"
 #include "RockServices.h"
 #include "tools/LoadedRpsMods.h"
+#include <RPS/Runtime/RequiredUpdate.h>
 namespace wheel {
+namespace {
+// A loaded ROCK that does not serve the API PALM was built for stops the game
+// at the main menu (RPS/Runtime/RequiredUpdate.h); a missing ROCK does not.
+// PALM requests the exact versions its ROCK headers declare, so every version
+// refusal is a real mismatch.
+bool isVersionRefusal(rock::api::Status status) {
+    using rock::api::Status;
+    return status==Status::UnknownInterface || status==Status::UnsupportedMajor || status==Status::UnsupportedMinor ||
+        status==Status::TableTooSmall || status==Status::InvalidSize;
+}
+void reportRockMismatch(const char* reason) {
+    spdlog::critical("PALM does not work with the loaded ROCK ({}): the game stops at the main menu until they match",reason);
+    RPS::Runtime::RequiredUpdate::report(L"RobCo PALM does not work with the installed ROCK: they were built for "
+        L"different ROCK versions. Install matching versions of ROCK and RobCo PALM.");
+}
+}
 RockServices& rockServices() { static auto* service=new RockServices(); return *service; }
 bool RockServices::connect() {
     const auto variant=rock_configurator::loadedRockMod();
     const auto module=variant?GetModuleHandleW(rock_configurator::modInfo(*variant).module):nullptr;
-    const auto query=module?reinterpret_cast<rock::api::QueryInterfaceV1>(GetProcAddress(module,rock::api::kQueryExportName)):nullptr;
+    if(!module) return false;
+    const auto query=reinterpret_cast<rock::api::QueryInterfaceV1>(GetProcAddress(module,rock::api::kQueryExportName));
     using rock::api::Status;
-    if(!query) return false;
+    if(!query) {
+        reportRockMismatch("no ROCKAPI_QueryInterfaceV1 export");
+        return false;
+    }
     if(const auto status=client.connect(query,"RobCo PALM");status!=Status::Ok) {
         spdlog::warn("PALM ROCK registration refused: status={}",static_cast<unsigned>(status));
+        if(isVersionRefusal(status)) reportRockMismatch("Core refused");
         return false;
     }
     spdlog::info("PALM connected to {}",rock_configurator::modInfo(*variant).name);
@@ -25,6 +47,7 @@ bool RockServices::connect() {
     else if((status=client.acquire(bits(api::input::Permission::Read),input))!=Status::Ok) failed="Input";
     if(failed) {
         spdlog::warn("PALM ROCK {} interface unavailable: status={}",failed,static_cast<unsigned>(status));
+        if(isVersionRefusal(status)) reportRockMismatch(failed);
         grab=nullptr;weapon=nullptr;hands=nullptr;input=nullptr;
         if(const auto closed=client.close();closed!=Status::Ok) spdlog::error("PALM ROCK owner cleanup failed: {}",static_cast<unsigned>(closed));
         return false;
@@ -33,6 +56,7 @@ bool RockServices::connect() {
     if((status=client.acquire(bits(api::animation::Permission::Write),animation))!=Status::Ok) {
         animation=nullptr;
         spdlog::warn("PALM ROCK Animation interface unavailable; gestures disabled: status={}",static_cast<unsigned>(status));
+        if(isVersionRefusal(status)) reportRockMismatch("Animation");
     }
     return true;
 }

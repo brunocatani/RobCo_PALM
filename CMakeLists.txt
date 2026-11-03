@@ -10,6 +10,11 @@ set(SCISSORS_REDUX_INCLUDE_DIR "${WORKSPACE}/main_projects/SCISSORS_Redux/includ
 include_directories("${WORKSPACE}/main_projects/DIAMOND/include" "${SCISSORS_REDUX_INCLUDE_DIR}")
 # ROCK publishes its provider API from its own include/ directory.
 set(ROCK_INCLUDE_DIR "${WORKSPACE}/main_projects/ROCK/include" CACHE PATH "ROCK public include directory")
+# RPS Framework's header-only required-update stop (RPS/Runtime/RequiredUpdate.h).
+set(RPS_FRAMEWORK_INCLUDE_DIR "${WORKSPACE}/my_frameworks_and_sdks/RPS_Framework/include" CACHE PATH "RPS Framework public include directory")
+if(NOT EXISTS "${RPS_FRAMEWORK_INCLUDE_DIR}/RPS/Runtime/RequiredUpdate.h")
+ message(FATAL_ERROR "RPS Framework headers not found in '${RPS_FRAMEWORK_INCLUDE_DIR}'; set RPS_FRAMEWORK_INCLUDE_DIR.")
+endif()
 set(COMMON_LIB_F4VR_PATH "${WORKSPACE}/libraries_and_tools/CommonLibF4VR" CACHE PATH "")
 set(ENABLE_FALLOUT_VR ON CACHE BOOL "" FORCE)
 set(ENABLE_FALLOUT_F4 OFF CACHE BOOL "" FORCE)
@@ -50,6 +55,7 @@ set_source_files_properties(src/Gestures.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS 
 set_source_files_properties(src/MenuApi.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_include_directories(RobCoPALM PRIVATE src
  "${ROCK_INCLUDE_DIR}"
+ "${RPS_FRAMEWORK_INCLUDE_DIR}"
  "${CMAKE_CURRENT_SOURCE_DIR}/../RPS_UI_Framework/SDK/include")
 target_link_libraries(RobCoPALM PRIVATE CommonLibF4::CommonLibF4 spdlog::spdlog wheel_view wheel_workshop shell32 version bcrypt)
 target_precompile_headers(RobCoPALM PRIVATE src/PCH.h)
