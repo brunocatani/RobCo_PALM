@@ -23,24 +23,38 @@ int main(int argc,char** argv) {
     IniSettingsStore consumer("never-read.ini",RpsMod::ScissorsRedux,nullptr,{},0,fixture);
     IniSettingsStore developer("never-read-dev.ini",RpsMod::ScissorsReduxDeveloper,nullptr,{},0,fixture);
     assert(consumer.load()&&developer.load());
-    assert(consumer.settings().size()==3&&developer.settings().size()==6);
-    assert(consumer.settings()[0].key=="npcDynamicCollisions"&&consumer.settings()[0].value=="true");
-    for(const auto& setting:developer.settings())assert(setting.type==SettingType::Boolean&&setting.value=="false");
-    assert(developer.settings()[4].key=="bPhysicalMelee");
+    // Each page shows exactly its group's rows of Redux's catalog, at the module's values.
+    const auto indexOf=[](const IniSettingsStore& store,std::string_view key) {
+        const auto& rows=store.settings();
+        std::size_t index=0;
+        while(index<rows.size()&&rows[index].key!=key)++index;
+        assert(index<rows.size());
+        return index;
+    };
+    std::uint32_t defaults=0;
+    for(const auto& metadata:config::kSettings) {
+        if(metadata.defaultValue)defaults|=config::bit(metadata.id);
+        const auto& page=metadata.group==config::Group::Consumer?consumer:developer;
+        const auto& row=page.settings()[indexOf(page,metadata.key)];
+        assert(row.type==SettingType::Boolean&&row.value==(metadata.defaultValue?"true":"false"));
+    }
+    assert(consumer.settings().size()+developer.settings().size()==config::kSettings.size());
     assert(!consumer.needsReload()&&!developer.needsReload());
-    const auto collision=consumer.setBooleanByIndex(0,false);assert(collision.changed&&collision.saved);
-    const auto visualizer=developer.setBooleanByIndex(0,true);assert(visualizer.changed&&visualizer.saved);
-    const auto physical=developer.setBooleanByIndex(4,true);assert(physical.changed&&physical.saved);
-    // Blood is a consumer setting that defaults on.
-    constexpr std::uint32_t kBlood=config::bit(config::Setting::Blood);
+    // Writes go through Redux by key, from the page that owns the setting.
+    const auto collisionIndex=indexOf(consumer,"npcDynamicCollisions");
+    const auto visualizerIndex=indexOf(developer,"bDebugShowColliders");
+    const auto collision=consumer.setBooleanByIndex(collisionIndex,false);assert(collision.changed&&collision.saved);
+    const auto visualizer=developer.setBooleanByIndex(visualizerIndex,true);assert(visualizer.changed&&visualizer.saved);
+    const auto physical=developer.setBooleanByIndex(indexOf(developer,"bPhysicalMelee"),true);assert(physical.changed&&physical.saved);
     config::Snapshot state;assert(api->snapshot(&state)==config::Status::Ok);
 #ifdef WHEEL_DESKTOP_PREVIEW
-    assert(state.values==(1|kBlood)&&state.revision==1); // No persistence or live call.
+    assert(state.values==defaults&&state.revision==1); // No persistence or live call.
 #else
-    assert(state.values==(68|kBlood)&&state.revision==4);
+    assert(state.values==((defaults&~config::bit(config::Setting::Collision))|config::bit(config::Setting::Visualizer)|config::bit(config::Setting::PhysicalMelee)));
+    assert(state.revision==4);
     assert(consumer.needsReload()&&developer.needsReload());
-    assert(consumer.reload()&&consumer.settings()[0].value=="false");
-    assert(developer.reload()&&developer.settings()[0].value=="true");
+    assert(consumer.reload()&&consumer.settings()[collisionIndex].value=="false");
+    assert(developer.reload()&&developer.settings()[visualizerIndex].value=="true");
     assert(!developer.needsReload());
 #endif
     assert(!std::filesystem::exists("never-read.ini")&&!std::filesystem::exists("never-read-dev.ini"));
