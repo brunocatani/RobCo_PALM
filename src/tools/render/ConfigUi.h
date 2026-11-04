@@ -1,6 +1,7 @@
 #pragma once
 #include "NativeRenderer.h"
 #include "UiVisualStyle.h"
+#include "../../TextFit.h"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -65,7 +66,18 @@ inline void caption(const char* label) {
 }
 inline void heading(const char* title, const char* subtitle) {
     { Font font(render::FontRole::Heading, 40); ImGui::TextUnformatted(title); }
-    { Font font(render::FontRole::Body, 24); ImGui::TextColored(muted(), "%s", subtitle); }
+    {
+        // Always one line of one height: a status prepended after a click must not move
+        // the rows under the pointer.
+        Font font(render::FontRole::Body, 24);
+        const float lineHeight = ImGui::GetTextLineHeightWithSpacing();
+        const float natural = ImGui::CalcTextSize(subtitle).x;
+        const float available = ImGui::GetContentRegionAvail().x;
+        const float top = ImGui::GetCursorPosY();
+        { Font fitted(render::FontRole::Body, natural > available ? 24 * available / natural : 24);
+          ImGui::TextColored(muted(), "%s", subtitle); }
+        ImGui::SetCursorPosY(top + lineHeight);
+    }
     ImGui::Dummy({0, 12});
 }
 inline bool navigation(const char* label, bool selected, const char* badge = nullptr) {
@@ -77,11 +89,12 @@ inline bool navigation(const char* label, bool selected, const char* badge = nul
     auto* draw = ImGui::GetWindowDrawList();
     if (selected || hovered) draw->AddRectFilled(p, {p.x + width, p.y + height}, color(accent()));
     draw->AddRect(p,{p.x+width,p.y+height},color(palm::theme::border()));
-    const float right = p.x + width - (badge ? 42 : 12);
+    const float badgeWidth = badge ? ImGui::GetFont()->CalcTextSizeA(16, FLT_MAX, 0, badge).x : 0;
+    const float right = p.x + width - 12 - (badge ? badgeWidth + 8 : 0);
     auto* font = render::GetFont(render::FontRole::Medium) ? render::GetFont(render::FontRole::Medium) : ImGui::GetFont();
-    const float size = badge ? 20.0f : 26.0f;
     const float wrap = right - p.x - 16;
     const ReadableLabel readable(label);
+    const float size = palm::fitWrappedSize(font, readable.text.data(), wrap, height - 6, badge ? 20.0f : 26.0f, 14.0f);
     const auto extent = font->CalcTextSizeA(size, FLT_MAX, wrap, readable.text.data());
     draw->PushClipRect({p.x + 16, p.y}, {right, p.y + height}, true);
     draw->AddText(font, size, {p.x + 16, p.y + (std::max)(5.0f, (height - extent.y) * 0.5f)},

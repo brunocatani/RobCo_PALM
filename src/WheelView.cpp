@@ -1,5 +1,6 @@
 #include "WheelView.h"
 #include "PalmTheme.h"
+#include "TextFit.h"
 #include <imgui.h>
 #include <cstdio>
 
@@ -10,6 +11,16 @@ void centered(ImDrawList* draw, ImVec2 position, float size, ImU32 tint, const c
  auto* font=ImGui::GetFont();
  const auto extent=font->CalcTextSizeA(size,10000,0,text);
  draw->AddText(font,size,{position.x-extent.x/2,position.y-extent.y/2},tint,text);
+}
+// A slot's name under its icon, in a box two lines tall at full size.
+void slotLabel(ImDrawList* draw,ImVec2 slotCenter,float scale,ImU32 ink,const char* name) {
+ auto* font=ImGui::GetFont();
+ const float width=140*scale;
+ const float size=palm::fitWrappedSize(font,name,width,40*scale,16*scale,12*scale);
+ const auto extent=font->CalcTextSizeA(size,width,width,name);
+ draw->PushClipRect({slotCenter.x-width/2,slotCenter.y+22*scale},{slotCenter.x+width/2,slotCenter.y+62*scale},true);
+ draw->AddText(font,size,{slotCenter.x-extent.x/2,slotCenter.y+23*scale},ink,name,nullptr,width);
+ draw->PopClipRect();
 }
 Icon categoryIcon(Category category){return static_cast<Icon>(static_cast<unsigned>(Icon::Aid)+static_cast<unsigned>(category));}
 void sector(ImDrawList* draw, ImVec2 center, float inner, float outer, float a, float b, ImU32 tint,ImU32 outline=0) {
@@ -98,11 +109,7 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
     char quantity[16];std::snprintf(quantity,sizeof(quantity),"%u",item->quantity);
     centered(draw,{p.x,p.y+4*scale},22*scale,ink,quantity);
    }
-   const float labelSize=16*scale,labelWidth=140*scale;
-   const auto extent=ImGui::GetFont()->CalcTextSizeA(labelSize,labelWidth,labelWidth,item->name);
-   draw->PushClipRect({p.x-labelWidth/2,p.y+22*scale},{p.x+labelWidth/2,p.y+62*scale},true);
-   draw->AddText(ImGui::GetFont(),labelSize,{p.x-extent.x/2,p.y+23*scale},ink,item->name,nullptr,labelWidth);
-   draw->PopClipRect();continue;
+   slotLabel(draw,p,scale,ink,item->name);continue;
   }
   if(showingGestures) {
    const auto& definition=kGestures[slot];const bool over=hit==static_cast<int>(slot);
@@ -130,12 +137,7 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
    else std::snprintf(count,sizeof(count),"%u",item.count);
    centered(draw,{slotCenter.x,slotCenter.y+4*scale},isEquipment(model.category)?16*scale:22*scale,ink,count);
   }
-  const float labelSize=16*scale, labelWidth=140*scale;
-  const auto labelExtent=ImGui::GetFont()->CalcTextSizeA(labelSize,labelWidth,labelWidth,item.name.c_str());
-  draw->PushClipRect({slotCenter.x-labelWidth/2,slotCenter.y+22*scale},{slotCenter.x+labelWidth/2,slotCenter.y+62*scale},true);
-  draw->AddText(ImGui::GetFont(),labelSize,{slotCenter.x-labelExtent.x/2,slotCenter.y+23*scale},
-   ink,item.name.c_str(),nullptr,labelWidth);
-  draw->PopClipRect();
+  slotLabel(draw,slotCenter,scale,ink,item.name.c_str());
  }
  for(unsigned slot=0;slot<layout.count;++slot) {
   const unsigned c=layout.entries[slot];
@@ -167,6 +169,11 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
    centered(draw,{label.x,label.y+20*scale},13*scale,over || selected?ink:muted,itemCategory>=0?categoryName(static_cast<Category>(itemCategory)):"CONFIG");
   }
  }
+ char hintText[96];
+ const auto hint=[&](const char* action){
+  std::snprintf(hintText,sizeof(hintText),"%s TO %s",model.holdToSelect?"RELEASE TRIGGER OR GRAB":"PRESS TRIGGER",action);
+  return hintText;
+ };
  const bool cancelHovered=navigation==static_cast<int>(kCancelNavigation);
  action.cancelHovered=cancelHovered;
  draw->AddCircleFilled(center,54*scale,cancelHovered?green:surface,48);
@@ -180,7 +187,7 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
   if(externalHover) {
    const bool available=!(externalHover->flags&static_cast<unsigned>(palm::api::menu::ItemFlag::Disabled));
    if(available){action.section=external->handle;action.sectionItem=externalHover->id;}
-   centered(draw,point(512,920),16*scale,muted,available?"RELEASE TRIGGER OR GRAB TO SELECT":"UNAVAILABLE");
+   centered(draw,point(512,920),16*scale,muted,available?hint("SELECT"):"UNAVAILABLE");
   }else if(!external->count)centered(draw,point(512,920),16*scale,muted,"No items available from this mod");
  }else if(showingGestures) {
   if(hit>=0) {
@@ -190,16 +197,16 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
   const bool clearing=action.hoveredGesture && gestures.active[hand]==action.hoveredGesture;
   const bool free=gestures.availability[hand]==GestureAvailability::Free;
   if(hit>=0 || !free)centered(draw,point(512,920),16*scale,free || clearing?muted:green,
-   clearing?"RELEASE TRIGGER OR GRAB TO CLEAR GESTURE":!free?gestureAvailabilityText(gestures.availability[hand]):
-   gestures.left?"RELEASE TRIGGER OR GRAB TO POSE LEFT HAND":"RELEASE TRIGGER OR GRAB TO POSE RIGHT HAND");
+   clearing?hint("CLEAR GESTURE"):!free?gestureAvailabilityText(gestures.availability[hand]):
+   hint(gestures.left?"POSE LEFT HAND":"POSE RIGHT HAND"));
  }else if(hovered) {
   centered(draw,point(512,886),23*scale,green,hovered->name.c_str());
-  centered(draw,point(512,920),16*scale,muted,!hovered->count?"NOT CURRENTLY CARRIED":isEquipment(model.category)?(hovered->equipped?"RELEASE TRIGGER OR GRAB TO UNEQUIP":"RELEASE TRIGGER OR GRAB TO EQUIP"):"RELEASE TRIGGER OR GRAB TO TAKE ONE");
+  centered(draw,point(512,920),16*scale,muted,!hovered->count?"NOT CURRENTLY CARRIED":hint(isEquipment(model.category)?(hovered->equipped?"UNEQUIP":"EQUIP"):"TAKE ONE"));
  }else if(!showingItems)centered(draw,point(512,886),20*scale,muted,"Enable wheel sections in Config");
  else if(addHover) {
   action.addHeldWeapon=addSlotFree?static_cast<unsigned>(hit)+1:0;
   centered(draw,point(512,886),23*scale,green,addSlotFree?"ADD HELD WEAPON":"SLOT KEPT FOR A WEAPON NOT CARRIED");
-  centered(draw,point(512,920),16*scale,muted,addSlotFree?"RELEASE TRIGGER OR GRAB TO ADD THE WEAPON IN THIS HAND":
+  centered(draw,point(512,920),16*scale,muted,addSlotFree?hint("ADD THE WEAPON IN THIS HAND"):
    "CHANGE IT IN CONFIG");
  }else if(std::none_of(items.begin(),items.end(),[](const Item& item){return item.id!=0;}))centered(draw,point(512,886),20*scale,muted,
   isEquipment(model.category) && !model.equipmentNamesAvailable?"Equipment unavailable; saved choices are kept":"Choose your items in Config");

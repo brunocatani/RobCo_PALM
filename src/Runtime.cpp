@@ -324,7 +324,7 @@ void openHeldWheel(const rpsui::api::input::Frame& frame) {
  std::uint64_t ticket;
  {std::scoped_lock lock(s.presentationMutex);
   s.wheelPose=*pose;ticket=++s.generation;s.selection.begin(ticket);}
- tasks->AddTask([p=*pose,ticket] {
+ tasks->AddTask([p=*pose,ticket,holdToSelect=s.controls.mode==OpenMode::Hold] {
   auto& s=state();
   if(!s.sessionReady.load() || !s.inputReady.load() || !s.held.load() || s.generation.load()!=ticket)return;
   try {
@@ -332,7 +332,7 @@ void openHeldWheel(const rpsui::api::input::Frame& frame) {
    auto inventory=readInventory();auto& shared=sharedModel();
    {std::scoped_lock lock(shared.mutex);
     if(!s.sessionReady.load() || s.generation.load()!=ticket)return;
-    inventory.category=Category::Weapons;inventory.gestures=shared.model.gestures;inventory.gestures.showing=false;
+    inventory.category=Category::Weapons;inventory.gestures=shared.model.gestures;inventory.gestures.showing=false;inventory.holdToSelect=holdToSelect;
     if(!shared.lastAction.empty())inventory.status=shared.lastAction;
     shared.model=std::move(inventory);shared.view={};}
    std::scoped_lock presentationLock(s.presentationMutex);

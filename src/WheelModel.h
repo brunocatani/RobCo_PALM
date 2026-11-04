@@ -34,6 +34,8 @@ struct Model {
  std::array<bool,kCategoryCount> enabled{true,true,true,true,true};
  bool gesturesEnabled{true};
  bool equipmentNamesAvailable{true};
+ // Hold mode selects when the opening chord is released; press mode on a trigger click.
+ bool holdToSelect{};
  std::string status;
  GestureViewState gestures;
  SectionCatalog sections;
