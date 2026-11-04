@@ -39,7 +39,7 @@ Install the `.7z` asset from [GitHub Releases](https://github.com/brunocatani/Ro
 
 ## Adding a mod section
 
-The public headers are in [`SDK/include/PALMMenuApi.h`](SDK/include/PALMMenuApi.h) and [`PALMIcons.h`](SDK/include/PALMIcons.h). Resolve `GetPALMMenuApi` from `wheelmenu.dll` and request API version 1. The [`physical magazine example`](SDK/examples/PhysicalMagazines.cpp) compiles as part of the local build.
+The public headers are in [`include/RobCoPALM/`](include/RobCoPALM/), documented in [`docs/api/Menu.md`](docs/api/Menu.md). Resolve `PALMAPI_QueryInterfaceV1` from `wheelmenu.dll` and acquire the Menu table with `palm::api::acquire`. The [`physical magazine example`](tests/ConsumerExample.cpp) compiles with the tests.
 
 A mod registers a unique section ID, display name, icon, and selection callback, then publishes a copied snapshot of up to eight items. PALM supports up to ten registered mod sections. New mod sections start hidden until enabled in PALM settings.
 
