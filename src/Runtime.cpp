@@ -5,7 +5,8 @@
 #include "DeveloperActions.h"
 #include "PalmControls.h"
 #include "api/VirtualHolstersAPI.h"
-#include "RPSUIInputApi.h"
+#include "RpsUiQuery.h"
+#include <RPS_UI_Framework/Input.h>
 #include <ShlObj.h>
 #include "Inventory.h"
 #include "Equipment.h"
@@ -44,7 +45,7 @@ struct RuntimeState {
  // or render mutex while held; framework callbacks run outside its own lock.
  std::mutex presentationMutex;
  WheelSelectionState selection;
- rpsui::sdk::PanelPoseV1 wheelPose;
+ rpsui::api::framework::PanelPose wheelPose;
  std::uint64_t owner{},command{};
  ControlGesture gesture;
  RockyInputPriority rockyPriority;
@@ -57,7 +58,7 @@ struct RuntimeState {
  // Borrowed for the loaded plugin's process lifetime; queried on the game
  // input callback thread, where Virtual Holsters owns its zone updates.
  VirtualHolstersAPI* holsters{};
- const rpsui::sdk::InputApiV1* inputApi{};
+ const rpsui::api::input::Api* inputApi{};
  std::uint64_t inputToken{};
  std::atomic_bool rockReady{false},clickRequested{false};
  wheel::RockFrame rockFrame;
@@ -99,16 +100,16 @@ void publishGestureState() {
 }
 
 bool publishPointerAim() {
- const auto aim=snapshotPointerAim();rpsui::sdk::PointerAimV1 request;
+ const auto aim=snapshotPointerAim();rpsui::api::input::PointerAim request;
  for(unsigned side=0;side<2;++side){request.pitchDegrees[side]=nativePointerPitch(aim.pitch[side]);request.yawDegrees[side]=aim.yaw[side];}
  return state().inputApi && state().inputApi->setPointerAim && state().inputApi->setPointerAim(&request);
 }
 void clearSuppression() {
- auto& s=state();if(s.inputApi && s.inputToken){rpsui::sdk::InputCaptureV1 capture;(void)s.inputApi->capture(s.inputToken,&capture);}
+ auto& s=state();if(s.inputApi && s.inputToken){rpsui::api::input::Capture capture;(void)s.inputApi->capture(s.inputToken,&capture);}
 }
-bool claimInput(const rpsui::sdk::InputFrameV1& frame,bool owned) {
+bool claimInput(const rpsui::api::input::Frame& frame,bool owned) {
  auto& s=state();const auto masks=controlMasks(s.controls,frame.leftHanded);
- rpsui::sdk::InputCaptureV1 capture;
+ rpsui::api::input::Capture capture;
  // A plain click cannot reserve its press: FRIK/holsters must see it while
  // PALM waits for release to establish that it never became a chord.
  if(isPlainStickClick(s.controls) && !s.gesture.open){clearSuppression();return true;}
@@ -168,12 +169,12 @@ void serviceEquipCommand() {
  refreshWheelInventory();
 }
 
-std::optional<rpsui::sdk::PanelPoseV1> poseFor(const rpsui::sdk::InputFrameV1& frame) {
+std::optional<rpsui::api::framework::PanelPose> poseFor(const rpsui::api::input::Frame& frame) {
  const auto& t=frame.hands[physicalHand(state().controls.binding.hand,frame.leftHanded)];
  if(!t.valid)return {};
  float x=t.forward[0],y=t.forward[1];const float n=std::hypot(x,y);
  if(!std::isfinite(n) || n<.05f)return {};
- x/=n;y/=n;rpsui::sdk::PanelPoseV1 p;
+ x/=n;y/=n;rpsui::api::framework::PanelPose p;
  p.center[0]=t.position[0]+x*85;p.center[1]=t.position[1]+y*85;p.center[2]=t.position[2]+9;
  p.right[0]=y;p.right[1]=-x;p.right[2]=0;p.front[0]=-x;p.front[1]=-y;p.front[2]=0;
  p.physicalWidth=95;p.physicalHeight=95;
@@ -208,7 +209,7 @@ void submitChoice(const wheel::RockFrame& frame) {
  }else if(choice==kSectionChoice) {
   s.handGestures.clear(s.owner);
   const auto selected=s.sectionChoice.load();
-  const auto section=static_cast<palm::api::SectionHandle>(selected>>32),item=static_cast<std::uint32_t>(selected);
+  const auto section=static_cast<palm::api::menu::SectionHandle>(selected>>32),item=static_cast<std::uint32_t>(selected);
   const auto* tasks=F4SE::GetTaskInterface();
   if(!tasks){actionStatus("Mod action task queue unavailable");return;}
   s.gameActionPending=true;
@@ -317,7 +318,7 @@ void submitChoice(const wheel::RockFrame& frame) {
   requestInventoryHandoff(static_cast<std::uint32_t>(choice),frame);
  }
 }
-void openHeldWheel(const rpsui::sdk::InputFrameV1& frame) {
+void openHeldWheel(const rpsui::api::input::Frame& frame) {
  auto& s=state();const auto pose=poseFor(frame);const auto* tasks=F4SE::GetTaskInterface();
  if(!pose || !tasks){failWheelPresentation(0);return;}
  std::uint64_t ticket;
@@ -367,21 +368,22 @@ void selectWheel(bool closeAfterSelect,const std::optional<Action>& clicked) {
  // Cancelling this opening is not evidence that presentation is unavailable.
  if(!hover)spdlog::info("PALM opening cancelled before a rendered selection; waiting for both buttons to release");
 }
-void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
+void RPSUI_CALL onFrame(const rpsui::api::input::Frame* frame,void*) noexcept {
  try {
   if(!frame)return;auto& s=state();
   if(takePointerAimChange() && !publishPointerAim())spdlog::error("PALM pointer aim update rejected by UI framework");
   if(takeControlsSaveRequest())if(const auto* tasks=F4SE::GetTaskInterface())tasks->AddTask([]{persistControls();});
   InputMode inputMode;
   const auto controls=snapshotControls(&inputMode);
-  if(!s.loggedControls || inputMode!=s.loggedInputMode || controls!=s.controls || s.leftHanded!=frame->leftHanded) {
+  const bool leftHanded=frame->leftHanded!=0;
+  if(!s.loggedControls || inputMode!=s.loggedInputMode || controls!=s.controls || s.leftHanded!=leftHanded) {
    s.loggedControls=true;s.loggedInputMode=inputMode;
-   queueInputLog([inputMode,controls,leftHanded=frame->leftHanded,sequence=frame->sequence] {
+   queueInputLog([inputMode,controls,leftHanded,sequence=frame->sequence] {
     spdlog::info("PALM controls applied: mode={} selection={} binding='{}' leftHanded={} inputFrame={}",
      static_cast<unsigned>(inputMode),controls.mode==OpenMode::Hold?"release":"click",bindingText(controls),leftHanded,sequence);
    });
   }
-  if(controls!=s.controls || s.leftHanded!=frame->leftHanded){s.controls=controls;s.leftHanded=frame->leftHanded;s.gesture={};s.clickRequested=false;if(s.open.load() || s.held.load())closeWheel();}
+  if(controls!=s.controls || s.leftHanded!=leftHanded){s.controls=controls;s.leftHanded=leftHanded;s.gesture={};s.clickRequested=false;if(s.open.load() || s.held.load())closeWheel();}
   if(takeWheelConfigChange())refreshWheelInventory();
   RockSnapshotDiagnostic snapshotDiagnostic;
   const bool rockReady=s.owner && rockServices().client.owner() && rockServices().snapshot(s.rockFrame,&snapshotDiagnostic) && s.rockFrame.providerReady;
@@ -415,11 +417,11 @@ void RPSUI_CALL onFrame(const rpsui::sdk::InputFrameV1* frame,void*) noexcept {
   const bool eligible=!s.command && !gameActionPending && !configOpen && !configOpening;
   const auto masks=controlMasks(s.controls,frame->leftHanded);
   const std::array pressed{frame->hands[0].pressed,frame->hands[1].pressed};
-  const std::array handValid{frame->hands[0].valid,frame->hands[1].valid};
+  const std::array<bool,2> handValid{frame->hands[0].valid!=0,frame->hands[1].valid!=0};
   const bool rockyOwnsInput=s.rockLoaded && s.rockyPriority.update(pressed,handValid);
   bool allDown=true,anyDown=false,valid=true;
   for(unsigned hand=0;hand<2;++hand)if(masks.buttons[hand]) {
-   valid &= frame->hands[hand].valid;
+   valid &= frame->hands[hand].valid!=0;
    allDown &= (frame->hands[hand].pressed&masks.buttons[hand])==masks.buttons[hand];
    anyDown |= (frame->hands[hand].pressed&masks.buttons[hand])!=0;
   }
@@ -566,8 +568,7 @@ bool startRuntime() {
  if(!devui::render::InstallFrameworkPanel())return false;
 
  auto& s=state();
- s.inputApi=rpsui::sdk::RequestInputApiV1();
- if(!s.inputApi || !s.inputApi->subscribe || !s.inputApi->capture || !s.inputApi->unsubscribe || !s.inputApi->setPointerAim) {
+ if(rpsui::api::acquire(rpsUiQuery(),s.inputApi)!=rpsui::api::Result::Ok) {
   spdlog::error("PALM startup failed: RPS UI independent input API unavailable");return false;
  }
  PWSTR documents{};

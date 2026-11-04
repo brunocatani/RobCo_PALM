@@ -2,5 +2,6 @@ LIBRARY wheelmenu
 EXPORTS
  F4SEPlugin_Query
  F4SEPlugin_Load
+ PALMAPI_QueryInterfaceV1
  GetPALMMenuApi
  GetPALMDeveloperApi

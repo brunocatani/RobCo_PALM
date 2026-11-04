@@ -5,7 +5,7 @@
 
 namespace wheel {
 namespace {
-using namespace palm::api;
+using namespace palm::api;using namespace palm::api::menu;
 template<std::size_t N> bool textValid(const char (&text)[N]) {
  const auto* end=static_cast<const char*>(std::memchr(text,0,N));
  return end && end!=text && std::none_of(text,end,[](unsigned char c){return c<32;});
@@ -19,14 +19,14 @@ bool idValid(const char (&id)[64]) {
 bool iconValid(Icon icon){return icon<Icon::Count;}
 }
 SectionRegistry& sectionRegistry(){static SectionRegistry registry;return registry;}
-SectionRegistry::Entry* SectionRegistry::find(palm::api::SectionHandle handle) {
+SectionRegistry::Entry* SectionRegistry::find(palm::api::menu::SectionHandle handle) {
  if(!handle)return nullptr;
  for(auto& entry:_entries)if(entry.snapshot.handle==handle)return &entry;
  return nullptr;
 }
-palm::api::Result SectionRegistry::registerSection(const palm::api::SectionV1* section,palm::api::SectionHandle* output) {
+palm::api::Result SectionRegistry::registerSection(const palm::api::menu::Section* section,palm::api::menu::SectionHandle* output) {
  if(output)*output=0;
- if(!section || !output || section->structSize!=sizeof(SectionV1) || !idValid(section->id) ||
+ if(!section || !output || section->size!=sizeof(Section) || section->version!=kRecordVersion || !idValid(section->id) ||
   !textValid(section->name) || !textValid(section->modName) || !iconValid(section->icon) || !section->onSelect)return Result::InvalidArgument;
  std::scoped_lock lock(_mutex);
  for(const auto& entry:_entries)if(entry.snapshot.handle && std::strcmp(entry.snapshot.id,section->id)==0)return Result::DuplicateId;
@@ -39,18 +39,18 @@ palm::api::Result SectionRegistry::registerSection(const palm::api::SectionV1* s
  std::memcpy(target.modName,section->modName,sizeof(target.modName));
  *output=target.handle;++_revision;return Result::Ok;
 }
-palm::api::Result SectionRegistry::unregisterSection(palm::api::SectionHandle handle) {
+palm::api::Result SectionRegistry::unregisterSection(palm::api::menu::SectionHandle handle) {
  std::scoped_lock lock(_mutex);auto* entry=find(handle);
  if(!entry)return Result::NotFound;
  if(entry->invoking)return Result::CallbackBusy;
  *entry={};++_revision;return Result::Ok;
 }
-palm::api::Result SectionRegistry::setItems(palm::api::SectionHandle handle,const palm::api::ItemV1* items,std::uint32_t count) {
+palm::api::Result SectionRegistry::setItems(palm::api::menu::SectionHandle handle,const palm::api::menu::Item* items,std::uint32_t count) {
  if(count>kMaxItems || (count && !items))return Result::InvalidArgument;
  constexpr auto flags=static_cast<unsigned>(ItemFlag::Disabled)|static_cast<unsigned>(ItemFlag::Equipped)|static_cast<unsigned>(ItemFlag::ShowQuantity);
  for(unsigned i=0;i<count;++i) {
   const auto& item=items[i];
-  if(item.structSize!=sizeof(ItemV1) || !item.id || !textValid(item.name) || !iconValid(item.icon) || (item.flags&~flags))return Result::InvalidArgument;
+  if(item.size!=sizeof(Item) || item.version!=kRecordVersion || !item.id || !textValid(item.name) || !iconValid(item.icon) || (item.flags&~flags))return Result::InvalidArgument;
   for(unsigned j=0;j<i;++j)if(items[j].id==item.id)return Result::DuplicateId;
  }
  std::scoped_lock lock(_mutex);auto* entry=find(handle);
@@ -64,7 +64,7 @@ palm::api::Result SectionRegistry::setItems(palm::api::SectionHandle handle,cons
  }
  if(same)return Result::Ok;
  snapshot.count=count;
- for(unsigned i=0;i<kMaxItems;++i)snapshot.items[i]=i<count?items[i]:ItemV1{};
+ for(unsigned i=0;i<kMaxItems;++i)snapshot.items[i]=i<count?items[i]:Item{};
  ++_revision;return Result::Ok;
 }
 void SectionRegistry::clearItems() {
@@ -78,7 +78,7 @@ bool SectionRegistry::snapshot(SectionCatalog& output) const {
  for(const auto& entry:_entries)if(entry.snapshot.handle)output.sections[output.count++]=entry.snapshot;
  output.revision=_revision.load();return true;
 }
-palm::api::Result SectionRegistry::dispatch(palm::api::SectionHandle handle,std::uint32_t id) {
+palm::api::Result SectionRegistry::dispatch(palm::api::menu::SectionHandle handle,std::uint32_t id) {
  SelectCallback callback{};void* context{};std::uint64_t data{};
  {
   std::scoped_lock lock(_mutex);auto* entry=find(handle);

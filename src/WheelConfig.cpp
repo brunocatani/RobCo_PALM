@@ -18,11 +18,11 @@ State& state(){static State s;return s;}
 void limitSections(Model& model) {
  unsigned used=1+static_cast<unsigned>(std::count(model.enabled.begin(),model.enabled.end(),true))+(model.gesturesEnabled?2:0);
  for(unsigned i=0;i<model.sections.count;++i)if(model.sections.sections[i].enabled && !isDeveloperSection(model.sections.sections[i].id)) {
-  model.sections.sections[i].enabled=used<palm::api::kMaxVisibleEntries;++used;
+  model.sections.sections[i].enabled=used<palm::api::menu::kMaxVisibleEntries;++used;
  }
  // Developer mode never silently hides an existing user-selected section.
  for(unsigned i=0;i<model.sections.count;++i)if(isDeveloperSection(model.sections.sections[i].id))
-  model.sections.sections[i].enabled=developerActions().enabled() && used<palm::api::kMaxVisibleEntries;
+  model.sections.sections[i].enabled=developerActions().enabled() && used<palm::api::menu::kMaxVisibleEntries;
  normalizeWheelSelection(model);
 }
 bool matches(std::string_view name,std::string_view needle) {
@@ -103,13 +103,13 @@ void drawWheelSettings() {
  };
  visual::heading("Wheel sections","Choose which sections appear. Visible sections fill the ring.");
  {visual::Font font(render::FontRole::Body,18);
-  ImGui::TextColored(visual::muted(),"%u / %u slots enabled. Config and Cancel always stay available.",(std::min)(enabledCount(),palm::api::kMaxVisibleEntries),palm::api::kMaxVisibleEntries);
+  ImGui::TextColored(visual::muted(),"%u / %u slots enabled. Config and Cancel always stay available.",(std::min)(enabledCount(),palm::api::menu::kMaxVisibleEntries),palm::api::menu::kMaxVisibleEntries);
   ImGui::TextColored(visual::muted(),"Hiding a section keeps its item choices. Gestures uses two slots.");}
- if(enabledCount()>palm::api::kMaxVisibleEntries)ImGui::TextWrapped("Some enabled mod sections are waiting for a free slot. Hide sections to make room.");
+ if(enabledCount()>palm::api::menu::kMaxVisibleEntries)ImGui::TextWrapped("Some enabled mod sections are waiting for a free slot. Hide sections to make room.");
  ImGui::Dummy({0,16});
  const auto toggle=[&](const char* name,const char* detail,bool& enabled,unsigned cost) {
   ImGui::TableNextColumn();ImGui::PushID(name);
-  ImGui::BeginDisabled(!enabled && enabledCount()+cost>palm::api::kMaxVisibleEntries);
+  ImGui::BeginDisabled(!enabled && enabledCount()+cost>palm::api::menu::kMaxVisibleEntries);
   bool changed;
   {visual::Font font(render::FontRole::Medium,24);ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{4,4});
    changed=devui::visual::checkbox(name,&enabled);ImGui::PopStyleVar();}

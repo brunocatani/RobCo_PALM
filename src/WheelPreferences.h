@@ -21,7 +21,7 @@ struct Preferences {
   if(visibleCount==~0u)visibleCount=enabledEntries();
   const auto it=std::find(sections.begin(),sections.end(),id);
   if(!value){if(it==sections.end())return false;sections.erase(it);return true;}
-  if(it!=sections.end() || id.empty() || id.size()>=64 || sections.size()>=palm::api::kMaxSections || visibleCount>=palm::api::kMaxVisibleEntries)return false;
+  if(it!=sections.end() || id.empty() || id.size()>=64 || sections.size()>=palm::api::menu::kMaxSections || visibleCount>=palm::api::menu::kMaxVisibleEntries)return false;
   sections.emplace_back(id);return true;
  }
  bool slotFree(unsigned category,unsigned slot) const {
@@ -98,11 +98,11 @@ inline bool readPreferences(std::istream& in,Preferences& prefs) {
  const bool positional=line=="PALMItems 2";
  std::array<bool,kCategoryCount> categories{};unsigned lines=0;bool gesturesRead=false;
  while(std::getline(in,line)) {
-  if(++lines>kCategoryCount*(kSlots+1)+palm::api::kMaxSections+1 || line.size()>2048)return false;
+  if(++lines>kCategoryCount*(kSlots+1)+palm::api::menu::kMaxSections+1 || line.size()>2048)return false;
   std::istringstream row(line);std::string kind;unsigned c;
   if(!(row>>kind))return false;
   if(kind=="section") {
-   std::string id;if(!(row>>std::quoted(id)) || id.empty() || id.size()>=64 || parsed.sectionEnabled(id) || parsed.sections.size()>=palm::api::kMaxSections)return false;
+   std::string id;if(!(row>>std::quoted(id)) || id.empty() || id.size()>=64 || parsed.sectionEnabled(id) || parsed.sections.size()>=palm::api::menu::kMaxSections)return false;
    if(!std::all_of(id.begin(),id.end(),[](unsigned char ch){return (ch>='a' && ch<='z') || (ch>='A' && ch<='Z') || (ch>='0' && ch<='9') || ch=='_' || ch=='-' || ch=='.';}))return false;
    parsed.sections.push_back(std::move(id));row>>std::ws;if(!row.eof())return false;continue;
   }

@@ -6,8 +6,15 @@ project(RobCoPALM VERSION 1.2.1 LANGUAGES CXX RC)
 get_filename_component(WORKSPACE "${CMAKE_CURRENT_SOURCE_DIR}/../../PROJECT_ROCK_V2" ABSOLUTE)
 # SCISSORS_Redux publishes its Configuration API from its own include/ directory.
 set(SCISSORS_REDUX_INCLUDE_DIR "${WORKSPACE}/main_projects/SCISSORS_Redux/include" CACHE PATH "SCISSORS_Redux public include directory")
+# PALM's own provider API: self-contained headers PALM compiles against.
+set(PALM_PUBLIC_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 # Shared DIAMOND setting names/ranges keep its native INI and PALM controls aligned.
-include_directories("${WORKSPACE}/main_projects/DIAMOND/include" "${SCISSORS_REDUX_INCLUDE_DIR}")
+include_directories("${PALM_PUBLIC_INCLUDE_DIR}" "${WORKSPACE}/main_projects/DIAMOND/include" "${SCISSORS_REDUX_INCLUDE_DIR}")
+# RPS UI Framework publishes its provider API from its own include/ directory.
+set(RPSUI_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../RPS_UI_Framework/include" CACHE PATH "RPS UI Framework public include directory")
+if(NOT EXISTS "${RPSUI_INCLUDE_DIR}/RPS_UI_Framework/Framework.h")
+ message(FATAL_ERROR "RPS UI Framework headers not found in '${RPSUI_INCLUDE_DIR}'; set RPSUI_INCLUDE_DIR.")
+endif()
 # ROCK publishes its provider API from its own include/ directory.
 set(ROCK_INCLUDE_DIR "${WORKSPACE}/main_projects/ROCK/include" CACHE PATH "ROCK public include directory")
 # RPS Framework's header-only required-update stop (RPS/Runtime/RequiredUpdate.h).
@@ -48,7 +55,7 @@ foreach(target wheel_workshop wheel_workshop_preview)
 endforeach()
 target_link_libraries(wheel_workshop PUBLIC CommonLibF4::CommonLibF4)
 target_compile_definitions(wheel_workshop_preview PUBLIC WHEEL_DESKTOP_PREVIEW)
-add_library(RobCoPALM SHARED src/Plugin.cpp src/Runtime.cpp src/RockServices.cpp src/Gestures.cpp src/Inventory.cpp src/Equipment.cpp src/Renderer.cpp src/MenuApi.cpp
+add_library(RobCoPALM SHARED src/Plugin.cpp src/Runtime.cpp src/RockServices.cpp src/Gestures.cpp src/Inventory.cpp src/Equipment.cpp src/Renderer.cpp src/MenuApi.cpp src/RequiredUpdates.cpp
  src/tools/render/FrameworkPanelRenderer.cpp src/exports.def src/IconResources.rc)
 set_target_properties(RobCoPALM PROPERTIES OUTPUT_NAME wheelmenu)
 set_source_files_properties(src/Gestures.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
@@ -56,7 +63,7 @@ set_source_files_properties(src/MenuApi.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS O
 target_include_directories(RobCoPALM PRIVATE src
  "${ROCK_INCLUDE_DIR}"
  "${RPS_FRAMEWORK_INCLUDE_DIR}"
- "${CMAKE_CURRENT_SOURCE_DIR}/../RPS_UI_Framework/SDK/include")
+ "${RPSUI_INCLUDE_DIR}")
 target_link_libraries(RobCoPALM PRIVATE CommonLibF4::CommonLibF4 spdlog::spdlog wheel_view wheel_workshop shell32 version bcrypt)
 target_precompile_headers(RobCoPALM PRIVATE src/PCH.h)
 target_compile_options(RobCoPALM PRIVATE /MP /Zi /wd4715 /utf-8)
@@ -119,9 +126,26 @@ target_include_directories(WheelSectionTests PRIVATE src)
 target_compile_features(WheelSectionTests PRIVATE cxx_std_23)
 add_test(NAME Wheel.Sections COMMAND WheelSectionTests)
 set_tests_properties(Wheel.Sections PROPERTIES TIMEOUT 30)
-add_library(PALMSectionExample OBJECT SDK/examples/PhysicalMagazines.cpp)
-target_include_directories(PALMSectionExample PRIVATE SDK/include)
-target_compile_features(PALMSectionExample PRIVATE cxx_std_23)
+# Every public header compiled on its own under a hostile packing, plus the
+# minimal consumer. The headers' static_asserts are the ABI layout checks.
+file(GLOB PALM_PUBLIC_HEADERS CONFIGURE_DEPENDS "${PALM_PUBLIC_INCLUDE_DIR}/RobCoPALM/*.h")
+set(PALM_PUBLIC_HEADER_SOURCES)
+foreach(PALM_PUBLIC_HEADER IN LISTS PALM_PUBLIC_HEADERS)
+ get_filename_component(PALM_PUBLIC_HEADER_NAME "${PALM_PUBLIC_HEADER}" NAME_WE)
+ set(PALM_PUBLIC_HEADER_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/public_header_tests/${PALM_PUBLIC_HEADER_NAME}.cpp")
+ file(CONFIGURE OUTPUT "${PALM_PUBLIC_HEADER_SOURCE}"
+  CONTENT "#pragma pack(push, 1)\n#include <RobCoPALM/${PALM_PUBLIC_HEADER_NAME}.h>\n#pragma pack(pop)\n")
+ list(APPEND PALM_PUBLIC_HEADER_SOURCES "${PALM_PUBLIC_HEADER_SOURCE}")
+endforeach()
+add_executable(PALMPublicHeaderTests ${PALM_PUBLIC_HEADER_SOURCES} tests/ConsumerExample.cpp)
+set_target_properties(PALMPublicHeaderTests PROPERTIES INCLUDE_DIRECTORIES "${PALM_PUBLIC_INCLUDE_DIR}")
+target_compile_features(PALMPublicHeaderTests PRIVATE cxx_std_23)
+add_test(NAME PALM.PublicHeaders COMMAND PALMPublicHeaderTests)
+add_executable(PALMDiscoveryTests tests/DiscoveryTests.cpp)
+target_include_directories(PALMDiscoveryTests PRIVATE src)
+target_compile_features(PALMDiscoveryTests PRIVATE cxx_std_23)
+target_compile_options(PALMDiscoveryTests PRIVATE /UNDEBUG)
+add_test(NAME PALM.Discovery COMMAND PALMDiscoveryTests)
 foreach(policy SpawnPluginIdentity RockSettingControlPolicy IniSettingsStoreControl RockConfigurationBridge PanelResizePolicy)
  add_executable(Wheel${policy}Tests tests/${policy}Tests.cpp)
  target_include_directories(Wheel${policy}Tests PRIVATE src/tools "${ROCK_INCLUDE_DIR}")

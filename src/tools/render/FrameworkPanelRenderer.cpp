@@ -5,7 +5,8 @@
 #include "render/NativeRenderer.h"
 #include "render/UiVisualStyle.h"
 
-#include "RPSUIFrameworkApi.h"
+#include "RpsUiQuery.h"
+#include <RPS_UI_Framework/Framework.h>
 
 #include <imgui_impl_dx11.h>
 
@@ -35,7 +36,7 @@ namespace devui::render
         struct FrameworkState
         {
             std::mutex mutex;
-            const rpsui::sdk::ApiV1* api{ nullptr };
+            const rpsui::api::framework::Api* api{ nullptr };
             std::uint64_t ownerToken{ 0 };
             std::uint64_t panelHandle{ 0 };
             std::uint64_t presentationSequence{ 1 };
@@ -81,7 +82,7 @@ namespace devui::render
 
         [[nodiscard]] bool initializeRenderState(
             RenderState& state,
-            const rpsui::sdk::PanelRenderFrameV1& frame) noexcept
+            const rpsui::api::framework::PanelRenderFrame& frame) noexcept
         {
             auto* device =
                 static_cast<ID3D11Device*>(frame.d3dDevice);
@@ -147,18 +148,18 @@ namespace devui::render
         }
 
         [[nodiscard]] rock_configurator::panel_resize::Handle localResizeHandle(
-            rpsui::sdk::ResizeHandleV1 handle) noexcept
+            rpsui::api::framework::ResizeHandle handle) noexcept
         {
             return static_cast<rock_configurator::panel_resize::Handle>(
                 static_cast<std::uint32_t>(handle));
         }
 
         void RPSUI_CALL renderPanel(
-            const rpsui::sdk::PanelRenderFrameV1* frame,
+            const rpsui::api::framework::PanelRenderFrame* frame,
             void*) noexcept
         {
             if (!frame ||
-                frame->structSize < sizeof(*frame) ||
+                frame->size < sizeof(*frame) ||
                 !frame->renderTargetView) {
                 return;
             }
@@ -256,17 +257,13 @@ namespace devui::render
             return true;
         }
 
-        state.api = rpsui::sdk::RequestApiV1();
-        if (!state.api ||
-            !state.api->registerConsumer ||
-            !state.api->registerPanel ||
-            !state.api->submitPanelPresentation) {
+        if (rpsui::api::acquire(wheel::rpsUiQuery(), state.api) != rpsui::api::Result::Ok) {
             logger::critical(
-                "RPS UI Framework V1 is unavailable; PALM Config consumer disabled");
+                "RPS UI Framework 2.0 is unavailable; PALM Config consumer disabled");
             return false;
         }
 
-        rpsui::sdk::ConsumerRegistrationV1 consumer{};
+        rpsui::api::framework::ConsumerRegistration consumer{};
         std::snprintf(
             consumer.consumerId,
             sizeof(consumer.consumerId),
@@ -275,11 +272,10 @@ namespace devui::render
             consumer.displayName,
             sizeof(consumer.displayName),
             "PALM Config");
-        consumer.requestedFeatures = state.api->featureBits;
-        rpsui::sdk::ConsumerHandleV1 handle{};
+        rpsui::api::framework::ConsumerHandle handle{};
         if (state.api->registerConsumer(
                 &consumer,
-                &handle) != rpsui::sdk::ResultV1::Ok ||
+                &handle) != rpsui::api::Result::Ok ||
             handle.ownerToken == 0) {
             logger::critical(
                 "PALM Config could not register with RPS UI Framework");
@@ -288,7 +284,7 @@ namespace devui::render
         }
         state.ownerToken = handle.ownerToken;
 
-        rpsui::sdk::PanelRegistrationV1 panel{};
+        rpsui::api::framework::PanelRegistration panel{};
         std::snprintf(
             panel.panelId,
             sizeof(panel.panelId),
@@ -303,12 +299,12 @@ namespace devui::render
         panel.minimumPhysicalWidth = kMinimumPanelPhysicalWidth;
         panel.maximumPhysicalWidth = kMaximumPanelPhysicalWidth;
         panel.sortOrder = 310;
-        panel.flags = static_cast<std::uint32_t>(rpsui::sdk::PanelFlagV1::ConfigNavigation);
+        panel.flags = static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::ConfigNavigation);
         panel.renderCallback = &renderPanel;
         if (state.api->registerPanel(
                 state.ownerToken,
                 &panel,
-                &state.panelHandle) != rpsui::sdk::ResultV1::Ok ||
+                &state.panelHandle) != rpsui::api::Result::Ok ||
             state.panelHandle == 0) {
             if (state.api->unregisterConsumer) {
                 (void)state.api->unregisterConsumer(state.ownerToken);
@@ -341,7 +337,7 @@ namespace devui::render
                state.api->resetPanelSize(
                    state.ownerToken,
                    state.panelHandle) ==
-                   rpsui::sdk::ResultV1::Ok;
+                   rpsui::api::Result::Ok;
     }
 
     bool SetPanelOpen(bool open, const PanelPose* pose) noexcept
@@ -354,7 +350,7 @@ namespace devui::render
             return false;
         }
 
-        rpsui::sdk::PanelPresentationV1 presentation{};
+        rpsui::api::framework::PanelPresentation presentation{};
         presentation.sequence = state.presentationSequence++;
         presentation.open = open ? 1 : 0;
         if (open) {
@@ -378,16 +374,16 @@ namespace devui::render
             state.ownerToken,
             state.panelHandle,
             &presentation);
-        if (result != rpsui::sdk::ResultV1::Ok) {
+        if (result != rpsui::api::Result::Ok) {
             logger::error(
                 "PALM Config panel presentation was rejected ({})",
                 static_cast<std::uint32_t>(result));
             return false;
         }
         if (open && state.api->getPanelState) {
-            rpsui::sdk::PanelStateV1 accepted;
+            rpsui::api::framework::PanelState accepted;
             const auto query = state.api->getPanelState(state.ownerToken, state.panelHandle, &accepted);
-            if (query == rpsui::sdk::ResultV1::Ok) {
+            if (query == rpsui::api::Result::Ok) {
                 logger::info("PALM Config accepted pose: requested=({:.2f},{:.2f},{:.2f}) actual=({:.2f},{:.2f},{:.2f}) shift=({:.2f},{:.2f},{:.2f}) open={}",
                     presentation.pose.center[0], presentation.pose.center[1], presentation.pose.center[2],
                     accepted.pose.center[0], accepted.pose.center[1], accepted.pose.center[2],

@@ -37,7 +37,7 @@ struct Model {
  std::string status;
  GestureViewState gestures;
  SectionCatalog sections;
- palm::api::SectionHandle activeSection{};
+ palm::api::menu::SectionHandle activeSection{};
  // Bit n: weapon ring slot n holds no saved choice. An empty-looking slot may
  // still hold a choice that is not carried; only a free one takes a new weapon.
  std::uint8_t freeWeaponSlots{};
@@ -45,9 +45,9 @@ struct Model {
 // The physical hand whose pointer made the selection; equipment goes into it.
 enum class PointerHand : std::uint8_t {None,Left,Right};
 // addHeldWeapon: 1 + the free weapon ring slot to fill; 0 for none.
-struct Action { std::uint64_t hoveredItem{}; bool configHovered{}; unsigned hoveredGesture{}; palm::api::SectionHandle section{}; std::uint32_t sectionItem{}; bool cancelHovered{}; PointerHand hand{}; unsigned addHeldWeapon{}; };
+struct Action { std::uint64_t hoveredItem{}; bool configHovered{}; unsigned hoveredGesture{}; palm::api::menu::SectionHandle section{}; std::uint32_t sectionItem{}; bool cancelHovered{}; PointerHand hand{}; unsigned addHeldWeapon{}; };
 struct NavigationLayout {
- std::array<unsigned,palm::api::kMaxVisibleEntries> entries{};
+ std::array<unsigned,palm::api::menu::kMaxVisibleEntries> entries{};
  unsigned count{};
  float step{},start{-kPi/2};
  float angle(unsigned slot) const {return start+slot*step;}

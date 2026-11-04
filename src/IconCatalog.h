@@ -1,5 +1,5 @@
 #pragma once
-#include "../SDK/include/PALMIcons.h"
+#include <RobCoPALM/Icons.h>
 
 namespace wheel {
 using Icon=palm::api::Icon;

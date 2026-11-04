@@ -131,20 +131,20 @@ int main(int argc, char** argv) {
   save(L"equipment-only.png");
   wheelModel.enabled.fill(false);save(L"config-only.png");
   // Exercise the same registration and snapshot code that a native mod uses.
-  std::array<palm::api::SectionHandle,2> modSections{};
+  std::array<palm::api::menu::SectionHandle,2> modSections{};
   auto preferences=wheel::snapshotWheelPreferences();
   for(unsigned i=0;i<modSections.size();++i) {
-   palm::api::SectionV1 section;
+   palm::api::menu::Section section;
    std::snprintf(section.id,sizeof(section.id),"preview.section%u",i);
    std::strcpy(section.name,i?"Tools":"Magazines");std::strcpy(section.modName,"Example mod");
    section.icon=i?wheel::Icon::Config:wheel::Icon::CombatRifle;
    section.onSelect=+[](std::uint32_t,std::uint64_t,void*) noexcept {};
    if(wheel::sectionRegistry().registerSection(&section,&modSections[i])!=palm::api::Result::Ok)throw std::runtime_error("Preview section registration failed");
-   std::array<palm::api::ItemV1,2> entries;
+   std::array<palm::api::menu::Item,2> entries;
    for(unsigned item=0;item<entries.size();++item) {
     entries[item].id=item+1;entries[item].quantity=3+item;
     entries[item].icon=i?wheel::Icon::Config:item?wheel::Icon::CombatRifle:wheel::Icon::Pistol10mm;
-    entries[item].flags=i?0:static_cast<unsigned>(palm::api::ItemFlag::ShowQuantity);
+    entries[item].flags=i?0:static_cast<unsigned>(palm::api::menu::ItemFlag::ShowQuantity);
     std::strcpy(entries[item].name,i?(item?"Inspect object":"Mod action"):(item?"Combat Rifle Magazine":"10mm Magazine"));
    }
    if(wheel::sectionRegistry().setItems(modSections[i],entries.data(),static_cast<std::uint32_t>(entries.size()))!=palm::api::Result::Ok)throw std::runtime_error("Preview section items failed");

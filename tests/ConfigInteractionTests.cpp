@@ -114,9 +114,9 @@ int main(int argc, char** argv) {
         const auto originalPreferences=wheel::snapshotWheelPreferences();
         auto full=originalPreferences;full.enabled.fill(false);full.gesturesEnabled=false;
         for(unsigned i=0;i<9;++i)require(full.setSectionEnabled("missing.section"+std::to_string(i),true), "visibility fixture could not reserve section slots");
-        std::array<palm::api::SectionHandle,9> handles{};
+        std::array<palm::api::menu::SectionHandle,9> handles{};
         for(unsigned i=0;i<handles.size();++i) {
-            palm::api::SectionV1 section;std::snprintf(section.id,sizeof(section.id),"missing.section%u",i);
+            palm::api::menu::Section section;std::snprintf(section.id,sizeof(section.id),"missing.section%u",i);
             std::strcpy(section.name,"Fixture");std::strcpy(section.modName,"Fixture");
             section.onSelect=[](std::uint32_t,std::uint64_t,void*) noexcept {};
             require(wheel::sectionRegistry().registerSection(&section,&handles[i])==palm::api::Result::Ok,"section fixture registration failed");

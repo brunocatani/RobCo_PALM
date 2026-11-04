@@ -16,7 +16,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with RobCo PALM. If not, see <https://www.gnu.org/licenses/>.
 
-This declaration applies to the original RobCo PALM source, public SDK
+This declaration applies to the original RobCo PALM source, public API
 headers, build files, documentation, and project assets in this repository.
 Third-party components, including the copied FRIK API header, retain their
 respective licenses and notices; see THIRD_PARTY_NOTICES.txt.

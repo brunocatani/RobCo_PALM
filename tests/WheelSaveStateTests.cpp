@@ -89,10 +89,10 @@ int main(){try {
  check(developerVisible(developerModel)); // No second settings-page switch.
  Preferences full;full.gesturesEnabled=false;
  for(unsigned i=0;i<4;++i) {
-  palm::api::SectionV1 section;std::snprintf(section.id,sizeof(section.id),"fixture.full.%u",i);
+  palm::api::menu::Section section;std::snprintf(section.id,sizeof(section.id),"fixture.full.%u",i);
   std::strcpy(section.name,"Existing section");std::strcpy(section.modName,"Fixture");
   section.onSelect=[](std::uint32_t,std::uint64_t,void*) noexcept {};
-  palm::api::SectionHandle handle{};check(sectionRegistry().registerSection(&section,&handle)==palm::api::Result::Ok);
+  palm::api::menu::SectionHandle handle{};check(sectionRegistry().registerSection(&section,&handle)==palm::api::Result::Ok);
   full.sections.emplace_back(section.id);
  }
  restoreWheelPreferences(full);developerModel=selectedWheelInventory(inventory);

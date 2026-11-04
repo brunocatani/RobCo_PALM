@@ -8,15 +8,15 @@ DeveloperActions& developerActions(){static DeveloperActions value(sectionRegist
 bool DeveloperActions::initialize(bool enabled) {
  std::scoped_lock lock(mutex_);
  if(enabled && !section_) {
-  palm::api::SectionV1 section;std::strcpy(section.id,kDeveloperSection);
+  palm::api::menu::Section section;std::strcpy(section.id,kDeveloperSection);
   std::strcpy(section.name,"Developer");std::strcpy(section.modName,"Local diagnostics");
   section.onSelect=selected;section.context=this;
   if(registry_.registerSection(&section,&section_)!=palm::api::Result::Ok)return false;
  }
  enabled_.store(enabled,std::memory_order_release);publish();return true;
 }
-palm::developer::Result DeveloperActions::add(const palm::developer::ActionV1* action,palm::developer::Handle* output) {
- using namespace palm::developer;
+palm::api::Result DeveloperActions::add(const palm::api::developer::Action* action,palm::api::developer::Handle* output) {
+ using namespace palm::api;using namespace palm::api::developer;
  if(output)*output=0;
  const auto valid=[](const char* text,std::size_t capacity){
   const auto* end=static_cast<const char*>(std::memchr(text,0,capacity));
@@ -24,7 +24,7 @@ palm::developer::Result DeveloperActions::add(const palm::developer::ActionV1* a
   for(auto* p=text;p!=end;++p)if(static_cast<unsigned char>(*p)<32)return false;
   return true;
  };
- if(!action || !output || action->byteSize!=sizeof(ActionV1) || !action->invoke ||
+ if(!action || !output || action->size!=sizeof(Action) || action->version!=kRecordVersion || !action->invoke ||
   !valid(action->id,sizeof(action->id)) || !valid(action->label,sizeof(action->label)))return Result::InvalidArgument;
  std::scoped_lock lock(mutex_);if(!enabled())return Result::Disabled;
  Entry* empty{};
@@ -35,8 +35,8 @@ palm::developer::Result DeveloperActions::add(const palm::developer::ActionV1* a
  if(!empty || next_==std::numeric_limits<Handle>::max())return Result::CapacityReached;
  empty->action=*action;empty->handle=next_++;*output=empty->handle;publish();return Result::Ok;
 }
-palm::developer::Result DeveloperActions::remove(palm::developer::Handle handle) {
- using namespace palm::developer;std::scoped_lock lock(mutex_);
+palm::api::Result DeveloperActions::remove(palm::api::developer::Handle handle) {
+ using namespace palm::api;using namespace palm::api::developer;std::scoped_lock lock(mutex_);
  for(auto& entry:entries_)if(handle && entry.handle==handle) {
   if(entry.invoking)return Result::CallbackBusy;
   entry={};publish();return Result::Ok;
@@ -45,7 +45,7 @@ palm::developer::Result DeveloperActions::remove(palm::developer::Handle handle)
 }
 void DeveloperActions::publish() {
  if(!section_)return;
- std::array<palm::api::ItemV1,palm::developer::kCapacity> items{};unsigned count{};
+ std::array<palm::api::menu::Item,palm::api::developer::kCapacity> items{};unsigned count{};
  if(enabled())for(const auto& entry:entries_)if(entry.handle) {
   auto& item=items[count++];item.id=entry.handle;item.icon=palm::api::Icon::Config;
   std::memcpy(item.name,entry.action.label,sizeof(item.name));
@@ -57,7 +57,7 @@ void DeveloperActions::selected(std::uint32_t id,std::uint64_t,void* context) no
  try{static_cast<DeveloperActions*>(context)->dispatch(id);}catch(...){OutputDebugStringA("PALM developer action dispatch failed\n");}
 }
 void DeveloperActions::dispatch(std::uint32_t id) {
- palm::developer::Callback invoke{};void* context{};
+ palm::api::developer::Callback invoke{};void* context{};
  {
   std::scoped_lock lock(mutex_);if(!enabled())return;
   for(auto& entry:entries_)if(entry.handle==id && !entry.invoking){entry.invoking=true;invoke=entry.action.invoke;context=entry.action.context;break;}

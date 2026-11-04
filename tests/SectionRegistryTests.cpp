@@ -6,7 +6,7 @@
 #include <stdexcept>
 
 namespace {
-using namespace palm::api;
+using namespace palm::api;using namespace palm::api::menu;
 void check(bool value){if(!value)throw std::runtime_error("Section API assertion failed");}
 struct CallbackState {
  wheel::SectionRegistry* registry{};SectionHandle section{};
@@ -17,13 +17,13 @@ void selected(std::uint32_t item,std::uint64_t data,void* context) noexcept {
  state.removal=state.registry->unregisterSection(state.section);
  state.nested=state.registry->dispatch(state.section,item);
 }
-SectionV1 section(const char* id,CallbackState& state) {
- SectionV1 value;std::snprintf(value.id,sizeof(value.id),"%s",id);
+Section section(const char* id,CallbackState& state) {
+ Section value;std::snprintf(value.id,sizeof(value.id),"%s",id);
  std::strcpy(value.name,"Magazines");std::strcpy(value.modName,"Magazine Mod");
  value.icon=Icon::CombatRifle;value.onSelect=selected;value.context=&state;return value;
 }
-ItemV1 item(unsigned id) {
- ItemV1 value;value.id=id;value.icon=Icon::Pistol10mm;value.quantity=3;
+Item item(unsigned id) {
+ Item value;value.id=id;value.icon=Icon::Pistol10mm;value.quantity=3;
  value.flags=static_cast<unsigned>(ItemFlag::ShowQuantity);std::strcpy(value.name,"10mm Magazine");value.userData=123456;return value;
 }
 }
@@ -52,10 +52,10 @@ int main(){try {
  auto again=section("example.magazines",state);SectionHandle replacement{};
  check(registry.registerSection(&again,&replacement)==Result::Ok && replacement!=handle);
  SectionHandle rejected=99;check(registry.registerSection(&again,&rejected)==Result::DuplicateId && !rejected);
- again.structSize=0;check(registry.registerSection(&again,&rejected)==Result::InvalidArgument);
+ again.size=0;check(registry.registerSection(&again,&rejected)==Result::InvalidArgument);
  again=section("bad id",state);check(registry.registerSection(&again,&rejected)==Result::InvalidArgument);
  again=section("example.bad",state);again.name[0]=0;check(registry.registerSection(&again,&rejected)==Result::InvalidArgument);
- std::array<ItemV1,9> items;for(unsigned i=0;i<items.size();++i)items[i]=item(i+1);
+ std::array<Item,9> items;for(unsigned i=0;i<items.size();++i)items[i]=item(i+1);
  check(registry.setItems(replacement,items.data(),9)==Result::InvalidArgument);
  check(registry.setItems(replacement,items.data(),8)==Result::Ok);
  items[1].id=items[0].id;check(registry.setItems(replacement,items.data(),8)==Result::DuplicateId);

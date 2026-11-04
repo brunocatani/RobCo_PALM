@@ -86,15 +86,15 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
   const auto itemIndex=slot;
   if(external) {
    const auto* item=slot<external->count?&external->items[slot]:nullptr;
-   const bool available=item && !(item->flags&static_cast<unsigned>(palm::api::ItemFlag::Disabled));
+   const bool available=item && !(item->flags&static_cast<unsigned>(palm::api::menu::ItemFlag::Disabled));
    const bool over=available && hit==static_cast<int>(slot);
    sector(draw,center,inner,outer,start,end,over?green:surface,over?green:item?boundary:phosphor(alpha/8));
    if(!item)continue;
    const ImVec2 p{center.x+std::cos(mid)*258*scale,center.y+std::sin(mid)*258*scale};
    const auto ink=over?dark:available?green:muted;
    drawIcon(draw,{p.x,p.y-39*scale},46*scale,item->icon,ink,icons);
-   if(item->flags&static_cast<unsigned>(palm::api::ItemFlag::Equipped))centered(draw,{p.x,p.y+4*scale},16*scale,ink,"EQUIPPED");
-   else if(item->flags&static_cast<unsigned>(palm::api::ItemFlag::ShowQuantity)) {
+   if(item->flags&static_cast<unsigned>(palm::api::menu::ItemFlag::Equipped))centered(draw,{p.x,p.y+4*scale},16*scale,ink,"EQUIPPED");
+   else if(item->flags&static_cast<unsigned>(palm::api::menu::ItemFlag::ShowQuantity)) {
     char quantity[16];std::snprintf(quantity,sizeof(quantity),"%u",item->quantity);
     centered(draw,{p.x,p.y+4*scale},22*scale,ink,quantity);
    }
@@ -178,7 +178,7 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
  if(external) {
   centered(draw,point(512,886),23*scale,green,externalHover?externalHover->name:external->name);
   if(externalHover) {
-   const bool available=!(externalHover->flags&static_cast<unsigned>(palm::api::ItemFlag::Disabled));
+   const bool available=!(externalHover->flags&static_cast<unsigned>(palm::api::menu::ItemFlag::Disabled));
    if(available){action.section=external->handle;action.sectionItem=externalHover->id;}
    centered(draw,point(512,920),16*scale,muted,available?"RELEASE TRIGGER OR GRAB TO SELECT":"UNAVAILABLE");
   }else if(!external->count)centered(draw,point(512,920),16*scale,muted,"No items available from this mod");

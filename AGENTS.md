@@ -12,12 +12,9 @@ RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM'
 - SCISSORS Redux pages (consumer and developer) bind only `SCISSORS_Redux.dll`'s `SCISSORS_Redux_GetConfiguration` 2.0 table, from Redux's own `include/` (`SCISSORS_REDUX_INCLUDE_DIR`). Never forward NPC settings through ROCK or write Redux INIs directly. `bPhysicalMelee` lives on the Redux Dev page and goes through Redux Configuration, never ROCK configuration.
 - Preview fixture flags never alter production discovery or write runtime INIs; preview never discovers or writes a real provider, and injected fixtures stay read-only.
 
-## Pending API rework
+## Public API
 
-When work on RobCo PALM's API starts, rework it the way ROCK's 1.0 reset did (master `AGENTS.md`, section 15):
-
-- Move the public headers into `include/RobCoPALM/`, self-contained, with `kMajor`/`kMinor` in each interface header and one page per interface in `docs/api/`. Drop every SDK copy and bind other providers from their own `include/` directories.
-- Squash every earlier version and minor of each interface into exactly 2.0. Every request for a major-1 version fails closed: discovery returns a logged unsupported-version status and never a table.
-- Whatever is not carried into the squashed version is deleted with its code, tests and docs. No code or behaviour is kept to serve an older version: it is either in the new version or dead.
-- Covers the Menu (section) and Developer APIs in `SDK/include/`.
-- Update `providers/RobCo_PALM.toml` in the API release registry (headers, `headers_ready = true`) and run `check.py`.
+- `include/RobCoPALM/` is the only copy of PALM's public headers: the Menu and Developer interfaces at major 2, with one page per interface in `docs/api/`, updated in the same commit as the header. They include only the C++ standard library and each other.
+- Consumers bind at runtime through `PALMAPI_QueryInterfaceV1`, never link PALM and never copy its headers. `Client.h` is the helper.
+- Every version refusal and retired-export call is logged with the calling DLL and stops the game at the main menu with an error box (`src/RequiredUpdates.cpp`). `GetPALMMenuApi` and `GetPALMDeveloperApi` only refuse; their names are never reused.
+- PALM binds RPS UI Framework from that project's `include/` (`RPSUI_INCLUDE_DIR`). A loaded RPS UI without its 2.0 discovery stops the game the same way.

@@ -11,12 +11,12 @@ int main(){try {
  check(hitSlot(0,0,180,336)==-1);check(hitSlot(0,400,180,336)==-1);
  // Every built-in visibility combination, with zero through ten registered mod
  // sections, keeps Config reachable and hits the same sectors that are drawn.
- for(unsigned mask=0;mask<64;++mask)for(unsigned mods=0;mods<=palm::api::kMaxSections;++mods) {
+ for(unsigned mask=0;mask<64;++mask)for(unsigned mods=0;mods<=palm::api::menu::kMaxSections;++mods) {
   Model model;for(unsigned c=0;c<kCategoryCount;++c)model.enabled[c]=(mask&(1u<<c))!=0;
   model.gesturesEnabled=(mask&32)!=0;model.sections.count=mods;
   for(unsigned i=0;i<mods;++i){model.sections.sections[i].handle=i+1;model.sections.sections[i].enabled=true;}
   const auto layout=navigationLayout(model);
-  check(layout.count>=1 && layout.count<=palm::api::kMaxVisibleEntries);
+  check(layout.count>=1 && layout.count<=palm::api::menu::kMaxVisibleEntries);
   check(layout.entries[layout.count-1]==kConfigNavigation);
   for(unsigned slot=0;slot<layout.count;++slot) {
    const float angle=layout.angle(slot);const auto id=layout.entries[slot];

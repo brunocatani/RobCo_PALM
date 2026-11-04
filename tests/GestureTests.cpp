@@ -155,7 +155,7 @@ void checkSelection() {
  (void)draw(512+std::cos(customAngle)*119,510+std::sin(customAngle)*119);
  const auto customAction=draw(512,252);
  require(customAction.section==50 && customAction.sectionItem==100 && !customAction.hoveredItem && !customAction.hoveredGesture,"mod item used a built-in action path");
- model.sections.sections[0].items[0].flags=static_cast<unsigned>(palm::api::ItemFlag::Disabled);
+ model.sections.sections[0].items[0].flags=static_cast<unsigned>(palm::api::menu::ItemFlag::Disabled);
  require(!draw(512,252).section,"disabled mod item remained selectable");
  model.sections.sections[0].enabled=false;
  require(!draw(512,252).section && model.activeSection==0,"removed mod section retained its active page");
