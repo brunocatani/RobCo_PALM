@@ -45,12 +45,12 @@ int main(int argc,char** argv) {
     const auto visualizerIndex=indexOf(developer,"bDebugShowColliders");
     const auto collision=consumer.setBooleanByIndex(collisionIndex,false);assert(collision.changed&&collision.saved);
     const auto visualizer=developer.setBooleanByIndex(visualizerIndex,true);assert(visualizer.changed&&visualizer.saved);
-    const auto physical=developer.setBooleanByIndex(indexOf(developer,"bPhysicalMelee"),true);assert(physical.changed&&physical.saved);
+    const auto physical=developer.setBooleanByIndex(indexOf(developer,"bPhysicalMelee"),false);assert(physical.changed&&physical.saved);
     config::Snapshot state;assert(api->snapshot(&state)==config::Status::Ok);
 #ifdef WHEEL_DESKTOP_PREVIEW
     assert(state.values==defaults&&state.revision==1); // No persistence or live call.
 #else
-    assert(state.values==((defaults&~config::bit(config::Setting::Collision))|config::bit(config::Setting::Visualizer)|config::bit(config::Setting::PhysicalMelee)));
+    assert(state.values==((defaults&~config::bit(config::Setting::Collision)&~config::bit(config::Setting::PhysicalMelee))|config::bit(config::Setting::Visualizer)));
     assert(state.revision==4);
     assert(consumer.needsReload()&&developer.needsReload());
     assert(consumer.reload()&&consumer.settings()[collisionIndex].value=="false");
