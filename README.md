@@ -17,7 +17,7 @@ RobCo P.A.L.M. is a customisable wheel menu for Fallout 4 VR, with quick access 
 
 Fallout 4 VR, F4SEVR, and RPS UI Framework.
 
-ROCK adds physical item handling; hand gestures also need FRIK 0.79 / API 2.3 for current source. PAPER and SCISSORS are optional integrations for their settings pages.
+ROCK adds physical item handling; hand gestures also need FRIK 0.79 / API 2.3 for current source. PAPER, SCISSORS and SCISSORS Redux are optional integrations for their settings pages.
 
 ## Using PALM
 
@@ -80,3 +80,9 @@ Third-party components retain their respective licenses; their notices are in
 ## Current ROCK integration
 
 Optional ROCK integration negotiates feature interfaces through `ROCKAPI_QueryInterfaceV1`. Configuration binds its own Read/Write permissions and uses ROCK's compiled catalog and writer; there is no separate configuration discovery export. The section API remains PALM-owned and independent of ROCK and RPS UI tables.
+
+SCISSORS Redux has separate consumer and developer settings pages. NPC collision,
+blade penetration and native/supplemental NPC visualization controls come from
+Redux's own Configuration 2.0 API and are written by Redux into its own INIs.
+No NPC setting is forwarded through ROCK, and the NPC visualization master is
+independent of ROCK's hand and weapon visualization master.
