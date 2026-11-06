@@ -12,6 +12,11 @@ RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM'
 - SCISSORS Redux pages (consumer and developer) bind only `SCISSORS_Redux.dll`'s `SCISSORS_Redux_GetConfiguration` 2.0 table, from Redux's own `include/` (`SCISSORS_REDUX_INCLUDE_DIR`). Never forward NPC settings through ROCK or write Redux INIs directly. `bPhysicalMelee` lives on the Redux Dev page and goes through Redux Configuration, never ROCK configuration.
 - Preview fixture flags never alter production discovery or write runtime INIs; preview never discovers or writes a real provider, and injected fixtures stay read-only.
 
+## Console tab
+
+- `src/tools/ConsoleService.cpp` hooks the call to `ConsoleLog::AddString` at plugin load, after checking the live bytes, and runs commands through `Console::ExecuteCommand`, so the native Console menu is never needed. Commands containing `%` are refused: the engine echoes a command through its print function as the format string.
+- The on-screen keyboard and the real keyboard feed one `ConsoleLine`, not an ImGui text field, because clicking a key would take focus from that field. The real keyboard comes from RPS UI's `captureKeyboard`, requested only while the tab is open; the capture lapses by itself when PALM stops asking.
+
 ## Public API
 
 - `include/RobCoPALM/` is the only copy of PALM's public headers: the Menu and Developer interfaces at major 2, with one page per interface in `docs/api/`, updated in the same commit as the header. They include only the C++ standard library and each other.

@@ -198,7 +198,8 @@ namespace rock_configurator
                 _pageRequest = 0.0f;
                 _followLatest = false;
             } else {
-                _followLatest = _followLatest ? ImGui::GetIO().MouseWheel >= 0.0f || !ImGui::IsWindowHovered() :
+                // A positive wheel value scrolls up, away from the newest row.
+                _followLatest = _followLatest ? ImGui::GetIO().MouseWheel <= 0.0f || !ImGui::IsWindowHovered() :
                     ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f;
             }
             if (_followLatest) {
