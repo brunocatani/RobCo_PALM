@@ -1,6 +1,8 @@
 #pragma once
 #include <filesystem>
 #include <array>
+#include <cstdint>
+#include <span>
 #include "PanelResizePolicy.h"
 #include "render/NativeRenderer.h"
 namespace rock::api::configuration { struct Api; }
@@ -17,12 +19,18 @@ void openAt(const devui::render::PanelPose& wheelPose);
 [[nodiscard]] bool drawImGui(float x=0, float y=0,
  float width=devui::render::kPanelPixelWidth, float height=devui::render::kPanelPixelHeight, bool backRequested=false) noexcept;
 void onFrameworkPanelFrame(float physicalWidth, panel_resize::Handle hovered, panel_resize::Handle active) noexcept;
+struct ConsoleKeyEvent { bool character{ false }; std::uint32_t code{ 0 }; };
+[[nodiscard]] bool consoleTabActive() noexcept;
+// Game thread, once per input frame. Hands the physical keyboard's input to the
+// Console tab and runs the commands that tab has queued.
+void serviceConsole(bool keyboardHeld, bool windowFocused, std::span<const ConsoleKeyEvent> keys);
 #ifdef WHEEL_DESKTOP_PREVIEW
 void initializePreview(const std::filesystem::path& settingsPath = {});
 void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available,
     const rock::api::configuration::Api* rockApi = nullptr, const std::filesystem::path& csahPath = {},
     const std::filesystem::path& csahCatalog = {});
 void setPreviewOpen(bool open);
+[[nodiscard]] float previewTabCenterX(unsigned index, float width);
 void drainPreviewActions();
 #endif
 }

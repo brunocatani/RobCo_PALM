@@ -43,7 +43,7 @@ target_include_directories(wheel_view PUBLIC src external/F4VR-Input
  "${WORKSPACE}/libraries_and_tools/F4VR-CommonFramework/external/openvr")
 target_link_libraries(wheel_view PUBLIC wheel_imgui windowscodecs ole32)
 set(WORKSHOP_SOURCES src/tools/ConfiguratorRuntime.cpp src/tools/IniSettingsStore.cpp src/tools/ReduxSettings.cpp src/tools/CsahSettings.cpp
- src/tools/RockSettingControlPolicy.cpp src/tools/SpawnBrowser.cpp)
+ src/tools/RockSettingControlPolicy.cpp src/tools/SpawnBrowser.cpp src/tools/ConsoleService.cpp src/tools/ConsoleTab.cpp)
 foreach(target wheel_workshop wheel_workshop_preview)
  add_library(${target} STATIC ${WORKSHOP_SOURCES})
  target_include_directories(${target} PUBLIC src/tools
@@ -146,7 +146,7 @@ target_include_directories(PALMDiscoveryTests PRIVATE src)
 target_compile_features(PALMDiscoveryTests PRIVATE cxx_std_23)
 target_compile_options(PALMDiscoveryTests PRIVATE /UNDEBUG)
 add_test(NAME PALM.Discovery COMMAND PALMDiscoveryTests)
-foreach(policy SpawnPluginIdentity RockSettingControlPolicy IniSettingsStoreControl RockConfigurationBridge PanelResizePolicy)
+foreach(policy SpawnPluginIdentity RockSettingControlPolicy IniSettingsStoreControl RockConfigurationBridge PanelResizePolicy ConsoleLine)
  add_executable(Wheel${policy}Tests tests/${policy}Tests.cpp)
  target_include_directories(Wheel${policy}Tests PRIVATE src/tools "${ROCK_INCLUDE_DIR}")
  target_compile_features(Wheel${policy}Tests PRIVATE cxx_std_23)

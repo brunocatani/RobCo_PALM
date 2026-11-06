@@ -2,6 +2,8 @@
 
 #include "ConfiguratorRuntime.h"
 
+#include "ConsoleService.h"
+#include "ConsoleTab.h"
 #include "IniSettingsStore.h"
 #include "LoadedRpsMods.h"
 #include "PanelResizePolicy.h"
@@ -37,6 +39,7 @@ namespace rock_configurator
             WheelSettings,
             Settings,
             Spawn,
+            Console,
         };
 
         enum class RuntimeActionKind : std::uint8_t
@@ -123,6 +126,12 @@ namespace rock_configurator
         std::size_t s_modIndex = 0;
         ModSettings& activeSettings() { return s_modSettings[s_modIndex]; }
         SpawnBrowser s_spawnBrowser;
+        ConsoleTab s_consoleTab;
+        std::atomic_bool s_consoleKeyboardHeld = false;
+        std::atomic_bool s_consoleWindowFocused = false;
+        std::atomic_uint32_t s_consoleSelectedReference{ 0 };
+        std::atomic_bool s_consoleCommandsPending = false;
+        std::uint32_t s_consoleSelectionAge = 0; // Game thread only.
         std::mutex s_runtimeMutex;
         std::string s_statusMessage;
         std::optional<PendingNumericEdit> s_pendingNumericEdit;
@@ -415,6 +424,7 @@ namespace rock_configurator
             case ConfiguratorTab::Wheel:
             case ConfiguratorTab::WheelSettings:
             case ConfiguratorTab::Spawn:
+            case ConfiguratorTab::Console:
                 break;
             }
         }
@@ -467,6 +477,7 @@ namespace rock_configurator
                 break;
             case ConfiguratorTab::Wheel:
             case ConfiguratorTab::Spawn:
+            case ConfiguratorTab::Console:
                 break;
             }
         }
@@ -768,10 +779,58 @@ namespace rock_configurator
             });
         }
 
+        constexpr std::array kTopBarTabs{ConfiguratorTab::Wheel, ConfiguratorTab::WheelSettings, ConfiguratorTab::Settings, ConfiguratorTab::Spawn, ConfiguratorTab::Console};
+        constexpr std::array kTopBarLabels{"Items", "PALM settings", "RPS mods", "Spawner", "Console"};
+        constexpr float kTopBarTabGap = 10.0f;
+
+        [[nodiscard]] bool topBarTabVisible(ConfiguratorTab tab)
+        {
+            return tab != ConfiguratorTab::Settings ||
+                   std::any_of(s_modSettings.begin(), s_modSettings.end(), [](const auto& mod) { return mod.available; });
+        }
+
+        struct TopBarSlot
+        {
+            float x{ 0.0f };
+            float width{ 0.0f };
+        };
+
+        // Tabs share the row by label width, so every label keeps its full size. Spare
+        // room goes equally to all of them; a row too narrow scales them down together.
+        [[nodiscard]] std::array<TopBarSlot, kTopBarTabs.size()> topBarSlots(float windowWidth)
+        {
+            constexpr float kFontSize = 26.0f;
+            constexpr float kLabelPadding = 24.0f;
+            constexpr float kMaximumSpare = 40.0f;
+            auto* font = fontFor(devui::render::FontRole::Medium);
+            const float start = devui::visual::railWidth(windowWidth) + 14.0f;
+            const float available = windowWidth - 342.0f - start;
+            std::array<float, kTopBarTabs.size()> natural{};
+            float total = 0.0f;
+            float visible = 0.0f;
+            for (std::size_t i = 0; i < kTopBarTabs.size(); ++i) {
+                if (topBarTabVisible(kTopBarTabs[i])) {
+                    natural[i] = font->CalcTextSizeA(kFontSize, FLT_MAX, 0.0f, kTopBarLabels[i]).x + kLabelPadding;
+                    total += natural[i];
+                    visible += 1.0f;
+                }
+            }
+            const float room = available - kTopBarTabGap * (std::max)(0.0f, visible - 1.0f);
+            const float scale = total > room ? room / total : 1.0f;
+            const float spare = total > room ? 0.0f : (std::min)(kMaximumSpare, (room - total) / (std::max)(1.0f, visible));
+            std::array<TopBarSlot, kTopBarTabs.size()> slots{};
+            float x = start;
+            for (std::size_t i = 0; i < kTopBarTabs.size(); ++i) {
+                if (natural[i] > 0.0f) {
+                    slots[i] = { x, natural[i] * scale + spare };
+                    x += slots[i].width + kTopBarTabGap;
+                }
+            }
+            return slots;
+        }
+
         void drawTopBar()
         {
-            constexpr std::array tabs{ConfiguratorTab::Wheel, ConfiguratorTab::WheelSettings, ConfiguratorTab::Settings, ConfiguratorTab::Spawn};
-            constexpr std::array labels{"Items", "PALM settings", "RPS mods", "Spawner"};
             const auto active = s_activeTab.load(std::memory_order_acquire);
             const auto p = ImGui::GetWindowPos();
             const float width = ImGui::GetWindowWidth();
@@ -781,13 +840,11 @@ namespace rock_configurator
             { ScopedFont font(devui::render::FontRole::Medium, 16); ImGui::TextColored(accentColor(), "RobCo PALM"); }
             ImGui::SetCursorPos({28, 43});
             { ScopedFont font(devui::render::FontRole::Heading, 30); ImGui::TextUnformatted("Configuration"); }
-            const float start = devui::visual::railWidth(width) + 14;
-            const float tabStep = (std::min)(194.0f, (width - 342 - start) / tabs.size());
-            std::size_t visibleTab = 0;
-            for (std::size_t i = 0; i < tabs.size(); ++i) {
-                if(tabs[i] == ConfiguratorTab::Settings && std::none_of(s_modSettings.begin(),s_modSettings.end(),[](const auto& mod){return mod.available;})) continue;
-                ImGui::SetCursorPos({start + static_cast<float>(visibleTab++) * tabStep, 28});
-                if (tabChip(labels[i], tabs[i] == active, {tabStep - 10, 62})) queueTab(tabs[i]);
+            const auto slots = topBarSlots(width);
+            for (std::size_t i = 0; i < kTopBarTabs.size(); ++i) {
+                if (slots[i].width <= 0.0f) continue;
+                ImGui::SetCursorPos({slots[i].x, 28});
+                if (tabChip(kTopBarLabels[i], kTopBarTabs[i] == active, {slots[i].width, 62})) queueTab(kTopBarTabs[i]);
             }
             ImGui::SetCursorPos({width - 322, 20});
             { ScopedFont font(devui::render::FontRole::Medium, 24);
@@ -1261,6 +1318,16 @@ namespace rock_configurator
             if(s_activeTab.load(std::memory_order_acquire)==ConfiguratorTab::WheelSettings) {
                 wheel::drawWheelSettings(); return;
             }
+            if(s_activeTab.load(std::memory_order_acquire)==ConfiguratorTab::Console) {
+                ConsoleStatus status;
+                status.keyboardHeld = s_consoleKeyboardHeld.load(std::memory_order_acquire);
+                status.windowFocused = s_consoleWindowFocused.load(std::memory_order_acquire);
+                status.outputCaptured = console::captureInstalled();
+                if (const auto reference = s_consoleSelectedReference.load(std::memory_order_acquire)) status.selectedReference = reference;
+                s_consoleTab.draw(status);
+                if (s_consoleTab.hasCommands()) s_consoleCommandsPending.store(true, std::memory_order_release);
+                return;
+            }
             const float railWidth = devui::visual::railWidth(ImGui::GetContentRegionAvail().x);
             const auto tab = s_activeTab.load(std::memory_order_acquire);
             if (tab == ConfiguratorTab::Settings) {
@@ -1484,6 +1551,46 @@ namespace rock_configurator
         s_activeResizeHandle.store(active, std::memory_order_release);
     }
 
+    bool consoleTabActive() noexcept
+    {
+        return s_panelOpen.load(std::memory_order_acquire) &&
+               s_activeTab.load(std::memory_order_acquire) == ConfiguratorTab::Console;
+    }
+
+    void serviceConsole(bool keyboardHeld, bool windowFocused, std::span<const ConsoleKeyEvent> keys)
+    {
+        constexpr std::uint32_t kSelectionRefreshFrames = 30;
+        s_consoleKeyboardHeld.store(keyboardHeld, std::memory_order_release);
+        s_consoleWindowFocused.store(windowFocused, std::memory_order_release);
+        const bool active = consoleTabActive();
+        if (active && ++s_consoleSelectionAge >= kSelectionRefreshFrames) {
+            s_consoleSelectionAge = 0;
+            s_consoleSelectedReference.store(console::selectedReference().value_or(0), std::memory_order_release);
+        }
+        if (keys.empty() && !s_consoleCommandsPending.exchange(false, std::memory_order_acq_rel)) {
+            return;
+        }
+        std::vector<std::string> commands;
+        {
+            std::scoped_lock lock(s_runtimeMutex);
+            for (const auto& key : keys) {
+                if (key.character) {
+                    s_consoleTab.onCharacter(key.code);
+                } else {
+                    s_consoleTab.onKey(key.code);
+                }
+            }
+            commands = s_consoleTab.takeCommands();
+        }
+        // Not under the mutex: the engine prints the echo through the capture hook, and
+        // rendering should not wait on it. A closed panel leaves no stale command to run.
+        if (s_panelOpen.load(std::memory_order_acquire)) {
+            for (const auto& command : commands) {
+                console::run(command);
+            }
+        }
+    }
+
     void onGameDataReady()
     {
         {
@@ -1569,7 +1676,12 @@ namespace rock_configurator
     }
 
     void setPreviewOpen(bool open) { s_panelOpen.store(open); }
-    void drainPreviewActions() { drainRuntimeActions(); }
+    float previewTabCenterX(unsigned index, float width)
+    {
+        const auto slot = topBarSlots(width)[index];
+        return slot.x + slot.width * 0.5f;
+    }
+    void drainPreviewActions() { drainRuntimeActions(); serviceConsole(false, false, {}); }
 #endif
 
     void shutdown()

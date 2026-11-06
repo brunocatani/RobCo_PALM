@@ -141,6 +141,10 @@ int main(int argc, char** argv) {
         require(!rail || rail->Scroll.y == railBefore, "settings scroll moved the navigation column");
         frame(true); frame();
         require(rock_configurator::isOpen() && window("wheel-category-content"), "back did not return to Config home");
+        click(railWidth + 790, 50); // Console
+        require(window("console-log") != nullptr, "console tab did not open");
+        frame(true); frame();
+        require(rock_configurator::isOpen() && window("wheel-category-content"), "console back did not return to Config home");
         click(railWidth + 634, 50); // Spawner
         require(window("spawn-items") != nullptr, "spawner tab did not open");
         scroll(window("spawn-items"));

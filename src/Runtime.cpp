@@ -412,6 +412,16 @@ void RPSUI_CALL onFrame(const rpsui::api::input::Frame* frame,void*) noexcept {
    return;
   }
   serviceCommand();serviceEquipCommand();
+  {
+   // Asking only while the tab is open is what releases the keyboard otherwise: the
+   // capture lapses by itself three frames after the last request.
+   rpsui::api::input::KeyboardRead keyboard;
+   std::array<rock_configurator::ConsoleKeyEvent,rpsui::api::input::kKeyboardEventCapacity> keys;
+   const bool held=rock_configurator::consoleTabActive() && s.inputApi->captureKeyboard && s.inputApi->captureKeyboard(s.inputToken,&keyboard);
+   const std::uint32_t count=held?keyboard.count:0;
+   for(std::uint32_t i=0;i<count;++i)keys[i]={keyboard.events[i].kind==rpsui::api::input::KeyboardEventKind::Character,keyboard.events[i].code};
+   rock_configurator::serviceConsole(held,held && keyboard.focused!=0,std::span<const rock_configurator::ConsoleKeyEvent>(keys.data(),count));
+  }
   if(rock_configurator::takeInventoryRefreshRequest())refreshWheelInventory();
   const bool gameActionPending=s.gameActionPending.load(),configOpen=rock_configurator::isOpen(),configOpening=rock_configurator::isOpening();
   const bool eligible=!s.command && !gameActionPending && !configOpen && !configOpening;

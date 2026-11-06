@@ -6,6 +6,7 @@
 #include "DeveloperActions.h"
 #include <ShlObj.h>
 #include "tools/ConfiguratorRuntime.h"
+#include "tools/ConsoleService.h"
 #include <RPS/Runtime/RequiredUpdate.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 
@@ -82,6 +83,8 @@ extern "C" __declspec(dllexport) bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadIn
   const auto* messaging=F4SE::GetMessagingInterface();
   const auto* serialization=F4SE::GetSerializationInterface();
   if(!serialization || !messaging || !messaging->RegisterListener(onMessage))return false;
+  // Before the engine starts, so the Console tab has everything printed since launch.
+  (void)rock_configurator::console::installCapture();
   serialization->SetUniqueID(wheel::kWheelSaveID);
   serialization->SetRevertCallback(onRevert);
   serialization->SetSaveCallback(onSave);

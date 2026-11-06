@@ -69,8 +69,7 @@ int main(int argc, char** argv) {
   };
   const float rail=devui::visual::railWidth(static_cast<float>(width));
   const auto tab=[&](unsigned index) {
-   const float start=rail+14,step=(std::min)(194.f,(width-342-start)/4);
-   click(start+(index+.5f)*step,55);
+   click(rock_configurator::previewTabCenterX(index,static_cast<float>(width)),55);
   };
   settle();
   const bool csahOnly = argc > 5 && std::string_view(argv[3]) == "--csah";
@@ -167,6 +166,11 @@ int main(int argc, char** argv) {
   click(555,120);save(L"scissors-settings.png");
   tab(3);save(L"spawner.png");
   click(rail+100,335);save(L"item-actions.png");
+  tab(4);save(L"console.png");
+  // Key positions, as fractions of the panel: q, Enter, then Hide keyboard.
+  click(width*.1424f,670.f);save(L"console-typed.png");
+  click(width*.9326f,730.f);save(L"console-submitted.png");
+  click(width*.9257f,132.f);save(L"console-keyboard-hidden.png");
   }
   ImGui_ImplDX11_Shutdown();ImGui::DestroyContext();CoUninitialize();
   std::cout<<"Rendered Config views to "<<output.string()<<'\n';return 0;
