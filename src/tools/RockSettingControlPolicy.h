@@ -48,5 +48,6 @@ namespace rock_configurator::setting_control
         RpsMod mod = RpsMod::Rock);
 
     [[nodiscard]] double snapNumeric(const Spec& spec, double value) noexcept;
+    [[nodiscard]] std::string formatFloat(double value, double step);
     [[nodiscard]] bool equalsIgnoreCase(std::string_view left, std::string_view right) noexcept;
 }

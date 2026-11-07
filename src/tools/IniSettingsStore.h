@@ -99,7 +99,7 @@ namespace rock_configurator
         [[nodiscard]] bool connectRockApi();
         [[nodiscard]] bool reloadRockSnapshot();
         [[nodiscard]] bool loadReduxSettings();
-        [[nodiscard]] bool saveReduxSetting(const SettingRecord& setting, bool value);
+        [[nodiscard]] bool saveReduxSetting(const SettingRecord& setting, std::string_view value);
         [[nodiscard]] bool loadCsahSettings();
         [[nodiscard]] bool saveCsahSetting(const SettingRecord& setting, std::string_view value);
         [[nodiscard]] rock::api::configuration::Group rockGroup() const noexcept;

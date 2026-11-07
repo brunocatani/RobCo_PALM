@@ -38,7 +38,15 @@ int main(int argc,char** argv) {
         const auto& row=page.settings()[indexOf(page,metadata.key)];
         assert(row.type==SettingType::Boolean&&row.value==(metadata.defaultValue?"true":"false"));
     }
-    assert(consumer.settings().size()+developer.settings().size()==config::kSettings.size());
+    // Numbers are bounded by Redux's catalog, in steps of it.
+    for(const auto& metadata:config::kNumbers) {
+        const auto& page=metadata.group==config::Group::Consumer?consumer:developer;
+        const auto& row=page.settings()[indexOf(page,metadata.key)];
+        assert(row.type==SettingType::Float&&row.control.bounded&&row.control.kind==setting_control::Kind::Numeric);
+        assert(row.control.minimum==metadata.minimum&&row.control.maximum==metadata.maximum&&row.control.step==metadata.step);
+        assert(row.value==row.defaultValue&&!row.overridden);
+    }
+    assert(consumer.settings().size()+developer.settings().size()==config::kSettings.size()+config::kNumbers.size());
     assert(!consumer.needsReload()&&!developer.needsReload());
     // Writes go through Redux by key, from the page that owns the setting.
     const auto collisionIndex=indexOf(consumer,"npcDynamicCollisions");
@@ -46,12 +54,17 @@ int main(int argc,char** argv) {
     const auto collision=consumer.setBooleanByIndex(collisionIndex,false);assert(collision.changed&&collision.saved);
     const auto visualizer=developer.setBooleanByIndex(visualizerIndex,true);assert(visualizer.changed&&visualizer.saved);
     const auto physical=developer.setBooleanByIndex(indexOf(developer,"bPhysicalMelee"),false);assert(physical.changed&&physical.saved);
+    const auto hunchIndex=indexOf(developer,"fRagdollHunch");
+    const auto hunch=developer.setNumericByIndex(hunchIndex,2.5);assert(hunch.changed&&hunch.saved&&developer.settings()[hunchIndex].overridden);
     config::Snapshot state;assert(api->snapshot(&state)==config::Status::Ok);
+    config::NumberSnapshot numbers;assert(api->numbers(&numbers)==config::Status::Ok);
 #ifdef WHEEL_DESKTOP_PREVIEW
     assert(state.values==defaults&&state.revision==1); // No persistence or live call.
+    assert(numbers.values[static_cast<std::size_t>(config::Number::Hunch)]==1.0f);
 #else
     assert(state.values==((defaults&~config::bit(config::Setting::Collision)&~config::bit(config::Setting::PhysicalMelee))|config::bit(config::Setting::Visualizer)));
-    assert(state.revision==4);
+    assert(numbers.values[static_cast<std::size_t>(config::Number::Hunch)]==2.5f);
+    assert(state.revision==5);
     assert(consumer.needsReload()&&developer.needsReload());
     assert(consumer.reload()&&consumer.settings()[collisionIndex].value=="false");
     assert(developer.reload()&&developer.settings()[visualizerIndex].value=="true");

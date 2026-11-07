@@ -1,5 +1,6 @@
 #include "RockSettingControlPolicy.h"
 #include <DIAMOND/Configuration.h>
+#include <SCISSORS_Redux/Configuration.h>
 #include "EmitterSettings.h"
 
 #include <algorithm>
@@ -7,8 +8,10 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <iomanip>
 #include <initializer_list>
 #include <optional>
+#include <sstream>
 
 namespace rock_configurator::setting_control
 {
@@ -403,6 +406,20 @@ namespace rock_configurator::setting_control
         return true;
     }
 
+    std::string formatFloat(double value, double step)
+    {
+        std::ostringstream stream;
+        stream << std::fixed << std::setprecision(step < 0.05 ? 3 : (step < 1.0 ? 2 : 1)) << value;
+        auto result = stream.str();
+        while (result.size() > 3 && result.back() == '0') {
+            result.pop_back();
+        }
+        if (!result.empty() && result.back() == '.') {
+            result.push_back('0');
+        }
+        return result;
+    }
+
     Spec build(
         ValueType type,
         std::string_view key,
@@ -410,6 +427,8 @@ namespace rock_configurator::setting_control
         std::string_view description,
         RpsMod mod)
     {
+        if(isReduxConfiguration(mod))for(const auto& number:scissors::configuration::kNumbers)if(key==number.key)
+            return {.kind=Kind::Numeric,.bounded=true,.minimum=number.minimum,.maximum=number.maximum,.step=number.step};
         if(mod==RpsMod::Emitters)if(const auto* setting=emitter_settings::find(key)) {
             if(setting->type==emitter_settings::Type::Toggle)return {.kind=Kind::Checkbox};
             if(setting->type==emitter_settings::Type::Color)

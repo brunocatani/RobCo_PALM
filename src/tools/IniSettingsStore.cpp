@@ -61,19 +61,7 @@ namespace rock_configurator
             return parseEnd && *parseEnd == '\0' && std::isfinite(out);
         }
 
-        [[nodiscard]] std::string formatFloat(double value, double step)
-        {
-            std::ostringstream stream;
-            stream << std::fixed << std::setprecision(step < 0.05 ? 3 : (step < 1.0 ? 2 : 1)) << value;
-            auto result = stream.str();
-            while (result.size() > 3 && result.back() == '0') {
-                result.pop_back();
-            }
-            if (!result.empty() && result.back() == '.') {
-                result.push_back('0');
-            }
-            return result;
-        }
+        using setting_control::formatFloat;
 
         [[nodiscard]] double floatStep(double value)
         {
@@ -809,7 +797,7 @@ namespace rock_configurator
             };
         }
         if (isReduxConfiguration(_mod)) {
-            if (!saveReduxSetting(setting, *normalizedValue=="true"))
+            if (!saveReduxSetting(setting, *normalizedValue))
                 return { .message = _lastError, .setting = setting };
             setting.value = *normalizedValue;
             setting.overridden = setting.value != setting.defaultValue;
