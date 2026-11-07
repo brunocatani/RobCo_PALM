@@ -15,7 +15,11 @@ RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM'
 ## Console tab
 
 - `src/tools/ConsoleService.cpp` hooks the call to `ConsoleLog::AddString` at plugin load, after checking the live bytes, and runs commands through `Console::ExecuteCommand`, so the native Console menu is never needed. Commands containing `%` are refused: the engine echoes a command through its print function as the format string.
-- The on-screen keyboard and the real keyboard feed one `ConsoleLine`, not an ImGui text field, because clicking a key would take focus from that field. The real keyboard comes from RPS UI's `captureKeyboard`, requested only while the tab is open; the capture lapses by itself when PALM stops asking.
+- The on-screen keyboard is its own RPS UI panel (`robco.palm.workshop.keyboard`, `src/tools/OnScreenKeyboard.cpp`) under the Config panel. It is up on the Console tab, and on the Spawner while one of its two searches (sources, items) is open; it takes the Config panel's width and follows its resizes. Both keyboards feed a `ConsoleLine`, not an ImGui text field, because clicking a key would take focus from that field. The real keyboard comes from RPS UI's `captureKeyboard`, requested only while the keyboard panel is up; the capture lapses by itself when PALM stops asking.
+
+## Spawner
+
+- With `Flying_BRICKS.esp` loaded, the All ammo source lists only the rounds that plugin defines or overrides (`src/tools/SpawnBrowser.cpp`); otherwise every named ammo form.
 
 ## Public API
 

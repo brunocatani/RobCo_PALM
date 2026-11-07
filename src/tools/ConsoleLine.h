@@ -16,8 +16,9 @@ namespace rock_configurator
     }
 
     /**
-     * The command line both keyboards type into. It is separate from ImGui's text
-     * field because clicking an on-screen key would take focus from that field.
+     * A line both keyboards type into: the console command line and the Spawner's
+     * searches. It is separate from ImGui's text field because clicking a key on the
+     * keyboard panel would take focus from that field.
      * Holds UTF-8; the caret is always on a character boundary.
      */
     class ConsoleLine

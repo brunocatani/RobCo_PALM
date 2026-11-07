@@ -38,7 +38,9 @@ int main(int argc, char** argv) {
   wheel::IconAtlas icons;if(!icons.create(device.Get(),context.Get()))throw std::runtime_error("Embedded icon atlases unavailable");
   auto& io=ImGui::GetIO();io.DisplaySize={static_cast<float>(width),static_cast<float>(height)};io.DeltaTime=1.0f/90;
   wheel::publishWheelInventory(wheel::demoInventory());rock_configurator::initializePreview();rock_configurator::setPreviewOpen(true);
-  bool showWheel=false,showAtlas=false;unsigned atlasSheet=0;wheel::Model wheelModel;wheel::View wheelView;
+  bool showWheel=false,showAtlas=false,showKeyboard=false;unsigned atlasSheet=0;
+  // The keyboard panel is drawn alone at its own shape, along the top of the image.
+  const float keyboardHeight=static_cast<float>(width)*480.f/2080.f;wheel::Model wheelModel;wheel::View wheelView;
   const auto frame=[&] {
    ImGui_ImplDX11_NewFrame();ImGui::NewFrame();
    if(showAtlas) {
@@ -47,6 +49,7 @@ int main(int argc, char** argv) {
     for(unsigned i=0;i<16;++i)wheel::drawIcon(draw,{(width-height)/2.f+(i%4+.5f)*cell,(i/4+.5f)*cell},cell*.45f,
      static_cast<wheel::Icon>(atlasSheet*16+i),IM_COL32(225,235,240,255),icons.ids());
    }else if(showWheel)(void)wheel::drawWheel(wheelModel,wheelView,{},{},icons.ids());
+   else if(showKeyboard)(void)rock_configurator::drawKeyboardPanel(0,0,static_cast<float>(width),keyboardHeight);
    else (void)rock_configurator::drawImGui(0,0,static_cast<float>(width),static_cast<float>(height));
    ImGui::Render();rock_configurator::drainPreviewActions();
    auto* view=target.Get();context->OMSetRenderTargets(1,&view,nullptr);
@@ -164,13 +167,21 @@ int main(int argc, char** argv) {
   click(220,120);save(L"developer-settings.png");
   click(385,120);save(L"paper-settings.png");
   click(555,120);save(L"scissors-settings.png");
+  // Clicks a key by its row, the units and keys before it, its own units and the row's key count.
+  const auto key=[&](int row,float unitsBefore,int keysBefore,float units,int count) {
+   const float pad=keyboardHeight*.05f,gap=keyboardHeight/60.f,keyHeight=(keyboardHeight-pad*2-gap*4)/5;
+   const float unit=(static_cast<float>(width)-pad*2-gap*static_cast<float>(count-1))/14.5f;
+   click(pad+unitsBefore*unit+static_cast<float>(keysBefore)*gap+units*unit*.5f,pad+static_cast<float>(row)*(keyHeight+gap)+keyHeight*.5f);
+  };
   tab(3);save(L"spawner.png");
+  click(rail+300,282.f);save(L"spawner-search-open.png");
+  showKeyboard=true;key(2,2.75f,2,1,13);key(1,5.5f,5,1,14);key(1,8.5f,8,1,14);save(L"spawner-keyboard.png");
+  showKeyboard=false;save(L"spawner-search.png");
   click(rail+100,335);save(L"item-actions.png");
   tab(4);save(L"console.png");
-  // Key positions, as fractions of the panel: q, Enter, then Hide keyboard.
-  click(width*.1424f,670.f);save(L"console-typed.png");
-  click(width*.9326f,730.f);save(L"console-submitted.png");
-  click(width*.9257f,132.f);save(L"console-keyboard-hidden.png");
+  showKeyboard=true;key(1,1.5f,1,1,14);save(L"console-keyboard.png");
+  showKeyboard=false;save(L"console-typed.png");
+  showKeyboard=true;key(2,12.75f,12,1.75f,13);showKeyboard=false;save(L"console-submitted.png");
   }
   ImGui_ImplDX11_Shutdown();ImGui::DestroyContext();CoUninitialize();
   std::cout<<"Rendered Config views to "<<output.string()<<'\n';return 0;

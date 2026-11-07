@@ -43,7 +43,7 @@ target_include_directories(wheel_view PUBLIC src external/F4VR-Input
  "${WORKSPACE}/libraries_and_tools/F4VR-CommonFramework/external/openvr")
 target_link_libraries(wheel_view PUBLIC wheel_imgui windowscodecs ole32)
 set(WORKSHOP_SOURCES src/tools/ConfiguratorRuntime.cpp src/tools/IniSettingsStore.cpp src/tools/ReduxSettings.cpp src/tools/CsahSettings.cpp
- src/tools/RockSettingControlPolicy.cpp src/tools/SpawnBrowser.cpp src/tools/ConsoleService.cpp src/tools/ConsoleTab.cpp)
+ src/tools/RockSettingControlPolicy.cpp src/tools/SpawnBrowser.cpp src/tools/ConsoleService.cpp src/tools/ConsoleTab.cpp src/tools/OnScreenKeyboard.cpp)
 foreach(target wheel_workshop wheel_workshop_preview)
  add_library(${target} STATIC ${WORKSHOP_SOURCES})
  target_include_directories(${target} PUBLIC src/tools

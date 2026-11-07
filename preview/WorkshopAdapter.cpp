@@ -20,6 +20,7 @@ void PrepareFonts() noexcept {
  for(std::size_t i=0;i<configFonts.size();++i)configFonts[i]=wheel::addPreparedFont(kFontSizes[i]);
 }
 bool SetPanelOpen(bool, const PanelPose*) noexcept { return true; }
+void SyncKeyboardPanel(bool) noexcept {}
 void Shutdown() noexcept {}
 bool InstallFrameworkPanel() noexcept { return false; }
 bool ResetFrameworkPanelSize() noexcept {

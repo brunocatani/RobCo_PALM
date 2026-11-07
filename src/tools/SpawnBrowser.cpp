@@ -49,13 +49,18 @@ namespace rock_configurator
         }
 
         // A mod's rounds can live in several plugins: some are its own records, others override base game forms and stay
-        // under the plugin that first defined them. This first source lists them all in one place.
+        // under the plugin that first defined them. This first source lists them all in one place. With Flying BRICKS
+        // loaded it lists only that mod's rounds: it replaces the other ballistic ammunition, and rounds from other
+        // mods with similar names, such as a 9mm beside its 9x19mm Parabellum, made the list confusing.
         void addAllAmmoSource(std::vector<SpawnBrowser::PluginRecord>& plugins)
         {
+            const bool flyingBricks = std::ranges::any_of(plugins, [](const SpawnBrowser::PluginRecord& plugin) {
+                return std::ranges::any_of(plugin.items, &SpawnBrowser::ItemRecord::flyingBricksRound);
+            });
             SpawnBrowser::PluginRecord all{ .name = "All ammo" };
             for (const auto& plugin : plugins) {
                 for (const auto& item : plugin.items) {
-                    if (item.category == kAmmoCategory) {
+                    if (item.category == kAmmoCategory && (!flyingBricks || item.flyingBricksRound)) {
                         all.items.push_back(item);
                     }
                 }
@@ -64,6 +69,25 @@ namespace rock_configurator
                 return nameLessCaseInsensitive(lhs.name, rhs.name);
             });
             plugins.insert(plugins.begin(), std::move(all));
+        }
+
+        [[nodiscard]] bool containsIgnoringCase(std::string_view text, std::string_view word) noexcept
+        {
+            const auto lower = [](unsigned char letter) { return std::tolower(letter); };
+            return !std::ranges::search(text, word, {}, lower, lower).empty();
+        }
+
+        [[nodiscard]] bool matchesSearch(std::string_view name, std::string_view search) noexcept
+        {
+            std::size_t start = 0;
+            while (start < search.size()) {
+                const auto end = (std::min)(search.find(' ', start), search.size());
+                if (end > start && !containsIgnoringCase(name, search.substr(start, end - start))) {
+                    return false;
+                }
+                start = end + 1;
+            }
+            return true;
         }
 
         [[nodiscard]] std::size_t stepCursor(std::size_t cursor, int direction, std::size_t size)
@@ -78,6 +102,23 @@ namespace rock_configurator
         }
 
 #ifndef WHEEL_DESKTOP_PREVIEW
+        // The form's own file and every file that overrides it. GetFile(index) is no help here:
+        // FO4VR's 0x14015A2C0 returns the last file for any index past the end.
+        [[nodiscard]] bool definedBy(const RE::TESForm& form, std::string_view plugin) noexcept
+        {
+            const auto* files = form.sourceFiles.array;
+            if (!files) {
+                return false;
+            }
+            for (std::uint32_t index = 0; index < files->size(); ++index) {
+                const auto* file = (*files)[index];
+                if (file && _stricmp(file->filename, plugin.data()) == 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         [[nodiscard]] RE::TESBoundObject* resolveSpawnableObject(std::uint32_t formId)
         {
             auto* form = RE::TESForm::GetFormByID(formId);
@@ -168,6 +209,7 @@ namespace rock_configurator
                         {"Example Workshop.esp", {{8,1,"Custom Service Rifle"},{9,4,"Field Rations"}},1}};
             addAllAmmoSource(_plugins);
             _indexBuilt = true;
+            rebuildVisiblePlugins();
             rebuildFilteredItems();
             _lastResult = "PREVIEW ONLY — actions do not affect the game";
         }
@@ -252,6 +294,7 @@ namespace rock_configurator
                     .formId = formId,
                     .category = indexed.category,
                     .name = utf8SafeName(name),
+                    .flyingBricksRound = indexed.category == kAmmoCategory && definedBy(*form, "Flying_BRICKS.esp"),
                 });
                 ++itemCount;
             }
@@ -271,12 +314,13 @@ namespace rock_configurator
         _categoryCursor = 0;
         _itemCursor = 0;
         _view = SpawnView::Browse;
+        rebuildVisiblePlugins();
         rebuildFilteredItems();
 
         const auto elapsedMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
         _lastResult = std::format("Indexed {} items from {} plugins", itemCount, pluginCount);
         logger::info(
-            "PALM Config spawn: indexed {} named items, {} of them ammo, across {} plugins in engine load order in {:.1f} ms ({} forms skipped without an owning plugin file).",
+            "PALM Config spawn: indexed {} named items, {} of them under All ammo, across {} plugins in engine load order in {:.1f} ms ({} forms skipped without an owning plugin file).",
             itemCount, _plugins.front().items.size(), pluginCount, elapsedMs, skippedUnowned);
         return true;
 #endif
@@ -312,9 +356,36 @@ namespace rock_configurator
             return;
         }
         for (std::size_t i = 0; i < plugin->items.size(); ++i) {
-            if (_categoryCursor == 0 || plugin->items[i].category == _categoryCursor) {
+            const auto& item = plugin->items[i];
+            if ((_categoryCursor == 0 || item.category == _categoryCursor) && matchesSearch(item.name, _itemSearch)) {
                 _filteredItems.push_back(i);
             }
+        }
+    }
+
+    void SpawnBrowser::rebuildVisiblePlugins()
+    {
+        _visiblePlugins.clear();
+        for (std::size_t i = 0; i < _plugins.size(); ++i) {
+            if (matchesSearch(_plugins[i].name, _pluginSearch)) {
+                _visiblePlugins.push_back(i);
+            }
+        }
+    }
+
+    void SpawnBrowser::setPluginSearch(std::string_view text)
+    {
+        if (text != _pluginSearch) {
+            _pluginSearch = text;
+            rebuildVisiblePlugins();
+        }
+    }
+
+    void SpawnBrowser::setItemSearch(std::string_view text)
+    {
+        if (text != _itemSearch) {
+            _itemSearch = text;
+            rebuildFilteredItems();
         }
     }
 

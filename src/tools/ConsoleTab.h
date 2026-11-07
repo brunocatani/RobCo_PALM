@@ -20,10 +20,11 @@ namespace rock_configurator
     };
 
     /**
-     * The Console tab: scrollback, command line and on-screen keyboard. Everything
-     * here is presentation state. The caller holds the configurator runtime mutex
-     * around every call, because drawing runs on the render thread and physical keys
-     * arrive from the game thread. Commands wait in takeCommands() for the game thread.
+     * The Console tab: scrollback and command line. The on-screen keyboard lives on its own
+     * panel under the Config panel and types into line(). Everything here is presentation
+     * state. The caller holds the configurator runtime mutex around every call, because
+     * drawing runs on the render thread and physical keys arrive from the game thread.
+     * Commands wait in takeCommands() for the game thread.
      */
     class ConsoleTab
     {
@@ -31,20 +32,15 @@ namespace rock_configurator
         void draw(const ConsoleStatus& status);
         void onCharacter(std::uint32_t utf16Unit);
         void onKey(std::uint32_t virtualKey);
+        void submit();
+        [[nodiscard]] ConsoleLine& line() noexcept { return _line; }
         [[nodiscard]] std::vector<std::string> takeCommands();
         [[nodiscard]] bool hasCommands() const noexcept { return !_commands.empty(); }
 
     private:
-        enum class KeyAction : std::uint8_t;
-        struct VirtualKey;
-
         void drawStatusRow(const ConsoleStatus& status);
         void drawLog(float height);
         void drawCommandRow();
-        void drawKeyboard();
-        void drawCommandText(float width, float height);
-        void pressVirtualKey(const VirtualKey& key);
-        void submit();
         void addRow(std::string_view line, float wrapWidth);
         void absorbNewLines(float wrapWidth);
 
@@ -55,8 +51,5 @@ namespace rock_configurator
         float _commandScroll{ 0.0f };
         float _pageRequest{ 0.0f };
         bool _followLatest{ true };
-        bool _keyboardVisible{ true };
-        bool _shift{ false };
-        bool _caps{ false };
     };
 }

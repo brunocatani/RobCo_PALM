@@ -18,6 +18,10 @@ namespace devui::render
         kDefaultPanelPhysicalWidth / kPanelAspectRatio;
     inline constexpr float kMinimumPanelPhysicalWidth = 72.0f;
     inline constexpr float kMaximumPanelPhysicalWidth = 180.0f;
+    // The keyboard panel sits under the Config panel at the same physical width. RPS UI
+    // needs at least 480 pixels of height, which sets the 2080 width for the keyboard's shape.
+    inline constexpr std::uint32_t kKeyboardPanelPixelWidth = 2080;
+    inline constexpr std::uint32_t kKeyboardPanelPixelHeight = 480;
 
     enum class FontRole : std::uint8_t
     {
@@ -42,6 +46,10 @@ namespace devui::render
 
     void PrepareFonts() noexcept;
     [[nodiscard]] ImFont* GetFont(FontRole role) noexcept;
+    // Closing the Config panel closes the keyboard panel with it.
     bool SetPanelOpen(bool open, const PanelPose* pose = nullptr) noexcept;
+    // Game thread, once per input frame: opens the keyboard panel under the Config panel while
+    // wanted, moves it whenever the Config panel is resized, and closes it otherwise.
+    void SyncKeyboardPanel(bool wanted) noexcept;
     void Shutdown() noexcept;
 }

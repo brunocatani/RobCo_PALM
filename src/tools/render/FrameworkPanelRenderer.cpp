@@ -18,6 +18,7 @@ namespace devui::render
 {
     namespace
     {
+        // One per panel: each has its own ImGui context, so pointer state and fonts never mix.
         struct RenderState
         {
             std::mutex mutex;
@@ -31,6 +32,7 @@ namespace devui::render
             bool initializationFailed{ false };
             bool backWasDown{ false };
             bool backRequested{ false };
+            bool keyboard{ false };
         };
 
         struct FrameworkState
@@ -40,12 +42,23 @@ namespace devui::render
             std::uint64_t ownerToken{ 0 };
             std::uint64_t panelHandle{ 0 };
             std::uint64_t presentationSequence{ 1 };
+            std::uint64_t keyboardHandle{ 0 };
+            std::uint64_t keyboardSequence{ 1 };
+            std::uint64_t keyboardFollows{ 0 };  // Config panel state sequence the keyboard pose was built from.
+            bool keyboardOpen{ false };
+            bool keyboardRejectLogged{ false };
             bool installed{ false };
         };
 
-        [[nodiscard]] RenderState& renderState() noexcept
+        [[nodiscard]] RenderState& configState() noexcept
         {
             static RenderState state;
+            return state;
+        }
+
+        [[nodiscard]] RenderState& keyboardState() noexcept
+        {
+            static RenderState state{ .keyboard = true };
             return state;
         }
 
@@ -124,6 +137,11 @@ namespace devui::render
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
                 configureFonts(state, io);
                 devui::visual::applyStyle();
+                if (state.keyboard) {
+                    // The keyboard panel has more pixels per metre; keep its cursor the Config panel's size.
+                    ImGui::GetStyle().MouseCursorScale =
+                        static_cast<float>(kKeyboardPanelPixelWidth) / static_cast<float>(kPanelPixelWidth);
+                }
                 if (!ImGui_ImplDX11_Init(device, context)) {
                     throw std::runtime_error(
                         "ImGui DX11 backend initialization failed");
@@ -156,23 +174,26 @@ namespace devui::render
 
         void RPSUI_CALL renderPanel(
             const rpsui::api::framework::PanelRenderFrame* frame,
-            void*) noexcept
+            void* userData) noexcept
         {
             if (!frame ||
                 frame->size < sizeof(*frame) ||
-                !frame->renderTargetView) {
+                !frame->renderTargetView ||
+                !userData) {
                 return;
             }
-            auto& state = renderState();
+            auto& state = *static_cast<RenderState*>(userData);
             std::scoped_lock lock(state.mutex);
             if (!initializeRenderState(state, *frame)) {
                 return;
             }
 
-            rock_configurator::onFrameworkPanelFrame(
-                frame->physicalWidth,
-                localResizeHandle(frame->hoveredResizeHandle),
-                localResizeHandle(frame->activeResizeHandle));
+            if (!state.keyboard) {
+                rock_configurator::onFrameworkPanelFrame(
+                    frame->physicalWidth,
+                    localResizeHandle(frame->hoveredResizeHandle),
+                    localResizeHandle(frame->activeResizeHandle));
+            }
 
             ImGui::SetCurrentContext(state.imguiContext);
             auto& io = ImGui::GetIO();
@@ -225,7 +246,10 @@ namespace devui::render
             const bool backDown = frame->pointerValid != 0 && frame->backDown != 0;
             state.backRequested |= backDown && !state.backWasDown;
             state.backWasDown = backDown;
-            if (!rock_configurator::drawImGui(0, 0, kPanelPixelWidth, kPanelPixelHeight, state.backRequested)) {
+            const bool drawn = state.keyboard ?
+                rock_configurator::drawKeyboardPanel(0, 0, kKeyboardPanelPixelWidth, kKeyboardPanelPixelHeight, state.backRequested) :
+                rock_configurator::drawImGui(0, 0, kPanelPixelWidth, kPanelPixelHeight, state.backRequested);
+            if (!drawn) {
                 ImGui::EndFrame();
                 return;
             }
@@ -243,7 +267,8 @@ namespace devui::render
     ImFont* GetFont(FontRole role) noexcept
     {
         const auto index = static_cast<std::size_t>(role);
-        auto& state = renderState();
+        auto& keyboard = keyboardState();
+        auto& state = ImGui::GetCurrentContext() == keyboard.imguiContext ? keyboard : configState();
         return index < state.fonts.size() ?
             state.fonts[index] :
             nullptr;
@@ -301,6 +326,7 @@ namespace devui::render
         panel.sortOrder = 310;
         panel.flags = static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::ConfigNavigation);
         panel.renderCallback = &renderPanel;
+        panel.userData = &configState();
         if (state.api->registerPanel(
                 state.ownerToken,
                 &panel,
@@ -319,12 +345,88 @@ namespace devui::render
             return false;
         }
 
+        // Fixed size: it takes the Config panel's width and follows its resizes instead.
+        rpsui::api::framework::PanelRegistration keyboard{};
+        std::snprintf(keyboard.panelId, sizeof(keyboard.panelId), "robco.palm.workshop.keyboard");
+        std::snprintf(keyboard.displayName, sizeof(keyboard.displayName), "PALM Keyboard");
+        keyboard.pixelWidth = kKeyboardPanelPixelWidth;
+        keyboard.pixelHeight = kKeyboardPanelPixelHeight;
+        keyboard.defaultPhysicalWidth = kDefaultPanelPhysicalWidth;
+        keyboard.minimumPhysicalWidth = kMinimumPanelPhysicalWidth;
+        keyboard.maximumPhysicalWidth = kMaximumPanelPhysicalWidth;
+        keyboard.sortOrder = 311;
+        keyboard.flags = static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::ConfigNavigation) |
+                         static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::FixedSize);
+        keyboard.renderCallback = &renderPanel;
+        keyboard.userData = &keyboardState();
+        if (state.api->registerPanel(state.ownerToken, &keyboard, &state.keyboardHandle) != rpsui::api::Result::Ok) {
+            state.keyboardHandle = 0;
+            logger::critical("PALM Config could not register its keyboard panel; the console and searches take the physical keyboard only");
+        }
+
         state.installed = true;
         logger::info(
-            "PALM Config registered RPS UI panel {} as owner {}",
+            "PALM Config registered RPS UI panel {} and keyboard panel {} as owner {}",
             state.panelHandle,
+            state.keyboardHandle,
             state.ownerToken);
         return true;
+    }
+
+    namespace
+    {
+        void closeKeyboardLocked(FrameworkState& state) noexcept
+        {
+            if (!state.keyboardOpen) {
+                return;
+            }
+            state.keyboardOpen = false;
+            rpsui::api::framework::PanelPresentation presentation{};
+            presentation.sequence = state.keyboardSequence++;
+            const auto result = state.api->submitPanelPresentation(state.ownerToken, state.keyboardHandle, &presentation);
+            if (result != rpsui::api::Result::Ok) {
+                logger::error("PALM keyboard panel close was rejected ({})", static_cast<std::uint32_t>(result));
+            }
+        }
+    }
+
+    void SyncKeyboardPanel(bool wanted) noexcept
+    {
+        auto& state = frameworkState();
+        std::scoped_lock lock(state.mutex);
+        if (!state.installed || !state.api || !state.keyboardHandle || !state.api->getPanelState) {
+            return;
+        }
+        rpsui::api::framework::PanelState config;
+        if (!wanted || state.api->getPanelState(state.ownerToken, state.panelHandle, &config) != rpsui::api::Result::Ok || !config.open) {
+            closeKeyboardLocked(state);
+            return;
+        }
+        if (state.keyboardOpen && state.keyboardFollows == config.sequence) {
+            return;
+        }
+
+        // The Config panel's own axes, one gap below its bottom edge.
+        rpsui::api::framework::PanelPresentation presentation{};
+        presentation.sequence = state.keyboardSequence++;
+        presentation.open = 1;
+        auto& pose = presentation.pose;
+        pose = config.pose;
+        pose.physicalHeight = pose.physicalWidth * static_cast<float>(kKeyboardPanelPixelHeight) / static_cast<float>(kKeyboardPanelPixelWidth);
+        const float drop = config.pose.physicalHeight * 0.5f + config.pose.physicalWidth * 0.02f + pose.physicalHeight * 0.5f;
+        for (std::size_t axis = 0; axis < 3; ++axis) {
+            pose.center[axis] = config.pose.center[axis] - config.pose.up[axis] * drop;
+        }
+        const auto result = state.api->submitPanelPresentation(state.ownerToken, state.keyboardHandle, &presentation);
+        if (result != rpsui::api::Result::Ok) {
+            if (!std::exchange(state.keyboardRejectLogged, true)) {
+                logger::error("PALM keyboard panel was rejected ({}); the console and searches take the physical keyboard only",
+                    static_cast<std::uint32_t>(result));
+            }
+            return;
+        }
+        state.keyboardOpen = true;
+        state.keyboardFollows = config.sequence;
     }
 
     bool ResetFrameworkPanelSize() noexcept
@@ -348,6 +450,9 @@ namespace devui::render
             !state.api ||
             !state.api->submitPanelPresentation) {
             return false;
+        }
+        if (!open) {
+            closeKeyboardLocked(state);
         }
 
         rpsui::api::framework::PanelPresentation presentation{};
@@ -403,6 +508,9 @@ namespace devui::render
         {
             std::scoped_lock lock(framework.mutex);
             if (framework.api) {
+                if (framework.keyboardHandle != 0 && framework.api->unregisterPanel) {
+                    (void)framework.api->unregisterPanel(framework.ownerToken, framework.keyboardHandle);
+                }
                 if (framework.panelHandle != 0 &&
                     framework.api->unregisterPanel) {
                     (void)framework.api->unregisterPanel(
@@ -419,11 +527,17 @@ namespace devui::render
             framework.ownerToken = 0;
             framework.panelHandle = 0;
             framework.presentationSequence = 1;
+            framework.keyboardHandle = 0;
+            framework.keyboardSequence = 1;
+            framework.keyboardFollows = 0;
+            framework.keyboardOpen = false;
+            framework.keyboardRejectLogged = false;
             framework.installed = false;
         }
 
-        auto& state = renderState();
-        std::scoped_lock lock(state.mutex);
-        releaseRenderState(state);
+        for (auto* state : { &configState(), &keyboardState() }) {
+            std::scoped_lock lock(state->mutex);
+            releaseRenderState(*state);
+        }
     }
 }

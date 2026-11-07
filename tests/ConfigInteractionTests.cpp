@@ -147,6 +147,11 @@ int main(int argc, char** argv) {
         require(rock_configurator::isOpen() && window("wheel-category-content"), "console back did not return to Config home");
         click(railWidth + 634, 50); // Spawner
         require(window("spawn-items") != nullptr, "spawner tab did not open");
+        click(railWidth + 300, 282); // Search items
+        require(rock_configurator::keyboardInputActive(), "item search did not bring up the keyboard");
+        frame(true); frame();
+        require(!rock_configurator::keyboardInputActive() && window("spawn-items"), "back did not close the search keyboard first");
+        click(100, 306); // Fallout4.esm: the first source, All ammo, holds one preview item and cannot scroll.
         scroll(window("spawn-items"));
         auto* items = window("spawn-items");
         click(items->InnerRect.Min.x + 80, items->InnerRect.Min.y + 80);

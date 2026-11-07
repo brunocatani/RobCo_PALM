@@ -4,6 +4,7 @@
 
 #include "ConsoleService.h"
 #include "ConsoleTab.h"
+#include "OnScreenKeyboard.h"
 #include "IniSettingsStore.h"
 #include "LoadedRpsMods.h"
 #include "PanelResizePolicy.h"
@@ -64,6 +65,16 @@ namespace rock_configurator
             UiSpawnOpenItem,
             UiSpawnActivateAction,
             UiSpawnBack,
+            UiSpawnSearch,
+            UiSpawnClearSearch,
+        };
+
+        // Which Spawner search the keyboard panel types into; None hides the panel on the Spawner.
+        enum class SpawnSearchField : std::uint8_t
+        {
+            None,
+            Sources,
+            Items,
         };
 
         struct PanelPose
@@ -132,6 +143,14 @@ namespace rock_configurator
         std::atomic_uint32_t s_consoleSelectedReference{ 0 };
         std::atomic_bool s_consoleCommandsPending = false;
         std::uint32_t s_consoleSelectionAge = 0; // Game thread only.
+        // Lines and keyboard state are guarded by s_runtimeMutex; the field is read lock-free
+        // to decide whether the keyboard panel is up.
+        OnScreenKeyboard s_keyboard;
+        ConsoleLine s_spawnSourceSearch;
+        ConsoleLine s_spawnItemSearch;
+        float s_spawnSourceScroll = 0.0f;
+        float s_spawnItemScroll = 0.0f;
+        std::atomic<SpawnSearchField> s_spawnSearchField{ SpawnSearchField::None };
         std::mutex s_runtimeMutex;
         std::string s_statusMessage;
         std::optional<PendingNumericEdit> s_pendingNumericEdit;
@@ -272,6 +291,32 @@ namespace rock_configurator
             return s_activeTab.load(std::memory_order_acquire) == ConfiguratorTab::Spawn;
         }
 
+        [[nodiscard]] ConsoleLine* spawnSearchLine(SpawnSearchField field) noexcept
+        {
+            switch (field) {
+            case SpawnSearchField::Sources: return &s_spawnSourceSearch;
+            case SpawnSearchField::Items: return &s_spawnItemSearch;
+            case SpawnSearchField::None: break;
+            }
+            return nullptr;
+        }
+
+        // The line the keyboard panel types into, or none while the panel is down.
+        [[nodiscard]] ConsoleLine* keyboardLineLocked() noexcept
+        {
+            switch (s_activeTab.load(std::memory_order_acquire)) {
+            case ConfiguratorTab::Console: return &s_consoleTab.line();
+            case ConfiguratorTab::Spawn: return spawnSearchLine(s_spawnSearchField.load(std::memory_order_acquire));
+            default: return nullptr;
+            }
+        }
+
+        void syncSpawnSearchLocked()
+        {
+            s_spawnBrowser.setPluginSearch(s_spawnSourceSearch.text());
+            s_spawnBrowser.setItemSearch(s_spawnItemSearch.text());
+        }
+
         void updateSettingsStatusLocked()
         {
             s_statusMessage = activeSettings().loaded ?
@@ -373,6 +418,7 @@ namespace rock_configurator
                 return;
             }
             devui::render::SetPanelOpen(false);
+            s_spawnSearchField.store(SpawnSearchField::None, std::memory_order_release);
             s_hoveredResizeHandle.store(panel_resize::Handle::None, std::memory_order_release);
             s_activeResizeHandle.store(panel_resize::Handle::None, std::memory_order_release);
             invalidateQueuedRuntimeActions();
@@ -405,6 +451,7 @@ namespace rock_configurator
             if (s_activeTab.exchange(tab, std::memory_order_acq_rel) == tab) {
                 return;
             }
+            s_spawnSearchField.store(SpawnSearchField::None, std::memory_order_release);
             if (tab == ConfiguratorTab::Spawn && !s_spawnBrowser.ensureIndexBuilt()) {
                 s_statusMessage = s_spawnBrowser.lastResult();
             }
@@ -574,8 +621,8 @@ namespace rock_configurator
                 }
                 break;
             case RuntimeActionKind::UiSpawnOpenItem:
-                if (spawnTabActive()) {
-                    (void)s_spawnBrowser.openItem(action.formId);
+                if (spawnTabActive() && s_spawnBrowser.openItem(action.formId)) {
+                    s_spawnSearchField.store(SpawnSearchField::None, std::memory_order_release);
                 }
                 break;
             case RuntimeActionKind::UiSpawnActivateAction:
@@ -593,7 +640,22 @@ namespace rock_configurator
                     }
                 }
                 break;
+            case RuntimeActionKind::UiSpawnSearch:
+                if (spawnTabActive() && action.index <= static_cast<std::size_t>(SpawnSearchField::Items)) {
+                    const auto field = static_cast<SpawnSearchField>(action.index);
+                    s_spawnSearchField.store(s_spawnSearchField.load(std::memory_order_acquire) == field ? SpawnSearchField::None : field,
+                        std::memory_order_release);
+                }
+                break;
+            case RuntimeActionKind::UiSpawnClearSearch:
+                if (auto* line = spawnSearchLine(static_cast<SpawnSearchField>(action.index)); spawnTabActive() && line) {
+                    line->clear();
+                    syncSpawnSearchLocked();
+                }
+                break;
             case RuntimeActionKind::UiBack:
+                // Back closes the search keyboard first, then the item menu, then the tab.
+                if (spawnTabActive() && s_spawnSearchField.exchange(SpawnSearchField::None, std::memory_order_acq_rel) != SpawnSearchField::None) break;
                 if (spawnTabActive() && s_spawnBrowser.back()) break;
                 if (s_activeTab.load(std::memory_order_acquire) != ConfiguratorTab::Wheel) {
                     s_pendingNumericEdit.reset();
@@ -1203,6 +1265,32 @@ namespace rock_configurator
             ImGui::EndChild();
         }
 
+        // A search line. Clicking it opens the keyboard panel under Config, or closes it again;
+        // the X beside it clears the search.
+        void drawSpawnSearch(const char* id, const char* placeholder, SpawnSearchField field, float& scroll)
+        {
+            constexpr float kHeight = 44.0f;
+            const auto* line = spawnSearchLine(field);
+            const bool hasText = !line->text().empty();
+            const bool editing = s_spawnSearchField.load(std::memory_order_acquire) == field;
+            const float width = ImGui::GetContentRegionAvail().x - (hasText ? kHeight + 6.0f : 0.0f);
+            ImGui::PushID(id);
+            const ImVec2 start = ImGui::GetCursorScreenPos();
+            if (ImGui::InvisibleButton("field", { width, kHeight })) {
+                (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnSearch, .tab = ConfiguratorTab::Spawn, .index = static_cast<std::size_t>(field)});
+            }
+            ImGui::SetCursorScreenPos(start);
+            drawLineField(*line, width, kHeight, 22.0f, placeholder, scroll, editing);
+            if (hasText) {
+                ImGui::SameLine(0, 6);
+                ScopedFont font(devui::render::FontRole::Medium, 20);
+                if (devui::visual::button("X", { kHeight, kHeight })) {
+                    (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnClearSearch, .tab = ConfiguratorTab::Spawn, .index = static_cast<std::size_t>(field)});
+                }
+            }
+            ImGui::PopID();
+        }
+
         void drawSpawnRail()
         {
             devui::visual::caption("ITEM SOURCES");
@@ -1210,16 +1298,22 @@ namespace rock_configurator
             if (!s_spawnBrowser.indexBuilt()) {
                 ImGui::TextWrapped("%s", s_spawnBrowser.lastResult().c_str()); return;
             }
+            drawSpawnSearch("source-search", "Search mods", SpawnSearchField::Sources, s_spawnSourceScroll);
+            ImGui::Dummy({0, 8});
+            // The search stays in view while the source list scrolls under it.
+            ImGui::BeginChild("spawn-sources", {0, 0});
             ImGuiListClipper clipper;
-            clipper.Begin(static_cast<int>(s_spawnBrowser.pluginCount()));
-            while (clipper.Step()) for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
-                const auto* plugin = s_spawnBrowser.pluginAt(i);
+            clipper.Begin(static_cast<int>(s_spawnBrowser.visiblePluginCount()));
+            while (clipper.Step()) for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+                const auto index = s_spawnBrowser.visiblePluginAt(static_cast<std::size_t>(row));
+                const auto* plugin = s_spawnBrowser.pluginAt(index);
                 if (!plugin) continue;
-                ImGui::PushID(i);
-                if (navigationRow(plugin->name.c_str(), plugin->items.size(), i == s_spawnBrowser.pluginCursor()))
-                    (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnSelectPlugin, .tab = ConfiguratorTab::Spawn, .index = static_cast<std::size_t>(i)});
+                ImGui::PushID(static_cast<int>(index));
+                if (navigationRow(plugin->name.c_str(), plugin->items.size(), index == s_spawnBrowser.pluginCursor()))
+                    (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnSelectPlugin, .tab = ConfiguratorTab::Spawn, .index = index});
                 ImGui::PopID();
             }
+            ImGui::EndChild();
         }
 
         void drawSpawnBrowse()
@@ -1236,7 +1330,9 @@ namespace rock_configurator
                     (void)queueUiAction({.kind = RuntimeActionKind::UiSpawnSelectCategory, .tab = ConfiguratorTab::Spawn, .index = i}); }
                 ImGui::PopID();
             }
-            ImGui::Dummy({0, 16});
+            ImGui::Dummy({0, 10});
+            drawSpawnSearch("item-search", "Search items", SpawnSearchField::Items, s_spawnItemScroll);
+            ImGui::Dummy({0, 10});
             constexpr auto flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                 ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInnerH;
             if (ImGui::BeginTable("spawn-items", 3, flags, {0,0})) {
@@ -1534,6 +1630,53 @@ namespace rock_configurator
         }
     }
 
+    bool drawKeyboardPanel(float x, float y, float width, float height, bool backRequested) noexcept
+    {
+        std::unique_lock lock(s_runtimeMutex, std::try_to_lock);
+        if (!lock.owns_lock() || !s_panelOpen.load(std::memory_order_acquire)) {
+            return false;
+        }
+        try {
+            auto* line = keyboardLineLocked();
+            if (!line) {
+                return false;
+            }
+            if (backRequested) {
+                (void)queueUiAction({ .kind = RuntimeActionKind::UiBack });
+            }
+            ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_Always);
+            constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+            if (ImGui::Begin("PALM Keyboard##root", nullptr, flags)) {
+                const ImVec2 minimum = ImGui::GetWindowPos();
+                const ImVec2 maximum{ minimum.x + width, minimum.y + height };
+                auto* draw = ImGui::GetWindowDrawList();
+                draw->AddRectFilled(minimum, maximum, packed(devui::visual::surface()));
+                draw->AddRect({ minimum.x + 3.0f, minimum.y + 3.0f }, { maximum.x - 3.0f, maximum.y - 3.0f }, packed(accentColor(0.24f)));
+                if (s_keyboard.draw(*line)) {
+                    if (line == &s_consoleTab.line()) {
+                        s_consoleTab.submit();
+                    } else {
+                        s_spawnSearchField.store(SpawnSearchField::None, std::memory_order_release);
+                    }
+                }
+                syncSpawnSearchLocked();
+                if (s_consoleTab.hasCommands()) s_consoleCommandsPending.store(true, std::memory_order_release);
+            }
+            ImGui::End();
+            ImGui::PopStyleVar();
+            return true;
+        } catch (...) {
+            static std::atomic_bool logged = false;
+            if (!logged.exchange(true, std::memory_order_relaxed)) {
+                logger::error("PALM Config contained an exception while building the keyboard frame");
+            }
+            return false;
+        }
+    }
+
     void onFrameworkPanelFrame(
         float physicalWidth,
         panel_resize::Handle hovered,
@@ -1551,10 +1694,16 @@ namespace rock_configurator
         s_activeResizeHandle.store(active, std::memory_order_release);
     }
 
-    bool consoleTabActive() noexcept
+    bool keyboardInputActive() noexcept
     {
-        return s_panelOpen.load(std::memory_order_acquire) &&
-               s_activeTab.load(std::memory_order_acquire) == ConfiguratorTab::Console;
+        if (!s_panelOpen.load(std::memory_order_acquire)) {
+            return false;
+        }
+        switch (s_activeTab.load(std::memory_order_acquire)) {
+        case ConfiguratorTab::Console: return true;
+        case ConfiguratorTab::Spawn: return s_spawnSearchField.load(std::memory_order_acquire) != SpawnSearchField::None;
+        default: return false;
+        }
     }
 
     void serviceConsole(bool keyboardHeld, bool windowFocused, std::span<const ConsoleKeyEvent> keys)
@@ -1562,7 +1711,9 @@ namespace rock_configurator
         constexpr std::uint32_t kSelectionRefreshFrames = 30;
         s_consoleKeyboardHeld.store(keyboardHeld, std::memory_order_release);
         s_consoleWindowFocused.store(windowFocused, std::memory_order_release);
-        const bool active = consoleTabActive();
+        devui::render::SyncKeyboardPanel(keyboardInputActive());
+        const bool active = s_panelOpen.load(std::memory_order_acquire) &&
+                            s_activeTab.load(std::memory_order_acquire) == ConfiguratorTab::Console;
         if (active && ++s_consoleSelectionAge >= kSelectionRefreshFrames) {
             s_consoleSelectionAge = 0;
             s_consoleSelectedReference.store(console::selectedReference().value_or(0), std::memory_order_release);
@@ -1573,13 +1724,25 @@ namespace rock_configurator
         std::vector<std::string> commands;
         {
             std::scoped_lock lock(s_runtimeMutex);
+            auto* line = keyboardLineLocked();
             for (const auto& key : keys) {
-                if (key.character) {
-                    s_consoleTab.onCharacter(key.code);
-                } else {
-                    s_consoleTab.onKey(key.code);
+                if (line == &s_consoleTab.line()) {
+                    if (key.character) {
+                        s_consoleTab.onCharacter(key.code);
+                    } else {
+                        s_consoleTab.onKey(key.code);
+                    }
+                } else if (line) {
+                    if (key.character) {
+                        typeCharacter(*line, key.code);
+                    } else if (key.code == VK_RETURN) {
+                        s_spawnSearchField.store(SpawnSearchField::None, std::memory_order_release);
+                    } else {
+                        (void)applyEditKey(*line, key.code);
+                    }
                 }
             }
+            syncSpawnSearchLocked();
             commands = s_consoleTab.takeCommands();
         }
         // Not under the mutex: the engine prints the echo through the capture hook, and
@@ -1624,6 +1787,7 @@ namespace rock_configurator
     {
         s_panelOpening.store(false);
         s_panelOpen.store(false, std::memory_order_release);
+        s_spawnSearchField.store(SpawnSearchField::None, std::memory_order_release);
         devui::render::SetPanelOpen(false);
         invalidateQueuedRuntimeActions();
     }

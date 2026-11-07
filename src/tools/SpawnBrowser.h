@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 
@@ -22,7 +23,9 @@ namespace rock_configurator
      * holding the runtime mutex). The index holds plugin names and item names
      * by value plus raw FormIDs only, never engine pointers, so nothing here
      * can dangle across frames; live forms are re-resolved by FormID at the
-     * moment an action executes and every hop fails closed.
+     * moment an action executes and every hop fails closed. The search setters
+     * touch only presentation state and engine data never, so the keyboard panel
+     * may call them from the render thread, still under the runtime mutex.
      */
     class SpawnBrowser
     {
@@ -32,6 +35,7 @@ namespace rock_configurator
             std::uint32_t formId{ 0 };
             std::uint8_t category{ 0 };
             std::string name;
+            bool flyingBricksRound{ false };  // Defined or overridden by Flying_BRICKS.esp.
         };
 
         struct PluginRecord
@@ -64,6 +68,10 @@ namespace rock_configurator
         [[nodiscard]] bool activateMenuAction(std::size_t index, std::uint32_t expectedFormId);
         /** Right grip: back one level inside the section. Returns false when already at Browse. */
         [[nodiscard]] bool back();
+        /** Every space-separated word must appear in the name, ignoring case. The source
+         *  search narrows the source list; the item search narrows the current source and tab. */
+        void setPluginSearch(std::string_view text);
+        void setItemSearch(std::string_view text);
         /** Left grip: back to the browse/side-menu level, closing the item menu from any depth. */
         void returnToBrowse();
 
@@ -74,6 +82,12 @@ namespace rock_configurator
         // Read-only presentation access. Callers hold the configurator runtime
         // mutex; the game-thread index and menu state remain the sole owner.
         [[nodiscard]] std::size_t pluginCount() const noexcept { return _plugins.size(); }
+        /** Rows of the source list after the source search; each names a pluginAt() index. */
+        [[nodiscard]] std::size_t visiblePluginCount() const noexcept { return _visiblePlugins.size(); }
+        [[nodiscard]] std::size_t visiblePluginAt(std::size_t row) const noexcept
+        {
+            return row < _visiblePlugins.size() ? _visiblePlugins[row] : _plugins.size();
+        }
         [[nodiscard]] std::size_t pluginCursor() const noexcept { return _pluginCursor; }
         [[nodiscard]] std::size_t categoryCount() const noexcept;
         [[nodiscard]] std::size_t categoryCursor() const noexcept { return _categoryCursor; }
@@ -90,6 +104,7 @@ namespace rock_configurator
 
     private:
         void rebuildFilteredItems();
+        void rebuildVisiblePlugins();
         void openItemMenu();
         void executeMenuAction(const MenuAction& action);
         [[nodiscard]] const PluginRecord* currentPlugin() const;
@@ -100,6 +115,9 @@ namespace rock_configurator
         std::size_t _pluginCursor = 0;
         std::size_t _categoryCursor = 0;
         std::vector<std::size_t> _filteredItems;  // indices into the current plugin's items
+        std::vector<std::size_t> _visiblePlugins;  // indices into _plugins
+        std::string _pluginSearch;
+        std::string _itemSearch;
         std::size_t _itemCursor = 0;
 
         SpawnView _view = SpawnView::Browse;
