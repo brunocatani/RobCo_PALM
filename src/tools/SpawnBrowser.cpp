@@ -40,11 +40,30 @@ namespace rock_configurator
 #endif
 
         constexpr std::int32_t kAmmoSpawnCount = 100;
+        constexpr std::uint8_t kAmmoCategory = 3;
 
         [[nodiscard]] bool nameLessCaseInsensitive(const std::string& lhs, const std::string& rhs)
         {
             const auto result = _strnicmp(lhs.c_str(), rhs.c_str(), (std::min)(lhs.size(), rhs.size()) + 1);
             return result < 0;
+        }
+
+        // A mod's rounds can live in several plugins: some are its own records, others override base game forms and stay
+        // under the plugin that first defined them. This first source lists them all in one place.
+        void addAllAmmoSource(std::vector<SpawnBrowser::PluginRecord>& plugins)
+        {
+            SpawnBrowser::PluginRecord all{ .name = "All ammo" };
+            for (const auto& plugin : plugins) {
+                for (const auto& item : plugin.items) {
+                    if (item.category == kAmmoCategory) {
+                        all.items.push_back(item);
+                    }
+                }
+            }
+            std::ranges::sort(all.items, [](const SpawnBrowser::ItemRecord& lhs, const SpawnBrowser::ItemRecord& rhs) {
+                return nameLessCaseInsensitive(lhs.name, rhs.name);
+            });
+            plugins.insert(plugins.begin(), std::move(all));
         }
 
         [[nodiscard]] std::size_t stepCursor(std::size_t cursor, int direction, std::size_t size)
@@ -147,6 +166,7 @@ namespace rock_configurator
         if (!_indexBuilt) {
             _plugins = {{"Fallout4.esm", {{1,1,"10mm Pistol"},{2,1,"Combat Rifle"},{3,2,"Leather Chest Piece"},{4,3,"10mm Round"},{5,4,"Stimpak"},{6,4,"Purified Water"},{7,6,"Duct Tape"}},0},
                         {"Example Workshop.esp", {{8,1,"Custom Service Rifle"},{9,4,"Field Rations"}},1}};
+            addAllAmmoSource(_plugins);
             _indexBuilt = true;
             rebuildFilteredItems();
             _lastResult = "PREVIEW ONLY — actions do not affect the game";
@@ -243,6 +263,8 @@ namespace rock_configurator
                 return nameLessCaseInsensitive(lhs.name, rhs.name);
             });
         }
+        const auto pluginCount = _plugins.size();
+        addAllAmmoSource(_plugins);
 
         _indexBuilt = true;
         _pluginCursor = 0;
@@ -252,10 +274,10 @@ namespace rock_configurator
         rebuildFilteredItems();
 
         const auto elapsedMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-        _lastResult = std::format("Indexed {} items from {} plugins", itemCount, _plugins.size());
+        _lastResult = std::format("Indexed {} items from {} plugins", itemCount, pluginCount);
         logger::info(
-            "PALM Config spawn: indexed {} named items across {} plugins in engine load order in {:.1f} ms ({} forms skipped without an owning plugin file).",
-            itemCount, _plugins.size(), elapsedMs, skippedUnowned);
+            "PALM Config spawn: indexed {} named items, {} of them ammo, across {} plugins in engine load order in {:.1f} ms ({} forms skipped without an owning plugin file).",
+            itemCount, _plugins.front().items.size(), pluginCount, elapsedMs, skippedUnowned);
         return true;
 #endif
     }
@@ -340,12 +362,21 @@ namespace rock_configurator
         _menuActions.clear();
         _menuCursor = 0;
         _menuFormId = item->formId;
-        for (const std::int32_t count : { 1, 5, 25 }) {
-            _menuActions.push_back(MenuAction{
-                .label = std::format("ADD ×{}", count),
-                .formId = item->formId,
-                .count = count,
-            });
+        constexpr std::array<std::int32_t, 3> kItemCounts{ 1, 5, 25 };
+        constexpr std::array<std::int32_t, 4> kAmmoCounts{ 1, 25, 100, 1000 };
+        const auto addCounts = [&](const auto& counts) {
+            for (const std::int32_t count : counts) {
+                _menuActions.push_back(MenuAction{
+                    .label = std::format("ADD ×{}", count),
+                    .formId = item->formId,
+                    .count = count,
+                });
+            }
+        };
+        if (item->category == kAmmoCategory) {
+            addCounts(kAmmoCounts);
+        } else {
+            addCounts(kItemCounts);
         }
 
         // Weapons offer their base ammo as a convenience action. The ammo pointer
