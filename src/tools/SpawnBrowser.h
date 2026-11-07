@@ -35,7 +35,7 @@ namespace rock_configurator
             std::uint32_t formId{ 0 };
             std::uint8_t category{ 0 };
             std::string name;
-            bool flyingBricksRound{ false };  // Defined or overridden by Flying_BRICKS.esp.
+            bool flyingBricksRound{ false };  // A playable round Flying_BRICKS.esp defines or overrides.
         };
 
         struct PluginRecord

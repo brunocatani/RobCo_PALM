@@ -119,6 +119,15 @@ namespace rock_configurator
             return false;
         }
 
+        // Flying_BRICKS.esp also overrides vanilla's companion and workshop-teammate copies of its
+        // rounds, such as CompanionAmmo308Caliber. Those carry the AMMO Non-Playable flag (0x2) and
+        // would list a second ".308 Round"; the player's own rounds never do.
+        [[nodiscard]] bool playableAmmo(const RE::TESForm& form) noexcept
+        {
+            return form.GetFormType() == RE::ENUM_FORM_ID::kAMMO &&
+                   (static_cast<const RE::TESAmmo&>(form).data.flags & 0x2) == 0;
+        }
+
         [[nodiscard]] RE::TESBoundObject* resolveSpawnableObject(std::uint32_t formId)
         {
             auto* form = RE::TESForm::GetFormByID(formId);
@@ -294,7 +303,7 @@ namespace rock_configurator
                     .formId = formId,
                     .category = indexed.category,
                     .name = utf8SafeName(name),
-                    .flyingBricksRound = indexed.category == kAmmoCategory && definedBy(*form, "Flying_BRICKS.esp"),
+                    .flyingBricksRound = indexed.category == kAmmoCategory && playableAmmo(*form) && definedBy(*form, "Flying_BRICKS.esp"),
                 });
                 ++itemCount;
             }

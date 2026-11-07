@@ -19,7 +19,7 @@ RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM'
 
 ## Spawner
 
-- With `Flying_BRICKS.esp` loaded, the All ammo source lists only the rounds that plugin defines or overrides (`src/tools/SpawnBrowser.cpp`); otherwise every named ammo form.
+- With `Flying_BRICKS.esp` loaded, the All ammo source lists only the playable rounds that plugin defines or overrides (`src/tools/SpawnBrowser.cpp`), so vanilla's non-playable companion copies it also overrides stay out; otherwise every named ammo form.
 
 ## Public API
 
