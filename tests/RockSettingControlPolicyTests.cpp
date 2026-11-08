@@ -26,7 +26,7 @@ int main()
     using namespace rock_configurator::setting_control;
 
     for (const auto value : {"1", "2", "3"}) {
-        const auto grabMode = build(ValueType::Integer, "iWeaponGrabMode", value, "");
+        const auto grabMode = build(ValueType::Integer, "WeaponGrabMode", value, "");
         expect(grabMode.kind == Kind::Dropdown && grabMode.options.size() == 3,
             "weapon grab mode has three selectable modes");
         if (grabMode.options.size() == 3) {
@@ -35,36 +35,36 @@ int main()
         }
     }
 
-    const auto boolean = build(ValueType::Boolean, "bGrabEnabled", "true", "");
+    const auto boolean = build(ValueType::Boolean, "GrabEnabled", "true", "");
     expect(boolean.kind == Kind::Checkbox,
         "every ROCK boolean is presented as a checkbox");
 
     const auto bounded = build(
-        ValueType::Float, "fManualScopeHoldSeconds", "0.30", "");
+        ValueType::Float, "ManualScopeHoldSeconds", "0.30", "");
     expect(bounded.kind == Kind::Numeric && bounded.bounded &&
            near(bounded.minimum, 0.05) && near(bounded.maximum, 2.0),
         "audited ROCK bounds produce a native slider");
 
     const auto unbounded = build(
-        ValueType::Float, "fExperimentalRecovery", "2.5", "");
+        ValueType::Float, "ExperimentalRecovery", "2.5", "");
     expect(unbounded.kind == Kind::Numeric && !unbounded.bounded &&
            unbounded.step > 0.0,
         "numeric values without authoritative bounds remain draggable and fine-stepped");
 
     const auto normalized = build(
-        ValueType::Float, "fContactStrength", "0.75", "");
+        ValueType::Float, "ContactStrength", "0.75", "");
     expect(normalized.kind == Kind::Numeric && normalized.bounded &&
            near(normalized.minimum, 0.0) && near(normalized.maximum, 1.0),
         "normalized strength values use a zero-to-one slider");
 
     const auto angle = build(
-        ValueType::Float, "fCalibrationYawDegrees", "0.0", "");
+        ValueType::Float, "CalibrationYawDegrees", "0.0", "");
     expect(angle.bounded && near(angle.minimum, -180.0) && near(angle.maximum, 180.0),
         "signed angle controls expose the full rotation range");
 
     const auto described = build(
         ValueType::Integer,
-        "iGrabContactQualityMode",
+        "GrabContactQualityMode",
         "1",
         "0 = permissive, 1 = hybrid patch and finger evidence, 2 = strict grouped-finger debug.");
     expect(described.kind == Kind::Dropdown && described.options.size() == 3 &&
@@ -74,21 +74,31 @@ int main()
 
     const auto incomplete = build(
         ValueType::Integer,
-        "iFutureMode",
+        "FutureMode",
         "3",
         "0 = minimal, 1 = standard, higher modes may be supported.");
     expect(incomplete.kind == Kind::Numeric,
         "an incomplete description cannot hide the current numeric mode in a dropdown");
 
     const auto color = build(
-        ValueType::String, "sHighlightColor", "blue", "");
+        ValueType::String, "HighlightColor", "blue", "");
     expect(color.kind == Kind::Dropdown && color.options.size() == 4,
         "the finite ROCK highlight palette is a dropdown");
 
     const auto freeText = build(
-        ValueType::String, "sLogPattern", "%Y [%l] %v", "");
+        ValueType::String, "LogPattern", "%Y [%l] %v", "");
     expect(freeText.kind == Kind::Text,
         "genuinely free-form ROCK strings remain text controls");
+
+    // ROCK's button layout lives in the ControllerInput.Left/Right tables.
+    using rock_configurator::RpsMod;
+    const auto leftButton = build(ValueType::String, "Trigger", "trigger", "", RpsMod::Rock, "ControllerInput.Left");
+    const auto rightButton = build(ValueType::String, "A", "a", "", RpsMod::Rock, "ControllerInput.Right");
+    expect(leftButton.kind == Kind::Dropdown && rightButton.kind == Kind::Dropdown &&
+           leftButton.options.size() > 2 && leftButton.options[2].value == "x" && rightButton.options[2].value == "a",
+        "button layout rows are per-hand dropdowns");
+    expect(build(ValueType::String, "Trigger", "trigger", "", RpsMod::Rock, "Grabbing").kind == Kind::Text,
+        "only the ControllerInput tables are button layouts");
 
     expect(near(snapNumeric(bounded, 0.333), 0.33),
         "slider commits snap to their fine-tuning step");

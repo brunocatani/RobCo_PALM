@@ -41,6 +41,10 @@ namespace rock_configurator
         bool numericValueValid{ false };
         std::optional<std::size_t> selectedOptionIndex;
         std::size_t lineIndex{ 0 };
+        // One row of a ROCK Float3 setting ("[x, y, z]"): which component it
+        // edits and its name (X, Y, Z or Pitch, Yaw, Roll). Writes send all three.
+        std::optional<std::size_t> vectorComponent;
+        std::string componentLabel;
     };
 
     struct SettingChangeResult

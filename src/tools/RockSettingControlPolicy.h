@@ -45,7 +45,8 @@ namespace rock_configurator::setting_control
         std::string_view key,
         std::string_view value,
         std::string_view description,
-        RpsMod mod = RpsMod::Rock);
+        RpsMod mod = RpsMod::Rock,
+        std::string_view section = {});
 
     [[nodiscard]] double snapNumeric(const Spec& spec, double value) noexcept;
     [[nodiscard]] std::string formatFloat(double value, double step);

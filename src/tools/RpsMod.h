@@ -14,9 +14,9 @@ struct RpsModInfo {
  const char* applyHint;
 };
 inline constexpr std::array kRpsMods{
- RpsModInfo{RpsMod::Rock,"ROCK",L"ROCK.dll","Mods_Config/ROCK","ROCK.ini","Consumer options are saved to ROCK.ini"},
+ RpsModInfo{RpsMod::Rock,"ROCK",L"ROCK.dll","Mods_Config/ROCK","ROCK.toml","Consumer options are saved to ROCK.toml"},
  RpsModInfo{RpsMod::Paper,"PAPER",L"PAPER.dll","Mods_Config/PAPER","PAPER.ini","Changes save to PAPER.ini and apply live; cache size limits apply next launch"},
- RpsModInfo{RpsMod::RockDeveloper,"ROCK Dev",L"ROCK.dll","Mods_Config/ROCK","ROCK_Developer.ini","Only changes from defaults are saved to ROCK_Developer.ini"},
+ RpsModInfo{RpsMod::RockDeveloper,"ROCK Dev",L"ROCK.dll","Mods_Config/ROCK","ROCK_Developer.toml","Only changes from defaults are saved to ROCK_Developer.toml"},
  RpsModInfo{RpsMod::Csah,"CSAH",L"CSAH.dll","Mods_Config/CSAH","CSAH.ini","Changes apply through CSAH's watcher; controls marked Restart apply next launch"},
  RpsModInfo{RpsMod::Diamond,"DIAMOND",L"DIAMOND.dll","Mods_Config/DIAMOND","DIAMOND.ini","PouchUI moves and rotates the pouch indicator. Enable Show grab zone boundary to preview while adjusting. Changes apply immediately and save to DIAMOND.ini"},
  RpsModInfo{RpsMod::Emitters,"Emitters",L"ROCK_Emitters.dll","Mods_Config/ROCK_Emitters","ROCK_Emitters.ini","Changes save to ROCK_Emitters.ini and apply live within about 250 ms"},

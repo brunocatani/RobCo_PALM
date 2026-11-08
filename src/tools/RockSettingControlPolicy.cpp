@@ -25,122 +25,114 @@ namespace rock_configurator::setting_control
         };
 
         constexpr auto kNumericRanges = std::to_array<NumericRange>({
-            { "fFiringGripProximitySupportRadius", 0.25, 30.0 },
-            { "fForceGrabAttachSettleSeconds", 0.0, 1.0 },
-            { "fGrabEffectiveMotorMassFloor", 0.0, 100.0 },
-            { "fGrabHandLerpMinDistance", 0.0, 80.0 },
-            { "fGrabHandLerpTimeMin", 0.0, 1.0 },
-            { "fGrabHandReturnMinAngleDegrees", 0.0, 180.0 },
-            { "fGrabHandReturnMinDistance", 0.0, 80.0 },
-            { "fGrabHandReturnTimeMin", 0.0, 1.0 },
-            { "fGrabHapticBaseIntensity", 0.0, 1.0 },
-            { "fGrabHapticDurationSeconds", 0.0, 0.2 },
-            { "fGrabHapticMassExponent", 0.0, 2.0 },
-            { "fGrabHapticMassScale", 0.0, 1.0 },
-            { "fGrabHeldMassMovementFadeOutSeconds", 0.0, 60.0 },
-            { "fGrabHeldMassMovementMassExponent", 0.0, 4.0 },
-            { "fGrabHeldMassMovementMassProportion", 0.0, 10.0 },
-            { "fGrabHeldMassMovementMaxReduction", 0.0, 99.0 },
-            { "fGrabLooseWeaponSharedConstraintAngularDampingMultiplier", 0.05, 4.0 },
-            { "fGrabLooseWeaponSharedConstraintAngularForceMultiplier", 0.05, 8.0 },
-            { "fGrabLooseWeaponSharedConstraintAngularRecoveryMultiplier", 0.05, 4.0 },
-            { "fGrabLooseWeaponSharedConstraintAngularTauMultiplier", 0.05, 4.0 },
-            { "fGrabLooseWeaponSharedConstraintCollisionTauMultiplier", 0.05, 4.0 },
-            { "fGrabLooseWeaponSharedConstraintLinearDampingMultiplier", 0.05, 4.0 },
-            { "fGrabLooseWeaponSharedConstraintLinearRecoveryMultiplier", 0.05, 4.0 },
-            { "fGrabLooseWeaponSharedConstraintLinearTauMultiplier", 0.05, 4.0 },
-            { "fGrabLooseWeaponSharedConstraintMaxForceMultiplier", 0.05, 8.0 },
+            { "FiringGripProximitySupportRadius", 0.25, 30.0 },
+            { "ForceGrabAttachSettleSeconds", 0.0, 1.0 },
+            { "GrabEffectiveMotorMassFloor", 0.0, 100.0 },
+            { "GrabHandLerpMinDistance", 0.0, 80.0 },
+            { "GrabHandLerpTimeMin", 0.0, 1.0 },
+            { "GrabHandReturnMinAngleDegrees", 0.0, 180.0 },
+            { "GrabHandReturnMinDistance", 0.0, 80.0 },
+            { "GrabHandReturnTimeMin", 0.0, 1.0 },
+            { "GrabHapticBaseIntensity", 0.0, 1.0 },
+            { "GrabHapticDurationSeconds", 0.0, 0.2 },
+            { "GrabHapticMassExponent", 0.0, 2.0 },
+            { "GrabHapticMassScale", 0.0, 1.0 },
+            { "GrabHeldMassMovementFadeOutSeconds", 0.0, 60.0 },
+            { "GrabHeldMassMovementMassExponent", 0.0, 4.0 },
+            { "GrabHeldMassMovementMassProportion", 0.0, 10.0 },
+            { "GrabHeldMassMovementMaxReduction", 0.0, 99.0 },
+            { "GrabLooseWeaponSharedConstraintAngularDampingMultiplier", 0.05, 4.0 },
+            { "GrabLooseWeaponSharedConstraintAngularForceMultiplier", 0.05, 8.0 },
+            { "GrabLooseWeaponSharedConstraintAngularRecoveryMultiplier", 0.05, 4.0 },
+            { "GrabLooseWeaponSharedConstraintAngularTauMultiplier", 0.05, 4.0 },
+            { "GrabLooseWeaponSharedConstraintCollisionTauMultiplier", 0.05, 4.0 },
+            { "GrabLooseWeaponSharedConstraintLinearDampingMultiplier", 0.05, 4.0 },
+            { "GrabLooseWeaponSharedConstraintLinearRecoveryMultiplier", 0.05, 4.0 },
+            { "GrabLooseWeaponSharedConstraintLinearTauMultiplier", 0.05, 4.0 },
+            { "GrabLooseWeaponSharedConstraintMaxForceMultiplier", 0.05, 8.0 },
             { "fGrabLowContactSupportAngularScale", 0.05, 1.0 },
             { "fGrabMinAngularAuthorityScale", 0.05, 1.0 },
-            { "fGrabMinInertia", 0.0001, 100.0 },
+            { "GrabMinInertia", 0.0001, 100.0 },
             { "fGrabPhysicsRateForceScaleExponent", 0.0, 2.0 },
             { "fGrabPhysicsRateMinForceScale", 0.1, 2.0 },
             { "fGrabPhysicsRateReferenceHz", 1.0, 240.0 },
-            { "fGrabPinchDetectionAxisBlend", 0.0, 1.0 },
-            { "fGrabPinchMaxFingerGapGameUnits", 0.1, 80.0 },
-            { "fGrabPinchMaxPocketDistanceGameUnits", 0.1, 80.0 },
-            { "fGrabPinchMaxVolumeCubicGameUnits", 0.001, 1000000.0 },
-            { "fGrabPinchMinFingerGapGameUnits", 0.0, 40.0 },
-            { "fGrabPinchOtherFingerCurlValue", 0.0, 1.0 },
-            { "fGrabPinchThumbIndexMaxOpenValue", 0.0, 1.0 },
+            { "GrabPinchDetectionAxisBlend", 0.0, 1.0 },
+            { "GrabPinchMaxFingerGapGameUnits", 0.1, 80.0 },
+            { "GrabPinchMaxPocketDistanceGameUnits", 0.1, 80.0 },
+            { "GrabPinchMaxVolumeCubicGameUnits", 0.001, 1000000.0 },
+            { "GrabPinchMinFingerGapGameUnits", 0.0, 40.0 },
+            { "GrabPinchOtherFingerCurlValue", 0.0, 1.0 },
+            { "GrabPinchThumbIndexMaxOpenValue", 0.0, 1.0 },
             { "fGrabPositionOnlyAngularScale", 0.05, 1.0 },
             { "fGrabSmallObjectAngularScale", 0.05, 1.0 },
             { "fGrabSmallObjectReferenceLeverGameUnits", 1.0, 120.0 },
             { "fGrabWeakPivotTwistScale", 0.0, 1.0 },
-            { "fHeldImpactHapticBaseIntensity", 0.0, 1.0 },
-            { "fHeldImpactHapticCooldownSeconds", 0.0, 1.0 },
-            { "fHeldImpactHapticDampedMultiplier", 0.0, 1.0 },
-            { "fHeldImpactHapticDurationSeconds", 0.0, 0.2 },
-            { "fHeldImpactHapticMassExponent", 0.0, 2.0 },
-            { "fHeldImpactHapticMassScale", 0.0, 1.0 },
-            { "fHeldImpactHapticMinSpeedGameUnits", 0.0, 1000.0 },
-            { "fHeldImpactHapticSpeedScale", 0.0, 1.0 },
-            { "fManualScopeHoldSeconds", 0.05, 2.0 },
-            { "fMouthConsumeCandidateHapticIntervalSeconds", 0.0, 2.0 },
-            { "fMouthConsumeCommitHapticDurationSeconds", 0.0, 0.2 },
-            { "fMouthConsumeCommitHapticIntensity", 0.0, 1.0 },
-            { "fMouthConsumeEnterPaddingGameUnits", 0.0, 40.0 },
-            { "fMouthConsumeExitPaddingGameUnits", 0.0, 60.0 },
-            { "fMouthConsumeMaxSpeedGameUnitsPerSecond", 0.0, 1000.0 },
-            { "fMouthConsumeMinDwellSeconds", 0.0, 1.0 },
-            { "fMouthConsumeRadiusGameUnits", 1.0, 80.0 },
-            { "fNativeScopeFiringGripFallbackOffsetXGameUnits", -100.0, 100.0 },
-            { "fNativeScopeFiringGripFallbackOffsetYGameUnits", -100.0, 100.0 },
-            { "fNativeScopeFiringGripFallbackOffsetZGameUnits", -100.0, 100.0 },
-            { "fNativeScopeFiringGripFallbackPitchDegrees", -180.0, 180.0 },
-            { "fNativeScopeFiringGripFallbackRollDegrees", -180.0, 180.0 },
-            { "fNativeScopeFiringGripFallbackYawDegrees", -180.0, 180.0 },
-            { "fNativeScopeOverlayOffsetXGameUnits", -100.0, 100.0 },
-            { "fNativeScopeOverlayOffsetYGameUnits", -100.0, 100.0 },
-            { "fNativeScopeOverlayOffsetZGameUnits", -100.0, 100.0 },
-            { "fNativeScopeOverlayPitchDegrees", -180.0, 180.0 },
-            { "fNativeScopeOverlayRollDegrees", -180.0, 180.0 },
-            { "fNativeScopeOverlayYawDegrees", -180.0, 180.0 },
-            { "fPullCatchHapticIntensity", 0.0, 1.0 },
-            { "fPullStartHapticIntensity", 0.0, 1.0 },
-            { "fRealisticGrenadeFuseSeconds", 0.0, 30.0 },
-            { "fSelectionLockHapticIntensity", 0.0, 1.0 },
-            { "fSelectionLockReleaseHapticDurationSeconds", 0.0, 0.2 },
-            { "fSelectionLockReleaseHapticIntensity", 0.0, 1.0 },
-            { "fShoulderStashCandidateHapticIntervalSeconds", 0.0, 2.0 },
-            { "fShoulderStashCommitHapticIntensity", 0.0, 1.0 },
-            { "fShoulderStashEnterPaddingGameUnits", 0.0, 40.0 },
-            { "fShoulderStashExitPaddingGameUnits", 0.0, 60.0 },
-            { "fShoulderStashHmdBackRadiusGameUnits", 1.0, 80.0 },
+            { "HeldImpactHapticBaseIntensity", 0.0, 1.0 },
+            { "HeldImpactHapticCooldownSeconds", 0.0, 1.0 },
+            { "HeldImpactHapticDampedMultiplier", 0.0, 1.0 },
+            { "HeldImpactHapticDurationSeconds", 0.0, 0.2 },
+            { "HeldImpactHapticMassExponent", 0.0, 2.0 },
+            { "HeldImpactHapticMassScale", 0.0, 1.0 },
+            { "HeldImpactHapticMinSpeedGameUnits", 0.0, 1000.0 },
+            { "HeldImpactHapticSpeedScale", 0.0, 1.0 },
+            { "ManualScopeHoldSeconds", 0.05, 2.0 },
+            { "MouthConsumeCandidateHapticIntervalSeconds", 0.0, 2.0 },
+            { "MouthConsumeCommitHapticDurationSeconds", 0.0, 0.2 },
+            { "MouthConsumeCommitHapticIntensity", 0.0, 1.0 },
+            { "MouthConsumeEnterPaddingGameUnits", 0.0, 40.0 },
+            { "MouthConsumeExitPaddingGameUnits", 0.0, 60.0 },
+            { "MouthConsumeMaxSpeedGameUnitsPerSecond", 0.0, 1000.0 },
+            { "MouthConsumeMinDwellSeconds", 0.0, 1.0 },
+            { "MouthConsumeRadiusGameUnits", 1.0, 80.0 },
+            { "NativeScopeFiringGripFallbackOffsetGameUnits", -100.0, 100.0 },
+            { "NativeScopeFiringGripFallbackRotationDegrees", -180.0, 180.0 },
+            { "NativeScopeOverlayOffsetGameUnits", -100.0, 100.0 },
+            { "NativeScopeOverlayRotationDegrees", -180.0, 180.0 },
+            { "PullCatchHapticIntensity", 0.0, 1.0 },
+            { "PullStartHapticIntensity", 0.0, 1.0 },
+            { "RealisticGrenadeFuseSeconds", 0.0, 30.0 },
+            { "SelectionLockHapticIntensity", 0.0, 1.0 },
+            { "SelectionLockReleaseHapticDurationSeconds", 0.0, 0.2 },
+            { "SelectionLockReleaseHapticIntensity", 0.0, 1.0 },
+            { "ShoulderStashCandidateHapticIntervalSeconds", 0.0, 2.0 },
+            { "ShoulderStashCommitHapticIntensity", 0.0, 1.0 },
+            { "ShoulderStashEnterPaddingGameUnits", 0.0, 40.0 },
+            { "ShoulderStashExitPaddingGameUnits", 0.0, 60.0 },
+            { "ShoulderStashHmdBackRadiusGameUnits", 1.0, 80.0 },
             { "fShoulderStashMaxSpeedGameUnitsPerSecond", 0.0, 1000.0 },
             { "fShoulderStashMinDwellSeconds", 0.0, 1.0 },
-            { "fSurfaceGrabHapticDurationSeconds", 0.0, 0.2 },
-            { "fSurfaceGrabHapticIntensity", 0.0, 1.0 },
-            { "fWeaponInteractionTouchRadius", 0.25, 6.0 },
-            { "fWeaponSupportGripHandLerpMinDistance", 0.0, 80.0 },
-            { "fWeaponSupportGripHandLerpTimeMin", 0.0, 1.0 },
+            { "SurfaceGrabHapticDurationSeconds", 0.0, 0.2 },
+            { "SurfaceGrabHapticIntensity", 0.0, 1.0 },
+            { "WeaponInteractionTouchRadius", 0.25, 6.0 },
+            { "WeaponSupportGripHandLerpMinDistance", 0.0, 80.0 },
+            { "WeaponSupportGripHandLerpTimeMin", 0.0, 1.0 },
         });
 
         constexpr auto kIntegerRanges = std::to_array<NumericRange>({
-            { "iHavokTimingFixMaxSubsteps", 1.0, 6.0 },
-            { "iSurfaceMeshGrabMaxTriangles", 256.0, 100000.0 },
+            { "HavokTimingFixMaxSubsteps", 1.0, 6.0 },
+            { "SurfaceMeshGrabMaxTriangles", 256.0, 100000.0 },
             { "iSurfaceMeshGrabMaxPatchTriangles", 64.0, 2048.0 },
             { "iGrabMinFingerContactGroups", 1.0, 5.0 },
             { "iGrabContactPatchProbeCount", 1.0, 9.0 },
-            { "iDebugMaxHandBoneBodiesDrawn", 0.0, 48.0 },
-            { "iDebugMaxBodyBoneBodiesDrawn", 0.0, 64.0 },
-            { "iDebugMaxShapeCapturesPerFrame", 0.0, 32.0 },
-            { "iDebugMaxConvexSupportVertices", 1.0, 32.0 },
-            { "iDebugMaxCompoundChildren", 1.0, 1024.0 },
-            { "iDebugMaxCompoundDepth", 1.0, 8.0 },
-            { "iDebugMaxShapeQueuedJobs", 0.0, 256.0 },
-            { "iDebugMaxShapeCompletedJobs", 0.0, 256.0 },
-            { "iDebugMaxShapeUploadsPerFrame", 0.0, 16.0 },
-            { "iDebugMaxShapeCacheEntries", 16.0, 4096.0 },
-            { "iDebugMaxShapeCacheBytes", 1048576.0, 536870912.0 },
-            { "iDebugMaxBodyInstances", 0.0, 171.0 },
-            { "iDebugMaxLineVertices", 0.0, 65536.0 },
+            { "DebugMaxHandBoneBodiesDrawn", 0.0, 48.0 },
+            { "DebugMaxBodyBoneBodiesDrawn", 0.0, 64.0 },
+            { "DebugMaxShapeCapturesPerFrame", 0.0, 32.0 },
+            { "DebugMaxConvexSupportVertices", 1.0, 32.0 },
+            { "DebugMaxCompoundChildren", 1.0, 1024.0 },
+            { "DebugMaxCompoundDepth", 1.0, 8.0 },
+            { "DebugMaxShapeQueuedJobs", 0.0, 256.0 },
+            { "DebugMaxShapeCompletedJobs", 0.0, 256.0 },
+            { "DebugMaxShapeUploadsPerFrame", 0.0, 16.0 },
+            { "DebugMaxShapeCacheEntries", 16.0, 4096.0 },
+            { "DebugMaxShapeCacheBytes", 1048576.0, 536870912.0 },
+            { "DebugMaxBodyInstances", 0.0, 171.0 },
+            { "DebugMaxLineVertices", 0.0, 65536.0 },
             { "iDebugMaxTextVertices", 0.0, 131072.0 },
-            { "iDebugMaxSkeletonBonesDrawn", 0.0, 768.0 },
-            { "iDebugMaxSkeletonBoneAxesDrawn", 0.0, 768.0 },
-            { "iLogSampleMilliseconds", 0.0, 60000.0 },
-            { "iPerformanceProfilerLogIntervalFrames", 30.0, 54000.0 },
-            { "iPerformanceProfilerWarmupFrames", 0.0, 54000.0 },
+            { "DebugMaxSkeletonBonesDrawn", 0.0, 768.0 },
+            { "DebugMaxSkeletonBoneAxesDrawn", 0.0, 768.0 },
+            { "LogSampleMilliseconds", 0.0, 60000.0 },
+            { "PerformanceProfilerLogIntervalFrames", 30.0, 54000.0 },
+            { "PerformanceProfilerWarmupFrames", 0.0, 54000.0 },
             { "iRightWeaponReadyButtonID", 0.0, 64.0 },
             { "iWeaponCollisionGroupingMode", 0.0, 3.0 },
             { "iWeaponCollisionVisualStabilizationFrames", 0.0, 60.0 },
@@ -276,11 +268,12 @@ namespace rock_configurator::setting_control
         }
 
         [[nodiscard]] std::optional<Spec> exactDropdown(
+            std::string_view section,
             std::string_view key,
             std::string_view currentValue,
             std::string_view description)
         {
-            if (key == "iLogLevel") {
+            if (key == "LogLevel") {
                 return dropdown({
                     { "0", "0 — Trace" },
                     { "1", "1 — Debug" },
@@ -291,14 +284,14 @@ namespace rock_configurator::setting_control
                     { "6", "6 — Off" },
                 });
             }
-            if (key == "iWeaponGrabMode") {
+            if (key == "WeaponGrabMode") {
                 return dropdown({
                     { "1", "1 — Toggle both grips" },
                     { "2", "2 — Toggle firing grip only" },
                     { "3", "3 — Hold both grips (full immersive)" },
                 });
             }
-            if (key == "iHighlightIntensityMode") {
+            if (key == "HighlightIntensityMode") {
                 return dropdown({
                     { "1", "1 — 40%" },
                     { "2", "2 — 60%" },
@@ -306,7 +299,7 @@ namespace rock_configurator::setting_control
                     { "4", "4 — 100%" },
                 });
             }
-            if (key == "sHighlightColor") {
+            if (key == "HighlightColor") {
                 return dropdown({
                     { "red", "Red" },
                     { "blue", "Blue" },
@@ -314,15 +307,15 @@ namespace rock_configurator::setting_control
                     { "white", "White" },
                 });
             }
-            if (key == "sDefaultHand") {
+            if (key == "DefaultHand") {
                 return dropdown({
                     { "right", "Right" },
                     { "left", "Left" },
                 });
             }
-            // ROCK [Controls] button layout: the physical input behind each ROCK button.
-            if ((key.starts_with("sLeft") || key.starts_with("sRight")) && key.ends_with("Button")) {
-                const bool left = key.starts_with("sLeft");
+            // ROCK button layout: the physical input behind each ROCK button.
+            if (section == "ControllerInput.Left" || section == "ControllerInput.Right") {
+                const bool left = section == "ControllerInput.Left";
                 return dropdown({
                     { "trigger", "Trigger" },
                     { "grip", "Grip" },
@@ -340,7 +333,7 @@ namespace rock_configurator::setting_control
                     { "none", "None" },
                 });
             }
-            if (key == "iDebugSkeletonBoneMode") {
+            if (key == "DebugSkeletonBoneMode") {
                 return dropdown({
                     { "0", "Mode 0" },
                     { "1", "Mode 1" },
@@ -348,7 +341,7 @@ namespace rock_configurator::setting_control
                     { "3", "Mode 3" },
                 });
             }
-            if (key == "iDebugSkeletonBoneSource") {
+            if (key == "DebugSkeletonBoneSource") {
                 return dropdown({
                     { "1", "Source 1" },
                     { "2", "Source 2" },
@@ -425,7 +418,8 @@ namespace rock_configurator::setting_control
         std::string_view key,
         std::string_view value,
         std::string_view description,
-        RpsMod mod)
+        RpsMod mod,
+        std::string_view section)
     {
         if(isScissorsConfiguration(mod))for(const auto& number:scissors::configuration::kNumbers)if(key==number.key)
             return {.kind=Kind::Numeric,.bounded=true,.minimum=number.minimum,.maximum=number.maximum,.step=number.step};
@@ -453,13 +447,13 @@ namespace rock_configurator::setting_control
             return { .kind = Kind::Checkbox };
         }
         if (type == ValueType::String) {
-            if (const auto exact = exactDropdown(key, value, description)) {
+            if (const auto exact = exactDropdown(section, key, value, description)) {
                 return *exact;
             }
             return { .kind = Kind::Text };
         }
         if (type == ValueType::Integer) {
-            if (const auto exact = exactDropdown(key, value, description)) {
+            if (const auto exact = exactDropdown(section, key, value, description)) {
                 return *exact;
             }
         }

@@ -135,6 +135,28 @@ namespace rock_configurator
             return setting_control::ValueType::String;
         }
 
+        // ROCK writes Float3 values as "[x, y, z]".
+        [[nodiscard]] std::optional<std::array<std::string, 3>> splitFloat3(std::string_view text)
+        {
+            const auto trimmed = IniSettingsStore::trim(text);
+            std::string_view value = trimmed;
+            if (value.size() < 2 || value.front() != '[' || value.back() != ']')
+                return std::nullopt;
+            value = value.substr(1, value.size() - 2);
+            std::array<std::string, 3> result;
+            for (std::size_t index = 0; index < result.size(); ++index) {
+                const auto comma = value.find(',');
+                if ((comma == std::string_view::npos) != (index + 1 == result.size()))
+                    return std::nullopt;
+                result[index] = IniSettingsStore::trim(value.substr(0, comma));
+                double parsed = 0.0;
+                if (!parseFloat(result[index], parsed))
+                    return std::nullopt;
+                value = comma == std::string_view::npos ? std::string_view{} : value.substr(comma + 1);
+            }
+            return result;
+        }
+
         [[nodiscard]] std::optional<std::string> normalizeValueForSetting(
             const SettingRecord& setting,
             std::string_view rawValue,
@@ -226,7 +248,7 @@ namespace rock_configurator
                 controlValueType(setting.type),
                 setting.key,
                 setting.value,
-                setting.description, _mod);
+                setting.description, _mod, setting.section);
         }
         if (setting.type == SettingType::Integer) {
             long long value = 0;
@@ -307,6 +329,34 @@ namespace rock_configurator
                 case rock::api::configuration::ValueType::Integer: setting.type = SettingType::Integer; break;
                 case rock::api::configuration::ValueType::Float: setting.type = SettingType::Float; break;
                 case rock::api::configuration::ValueType::String: setting.type = SettingType::String; break;
+                case rock::api::configuration::ValueType::Float3: {
+                    // One numeric row per component; a write sends the whole list.
+                    const auto values = splitFloat3(setting.value);
+                    const auto defaults = splitFloat3(setting.defaultValue);
+                    if (!values || !defaults) {
+                        snapshot.failed = true;
+                        return;
+                    }
+                    static constexpr std::array<const char*, 3> kAxes{ "X", "Y", "Z" };
+                    static constexpr std::array<const char*, 3> kAngles{ "Pitch", "Yaw", "Roll" };
+                    const auto& names = setting.key.ends_with("RotationDegrees") ? kAngles : kAxes;
+                    for (std::size_t component = 0; component < names.size(); ++component) {
+                        SettingRecord row = setting;
+                        row.type = SettingType::Float;
+                        row.vectorComponent = component;
+                        row.componentLabel = names[component];
+                        row.id = setting.id + "." + names[component];
+                        row.value = (*values)[component];
+                        row.defaultValue = (*defaults)[component];
+                        row.overridden = row.value != row.defaultValue;
+                        store.refreshControl(row);
+                        snapshot.settings.push_back(std::move(row));
+                    }
+                    return;
+                }
+                default:
+                    snapshot.failed = true;
+                    return;
                 }
                 store.refreshControl(setting);
                 snapshot.settings.push_back(std::move(setting));
@@ -813,9 +863,26 @@ namespace rock_configurator
         }
         if (setting.fromRockApi) {
 #ifndef WHEEL_DESKTOP_PREVIEW
+            // A Float3 row writes the whole "[x, y, z]" list with its siblings' current values.
+            std::string providerValue = *normalizedValue;
+            if (setting.vectorComponent) {
+                std::array<std::string, 3> components;
+                std::size_t found = 0;
+                for (const auto& sibling : _settings) {
+                    if (sibling.vectorComponent && sibling.section == setting.section && sibling.key == setting.key &&
+                        *sibling.vectorComponent < components.size()) {
+                        components[*sibling.vectorComponent] = sibling.value;
+                        ++found;
+                    }
+                }
+                if (found != components.size())
+                    return { .message = "vector setting is incomplete", .setting = setting };
+                components[*setting.vectorComponent] = *normalizedValue;
+                providerValue = std::format("[{}, {}, {}]", components[0], components[1], components[2]);
+            }
             std::array<char, 512> error{};
             _lastProviderStatus=_configurationApi ? _configurationApi->setValue(_configurationOwner,rockGroup(), setting.section.c_str(),
-                    setting.key.c_str(), normalizedValue->c_str(), error.data(), static_cast<std::uint32_t>(error.size())) : rock::api::Status::NotReady;
+                    setting.key.c_str(), providerValue.c_str(), error.data(), static_cast<std::uint32_t>(error.size())) : rock::api::Status::NotReady;
             if (_lastProviderStatus!=rock::api::Status::Ok) {
                 _lastError = error[0] ? error.data() : "ROCK configuration write failed";
                 return { .changed = false, .saved = false, .message = _lastError, .setting = setting };

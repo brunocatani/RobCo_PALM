@@ -1026,7 +1026,10 @@ namespace rock_configurator
             {
                 ScopedFont font(devui::render::FontRole::Medium, 25);
                 if (!setting.label.empty()) ImGui::TextUnformatted(setting.label.c_str());
-                else {
+                else if (!setting.componentLabel.empty()) {
+                    const devui::visual::ReadableLabel label(setting.key, true);
+                    ImGui::Text("%s %s", label.text.data(), setting.componentLabel.c_str());
+                } else {
                     const devui::visual::ReadableLabel label(setting.key, true);
                     ImGui::TextUnformatted(label.text.data());
                 }
