@@ -97,31 +97,31 @@ int main()
         "unbounded numeric commits retain fine adjustment");
 
     const auto paperPath = directory / "PAPER.ini";
-    const auto scissorsPath = directory / "SCISSORS.ini";
+    const auto emittersPath = directory / "ROCK_Emitters.ini";
     {
         std::ofstream paper(paperPath);
         paper << "[Main]\nbEnabled = true\nfContactIntensity = 0.5\n"
               << "[DevelopmentCapture]\nsMaximumMode = User\n[WeaponMotionCache]\nsAccess = Off\n";
-        std::ofstream scissors(scissorsPath);
-        scissors << "; untouched sibling\n[Main]\nbEnabled = true\nfContactIntensity = 0.5\n";
+        std::ofstream emitters(emittersPath);
+        emitters << "; untouched sibling\n[Main]\nbEnabled = true\nfContactIntensity = 0.5\n";
     }
-    const auto scissorsBefore = readAll(scissorsPath);
+    const auto emittersBefore = readAll(emittersPath);
     rock_configurator::IniSettingsStore paper(paperPath, rock_configurator::RpsMod::Paper);
-    rock_configurator::IniSettingsStore scissors(scissorsPath, rock_configurator::RpsMod::Scissors);
-    expect(paper.load() && scissors.load(), "each mod loads its own INI");
+    rock_configurator::IniSettingsStore emitters(emittersPath, rock_configurator::RpsMod::Emitters);
+    expect(paper.load() && emitters.load(), "each mod loads its own INI");
     expect(paper.settings()[0].control.kind == Kind::Checkbox, "PAPER boolean remains a checkbox");
-    expect(!paper.settings()[1].control.bounded && !scissors.settings()[1].control.bounded,
+    expect(!paper.settings()[1].control.bounded && !emitters.settings()[1].control.bounded,
         "ROCK-specific ranges cannot constrain another mod's matching key");
     expect(paper.setBooleanByIndex(0, false).saved, "PAPER checkbox writes to its own file");
     expect(paper.setOptionByIndex(2, 2).saved && paper.settings()[2].value == "Harvest",
         "PAPER development modes use supported values");
     expect(paper.setOptionByIndex(3, 2).saved && paper.settings()[3].value == "ReadWrite",
         "PAPER cache access uses supported values");
-    expect(readAll(scissorsPath) == scissorsBefore && readAll(iniPath) == saved,
-        "editing PAPER leaves ROCK and SCISSORS unchanged");
-    expect(scissors.setBooleanByIndex(0, false).saved, "SCISSORS checkbox writes its own file");
-    expect(readAll(scissorsPath).find("; untouched sibling") != std::string::npos,
-        "SCISSORS comments survive edits");
+    expect(readAll(emittersPath) == emittersBefore && readAll(iniPath) == saved,
+        "editing PAPER leaves ROCK and Emitters unchanged");
+    expect(emitters.setBooleanByIndex(0, false).saved, "Emitters checkbox writes its own file");
+    expect(readAll(emittersPath).find("; untouched sibling") != std::string::npos,
+        "Emitters comments survive edits");
 
     fs::remove_all(directory, error);
     if (error) {

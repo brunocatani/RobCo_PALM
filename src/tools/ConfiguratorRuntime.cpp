@@ -126,13 +126,12 @@ namespace rock_configurator
         std::array<ModSettings, kRpsMods.size()> s_modSettings{
             ModSettings{IniSettingsStore({}, RpsMod::Rock)},
             ModSettings{IniSettingsStore({}, RpsMod::Paper)},
-            ModSettings{IniSettingsStore({}, RpsMod::Scissors)},
             ModSettings{IniSettingsStore({}, RpsMod::RockDeveloper)},
             ModSettings{IniSettingsStore({}, RpsMod::Csah)},
             ModSettings{IniSettingsStore({}, RpsMod::Diamond)},
             ModSettings{IniSettingsStore({}, RpsMod::Emitters)},
-            ModSettings{IniSettingsStore({}, RpsMod::ScissorsRedux)},
-            ModSettings{IniSettingsStore({}, RpsMod::ScissorsReduxDeveloper)}
+            ModSettings{IniSettingsStore({}, RpsMod::Scissors)},
+            ModSettings{IniSettingsStore({}, RpsMod::ScissorsDeveloper)}
         };
         std::size_t s_modIndex = 0;
         ModSettings& activeSettings() { return s_modSettings[s_modIndex]; }
@@ -1809,11 +1808,11 @@ namespace rock_configurator
 #ifdef WHEEL_DESKTOP_PREVIEW
     void initializePreview(const std::filesystem::path& settingsPath)
     {
-        std::array<std::filesystem::path, 3> paths{settingsPath, {}, {}};
-        initializeRpsPreview(paths, {true, settingsPath.empty(), settingsPath.empty()});
+        std::array<std::filesystem::path, 2> paths{settingsPath, {}};
+        initializeRpsPreview(paths, {true, settingsPath.empty()});
     }
 
-    void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available,
+    void initializeRpsPreview(const std::array<std::filesystem::path, 2>& paths, const std::array<bool, 2>& available,
         const rock::api::configuration::Api* rockApi, const std::filesystem::path& csahPath,
         const std::filesystem::path& csahCatalog)
     {
@@ -1829,7 +1828,7 @@ namespace rock_configurator
         auto& csah = s_modSettings[static_cast<std::size_t>(RpsMod::Csah)];
         csah = ModSettings{IniSettingsStore(csahPath, RpsMod::Csah, nullptr, csahCatalog)};
         csah.available = !csahPath.empty() && !csahCatalog.empty();
-        // paths/available index the Rock, Paper and Scissors pages, whose enum values are 0..2.
+        // paths/available index the Rock and Paper pages, whose enum values are 0..1.
         for (std::size_t i = 0; i < paths.size(); ++i) {
             s_modSettings[i] = ModSettings{IniSettingsStore(paths[i], kRpsMods[i].id, i == 0 ? rockApi : nullptr, {}, rockApi?1:0)};
             s_modSettings[i].available = available[i];

@@ -29,7 +29,7 @@ struct ConsoleKeyEvent { bool character{ false }; std::uint32_t code{ 0 }; };
 void serviceConsole(bool keyboardHeld, bool windowFocused, std::span<const ConsoleKeyEvent> keys);
 #ifdef WHEEL_DESKTOP_PREVIEW
 void initializePreview(const std::filesystem::path& settingsPath = {});
-void initializeRpsPreview(const std::array<std::filesystem::path, 3>& paths, const std::array<bool, 3>& available,
+void initializeRpsPreview(const std::array<std::filesystem::path, 2>& paths, const std::array<bool, 2>& available,
     const rock::api::configuration::Api* rockApi = nullptr, const std::filesystem::path& csahPath = {},
     const std::filesystem::path& csahCatalog = {});
 void setPreviewOpen(bool open);

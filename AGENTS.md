@@ -9,7 +9,7 @@ RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM'
 - Runtime availability comes from the loaded modules (`src/tools/RpsMod.h`). PALM never changes a provider's published contract.
 - ROCK's consumer and developer pages share one configuration registration: read the catalog from ROCK's negotiated Configuration API and route writes to ROCK. PAPER uses its INI adapter and watcher behaviour.
 - Item and gesture integration use ROCK when it is loaded; without it, PALM keeps its standalone RPS UI behaviour. A loaded ROCK that does not serve the ROCK API PALM was built for stops the game at the main menu with an error box (`src/RockServices.cpp`, RPS Framework's `RPS/Runtime/RequiredUpdate.h` through `RPS_FRAMEWORK_INCLUDE_DIR`).
-- SCISSORS Redux pages (consumer and developer) bind only `SCISSORS_Redux.dll`'s `SCISSORS_Redux_GetConfiguration` 2.0 table, from Redux's own `include/` (`SCISSORS_REDUX_INCLUDE_DIR`). Never forward NPC settings through ROCK or write Redux INIs directly. `bPhysicalMelee` lives on the Redux Dev page and goes through Redux Configuration, never ROCK configuration.
+- SCISSORS pages (consumer and developer) bind only `SCISSORS.dll`'s `SCISSORS_GetConfiguration` 2.0 table, from SCISSORS' own `include/` (`SCISSORS_INCLUDE_DIR`). Never forward NPC settings through ROCK or write SCISSORS INIs directly. `bPhysicalMelee` lives on the SCISSORS Dev page and goes through SCISSORS Configuration, never ROCK configuration.
 - Preview fixture flags never alter production discovery or write runtime INIs; preview never discovers or writes a real provider, and injected fixtures stay read-only.
 
 ## Console tab

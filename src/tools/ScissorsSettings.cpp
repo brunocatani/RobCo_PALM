@@ -4,24 +4,24 @@
 #include <charconv>
 
 namespace rock_configurator {
-    bool IniSettingsStore::loadReduxSettings() {
+    bool IniSettingsStore::loadScissorsSettings() {
         namespace config=scissors::configuration;
 #ifndef WHEEL_DESKTOP_PREVIEW
-        if(!_reduxApi) {
-            const auto module=GetModuleHandleW(L"SCISSORS_Redux.dll");
+        if(!_scissorsApi) {
+            const auto module=GetModuleHandleW(L"SCISSORS.dll");
             const auto query=module?reinterpret_cast<config::Query>(GetProcAddress(module,config::kQueryExport)):nullptr;
-            if(query)_reduxApi=query(config::kMajor,config::kMinor,sizeof(config::Api));
+            if(query)_scissorsApi=query(config::kMajor,config::kMinor,sizeof(config::Api));
         }
 #endif
-        if(!_reduxApi || _reduxApi->major!=config::kMajor || _reduxApi->minor<config::kMinor || _reduxApi->size<sizeof(config::Api) ||
-            !_reduxApi->snapshot || !_reduxApi->setValue || !_reduxApi->numbers || !_reduxApi->setNumber) {
-            _reduxApi=nullptr;_lastError="SCISSORS Redux Configuration 2.0 is unavailable";return false;
+        if(!_scissorsApi || _scissorsApi->major!=config::kMajor || _scissorsApi->minor<config::kMinor || _scissorsApi->size<sizeof(config::Api) ||
+            !_scissorsApi->snapshot || !_scissorsApi->setValue || !_scissorsApi->numbers || !_scissorsApi->setNumber) {
+            _scissorsApi=nullptr;_lastError="SCISSORS Configuration 2.0 is unavailable";return false;
         }
         config::Snapshot snapshot;config::NumberSnapshot numbers;
-        if(_reduxApi->snapshot(&snapshot)!=config::Status::Ok || _reduxApi->numbers(&numbers)!=config::Status::Ok || numbers.count<config::kNumbers.size()) {
-            _lastError="SCISSORS Redux configuration is not ready";return false;
+        if(_scissorsApi->snapshot(&snapshot)!=config::Status::Ok || _scissorsApi->numbers(&numbers)!=config::Status::Ok || numbers.count<config::kNumbers.size()) {
+            _lastError="SCISSORS configuration is not ready";return false;
         }
-        const auto group=_mod==RpsMod::ScissorsReduxDeveloper?config::Group::Developer:config::Group::Consumer;
+        const auto group=_mod==RpsMod::ScissorsDeveloper?config::Group::Developer:config::Group::Consumer;
         std::vector<SettingRecord> settings;
         for(const auto& metadata:config::kSettings) {
             if(metadata.group!=group)continue;
@@ -47,15 +47,15 @@ namespace rock_configurator {
         }
         _settings=std::move(settings);_loadedRevision=snapshot.revision;return true;
     }
-    bool IniSettingsStore::saveReduxSetting(const SettingRecord& setting,std::string_view value) {
+    bool IniSettingsStore::saveScissorsSetting(const SettingRecord& setting,std::string_view value) {
         namespace config=scissors::configuration;
-        const auto group=_mod==RpsMod::ScissorsReduxDeveloper?config::Group::Developer:config::Group::Consumer;
-        // The call goes to Redux, which owns the file; preview edits stay memory-only, even with an injected provider.
+        const auto group=_mod==RpsMod::ScissorsDeveloper?config::Group::Developer:config::Group::Consumer;
+        // The call goes to SCISSORS, which owns the file; preview edits stay memory-only, even with an injected provider.
         const auto write=[&](auto&& call) {
 #ifndef WHEEL_DESKTOP_PREVIEW
             std::array<char,512> error{};
-            if(!_reduxApi || call(error)!=config::Status::Ok) {
-                _lastError=error[0]?error.data():"SCISSORS Redux configuration write failed";return false;
+            if(!_scissorsApi || call(error)!=config::Status::Ok) {
+                _lastError=error[0]?error.data():"SCISSORS configuration write failed";return false;
             }
 #else
             (void)call;
@@ -64,15 +64,15 @@ namespace rock_configurator {
         };
         for(const auto& metadata:config::kSettings) {
             if(metadata.group!=group || setting.key!=metadata.key)continue;
-            return write([&](std::array<char,512>& error){return _reduxApi->setValue(metadata.id,value=="true"?1u:0u,error.data(),static_cast<std::uint32_t>(error.size()));});
+            return write([&](std::array<char,512>& error){return _scissorsApi->setValue(metadata.id,value=="true"?1u:0u,error.data(),static_cast<std::uint32_t>(error.size()));});
         }
         for(const auto& metadata:config::kNumbers) {
             if(metadata.group!=group || setting.key!=metadata.key)continue;
             float number{};
             const auto parsed=std::from_chars(value.data(),value.data()+value.size(),number);
-            if(parsed.ec!=std::errc{}){_lastError="Invalid SCISSORS Redux number";return false;}
-            return write([&](std::array<char,512>& error){return _reduxApi->setNumber(metadata.id,number,error.data(),static_cast<std::uint32_t>(error.size()));});
+            if(parsed.ec!=std::errc{}){_lastError="Invalid SCISSORS number";return false;}
+            return write([&](std::array<char,512>& error){return _scissorsApi->setNumber(metadata.id,number,error.data(),static_cast<std::uint32_t>(error.size()));});
         }
-        _lastError="Unknown SCISSORS Redux setting";return false;
+        _lastError="Unknown SCISSORS setting";return false;
     }
 }

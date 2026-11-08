@@ -1,6 +1,6 @@
 #include "RockSettingControlPolicy.h"
 #include <DIAMOND/Configuration.h>
-#include <SCISSORS_Redux/Configuration.h>
+#include <SCISSORS/Configuration.h>
 #include "EmitterSettings.h"
 
 #include <algorithm>
@@ -427,7 +427,7 @@ namespace rock_configurator::setting_control
         std::string_view description,
         RpsMod mod)
     {
-        if(isReduxConfiguration(mod))for(const auto& number:scissors::configuration::kNumbers)if(key==number.key)
+        if(isScissorsConfiguration(mod))for(const auto& number:scissors::configuration::kNumbers)if(key==number.key)
             return {.kind=Kind::Numeric,.bounded=true,.minimum=number.minimum,.maximum=number.maximum,.step=number.step};
         if(mod==RpsMod::Emitters)if(const auto* setting=emitter_settings::find(key)) {
             if(setting->type==emitter_settings::Type::Toggle)return {.kind=Kind::Checkbox};

@@ -275,9 +275,9 @@ namespace rock_configurator
 
     bool IniSettingsStore::needsReload() const noexcept
     {
-        if (_reduxApi) {
+        if (_scissorsApi) {
             scissors::configuration::Snapshot snapshot;
-            return _reduxApi->snapshot(&snapshot)!=scissors::configuration::Status::Ok || snapshot.revision!=_loadedRevision;
+            return _scissorsApi->snapshot(&snapshot)!=scissors::configuration::Status::Ok || snapshot.revision!=_loadedRevision;
         }
         std::uint64_t revision{};
         return _configurationApi && (_configurationApi->revision(_configurationOwner,&revision)!=rock::api::Status::Ok || revision != _loadedRevision);
@@ -348,7 +348,7 @@ namespace rock_configurator
             return false;
         }
 
-        if (isReduxConfiguration(_mod)) return loadReduxSettings();
+        if (isScissorsConfiguration(_mod)) return loadScissorsSettings();
         if (_useRockApi && !connectRockApi()) return false;
         if (_useRockApi) return reloadRockSnapshot();
         if (_mod == RpsMod::Csah) return loadCsahSettings();
@@ -796,8 +796,8 @@ namespace rock_configurator
                 .setting = setting,
             };
         }
-        if (isReduxConfiguration(_mod)) {
-            if (!saveReduxSetting(setting, *normalizedValue))
+        if (isScissorsConfiguration(_mod)) {
+            if (!saveScissorsSetting(setting, *normalizedValue))
                 return { .message = _lastError, .setting = setting };
             setting.value = *normalizedValue;
             setting.overridden = setting.value != setting.defaultValue;

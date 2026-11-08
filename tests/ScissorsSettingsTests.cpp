@@ -5,10 +5,10 @@ int main(int argc,char** argv) {
     using namespace rock_configurator;
     namespace config=scissors::configuration;
     assert(argc==2);
-    assert(!isRockConfiguration(RpsMod::ScissorsRedux)&&!isRockConfiguration(RpsMod::ScissorsReduxDeveloper));
-    assert(std::wstring_view(modInfo(RpsMod::ScissorsRedux).module)==L"SCISSORS_Redux.dll");
-    assert(std::string_view(modInfo(RpsMod::ScissorsReduxDeveloper).ini)=="SCISSORS_Redux_Developer.ini");
-    IniSettingsStore absent("never-read.ini",RpsMod::ScissorsRedux);assert(!absent.load());
+    assert(!isRockConfiguration(RpsMod::Scissors)&&!isRockConfiguration(RpsMod::ScissorsDeveloper));
+    assert(std::wstring_view(modInfo(RpsMod::Scissors).module)==L"SCISSORS.dll");
+    assert(std::string_view(modInfo(RpsMod::ScissorsDeveloper).ini)=="SCISSORS_Developer.ini");
+    IniSettingsStore absent("never-read.ini",RpsMod::Scissors);assert(!absent.load());
     const auto module=LoadLibraryA(argv[1]);assert(module);
     const auto query=reinterpret_cast<config::Query>(GetProcAddress(module,config::kQueryExport));assert(query);
     assert(!query(1,1,32)); // Major 1 is retired.
@@ -20,10 +20,10 @@ int main(int argc,char** argv) {
 #else
     const config::Api* fixture=nullptr; // Exercise real named-module discovery.
 #endif
-    IniSettingsStore consumer("never-read.ini",RpsMod::ScissorsRedux,nullptr,{},0,fixture);
-    IniSettingsStore developer("never-read-dev.ini",RpsMod::ScissorsReduxDeveloper,nullptr,{},0,fixture);
+    IniSettingsStore consumer("never-read.ini",RpsMod::Scissors,nullptr,{},0,fixture);
+    IniSettingsStore developer("never-read-dev.ini",RpsMod::ScissorsDeveloper,nullptr,{},0,fixture);
     assert(consumer.load()&&developer.load());
-    // Each page shows exactly its group's rows of Redux's catalog, at the module's values.
+    // Each page shows exactly its group's rows of SCISSORS' catalog, at the module's values.
     const auto indexOf=[](const IniSettingsStore& store,std::string_view key) {
         const auto& rows=store.settings();
         std::size_t index=0;
@@ -38,7 +38,7 @@ int main(int argc,char** argv) {
         const auto& row=page.settings()[indexOf(page,metadata.key)];
         assert(row.type==SettingType::Boolean&&row.value==(metadata.defaultValue?"true":"false"));
     }
-    // Numbers are bounded by Redux's catalog, in steps of it.
+    // Numbers are bounded by SCISSORS' catalog, in steps of it.
     for(const auto& metadata:config::kNumbers) {
         const auto& page=metadata.group==config::Group::Consumer?consumer:developer;
         const auto& row=page.settings()[indexOf(page,metadata.key)];
@@ -48,7 +48,7 @@ int main(int argc,char** argv) {
     }
     assert(consumer.settings().size()+developer.settings().size()==config::kSettings.size()+config::kNumbers.size());
     assert(!consumer.needsReload()&&!developer.needsReload());
-    // Writes go through Redux by key, from the page that owns the setting.
+    // Writes go through SCISSORS by key, from the page that owns the setting.
     const auto collisionIndex=indexOf(consumer,"npcDynamicCollisions");
     const auto visualizerIndex=indexOf(developer,"bDebugShowColliders");
     const auto collision=consumer.setBooleanByIndex(collisionIndex,false);assert(collision.changed&&collision.saved);

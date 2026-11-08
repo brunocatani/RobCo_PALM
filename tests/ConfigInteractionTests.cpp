@@ -163,16 +163,16 @@ int main(int argc, char** argv) {
         frame(true);
         require(!rock_configurator::isOpen(), "back at Config home did not close it");
         // Every loaded-mod combination, including none, uses the real tab widgets.
-        for (unsigned mask = 0; mask < 8; ++mask) {
-            rock_configurator::initializeRpsPreview({path, path, path},
-                {(mask & 1) != 0, (mask & 2) != 0, (mask & 4) != 0});
+        for (unsigned mask = 0; mask < 4; ++mask) {
+            rock_configurator::initializeRpsPreview({path, path},
+                {(mask & 1) != 0, (mask & 2) != 0});
             rock_configurator::setPreviewOpen(true);frame();frame();
             click(railWidth + 440, 50);
             auto* firstRows = window("settings-rows");
             require((firstRows != nullptr) == (mask != 0), "unloaded mod exposed settings");
             if (!mask) continue;
             const auto firstId = firstRows->ID;
-            const int count = static_cast<int>((mask & 1) != 0) + static_cast<int>((mask & 2) != 0) + static_cast<int>((mask & 4) != 0);
+            const int count = static_cast<int>((mask & 1) != 0) + static_cast<int>((mask & 2) != 0);
             ImGuiID previous = firstId;
             for (int mod = 1; mod < count; ++mod) {
                 click(45.0f + mod * 168.0f, 120);
@@ -186,7 +186,7 @@ int main(int argc, char** argv) {
             require(window("settings-rows")->ID == firstId, "hidden mod tab remained clickable");
         }
         const rock::api::configuration::Api configApi{fixtureRevision, fixtureVisit, fixtureWrite};
-        rock_configurator::initializeRpsPreview({path, {}, {}}, {true, false, false}, &configApi);
+        rock_configurator::initializeRpsPreview({path, {}}, {true, false}, &configApi);
         rock_configurator::setPreviewOpen(true); frame(); frame();
         click(railWidth + 440, 50);
         const auto consumerText = renderedText();
@@ -206,10 +206,10 @@ int main(int argc, char** argv) {
             // Exercise the shipped CSAH catalog in the real RPS tab, both alone
             // and alongside every existing page. All edits remain in memory.
             for (bool otherMods : {false, true}) {
-                rock_configurator::initializeRpsPreview({path,path,path}, {otherMods,otherMods,otherMods},
+                rock_configurator::initializeRpsPreview({path,path}, {otherMods,otherMods},
                     otherMods ? &configApi : nullptr, path, argv[1]);
                 rock_configurator::setPreviewOpen(true);frame();frame();click(railWidth + 440, 50);
-                if (otherMods) click(45 + 4 * 168, 120);
+                if (otherMods) click(45 + 3 * 168, 120);
                 require(window("settings-rows"), "CSAH page did not open in RPS mods");
                 require(renderedText().find("CSAH Visual Suite") != std::string::npos, "CSAH page lost its authored controls");
                 scroll(window("settings-rows"));

@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
    showWheel=false;click(100,367);save(L"equipment-unavailable-config.png");
    tab(1);save(L"equipment-unavailable-settings.png");
   } else if (csahOnly) {
-   rock_configurator::initializeRpsPreview({}, {false,false,false}, nullptr, argv[4], argv[5]);
+   rock_configurator::initializeRpsPreview({}, {false,false}, nullptr, argv[4], argv[5]);
    rock_configurator::setPreviewOpen(true);settle();
    tab(2);save(L"csah-settings.png");
   } else if (settingsOnly) {
