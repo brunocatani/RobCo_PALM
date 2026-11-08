@@ -16,6 +16,7 @@ RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM'
 
 - `src/tools/ConsoleService.cpp` hooks the call to `ConsoleLog::AddString` at plugin load, after checking the live bytes, and runs commands through `Console::ExecuteCommand`, so the native Console menu is never needed. Commands containing `%` are refused: the engine echoes a command through its print function as the format string.
 - The on-screen keyboard is its own RPS UI panel (`robco.palm.workshop.keyboard`, `src/tools/OnScreenKeyboard.cpp`) under the Config panel. It is up on the Console tab, and on the Spawner while one of its two searches (sources, items) is open; it takes the Config panel's width and follows its resizes. Both keyboards feed a `ConsoleLine`, not an ImGui text field, because clicking a key would take focus from that field. The real keyboard comes from RPS UI's `captureKeyboard`, requested only while the keyboard panel is up; the capture lapses by itself when PALM stops asking.
+- Shortcut buttons come from `Mods_Config/RobCo_PALM/ConsoleCommands.ini` (`src/tools/ConsoleShortcuts.h` parses it; `console::loadShortcuts` reads it and writes the default list when absent). The game thread reads it only on entering the Console tab and on Reload, outside the runtime mutex; never per frame. The preview build uses the default list and touches no file.
 
 ## Spawner
 

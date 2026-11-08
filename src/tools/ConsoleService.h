@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ConsoleShortcuts.h"
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -20,4 +22,15 @@ namespace rock_configurator::console
     void run(const std::string& command);
     // Game thread. The form ID of the console's selected reference.
     [[nodiscard]] std::optional<std::uint32_t> selectedReference();
+
+    struct ShortcutFile
+    {
+        std::vector<ConsoleShortcut> shortcuts;
+        // Shown on the Console tab when the file gives no buttons.
+        std::string problem;
+    };
+    // Game thread, on Console tab entry and Reload only (file I/O). Reads
+    // Mods_Config/RobCo_PALM/ConsoleCommands.ini, first writing the default list when
+    // the file does not exist. The preview build returns a fixture and touches no file.
+    [[nodiscard]] ShortcutFile loadShortcuts();
 }

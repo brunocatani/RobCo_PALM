@@ -2,7 +2,11 @@
 
 #include "ConsoleService.h"
 
+#include <ShlObj.h>
 #include <deque>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 
 namespace rock_configurator::console
 {
@@ -178,6 +182,48 @@ namespace rock_configurator::console
         store(command);
 #else
         RE::Console::ExecuteCommand(narrow(widen(command, CP_UTF8, 0), CP_ACP).c_str());
+#endif
+    }
+
+    ShortcutFile loadShortcuts()
+    {
+#ifdef WHEEL_DESKTOP_PREVIEW
+        return { parseConsoleShortcuts(kDefaultConsoleShortcuts), {} };
+#else
+        PWSTR documents = nullptr;
+        if (FAILED(SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &documents)) || !documents) {
+            CoTaskMemFree(documents);
+            logger::warn("PALM console shortcuts unavailable: the Documents folder could not be resolved");
+            return { {}, "Console shortcuts unavailable: Documents folder not found" };
+        }
+        const auto path = std::filesystem::path(documents) / "My Games" / "Fallout4VR" / "Mods_Config" / "RobCo_PALM" /
+                          "ConsoleCommands.ini";
+        CoTaskMemFree(documents);
+
+        std::error_code error;
+        if (!std::filesystem::exists(path, error)) {
+            std::filesystem::create_directories(path.parent_path(), error);
+            std::ofstream created(path, std::ios::binary);
+            created.write(kDefaultConsoleShortcuts.data(), static_cast<std::streamsize>(kDefaultConsoleShortcuts.size()));
+            if (!created) {
+                logger::warn("PALM could not create {}", path.string());
+                return { {}, "Could not create ConsoleCommands.ini; see RobCoPALM.log" };
+            }
+            logger::info("PALM created {} with the default console shortcuts", path.string());
+        }
+
+        std::ifstream file(path, std::ios::binary);
+        if (!file) {
+            logger::warn("PALM could not read {}", path.string());
+            return { {}, "Could not read ConsoleCommands.ini; see RobCoPALM.log" };
+        }
+        const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        auto shortcuts = parseConsoleShortcuts(text);
+        logger::info("PALM loaded {} console shortcut(s) from {}", shortcuts.size(), path.string());
+        if (shortcuts.empty()) {
+            return { {}, "No shortcuts: add [Label] sections with commands to Mods_Config/RobCo_PALM/ConsoleCommands.ini" };
+        }
+        return { std::move(shortcuts), {} };
 #endif
     }
 

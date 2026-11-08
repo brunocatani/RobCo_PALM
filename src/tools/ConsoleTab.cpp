@@ -20,6 +20,9 @@ namespace rock_configurator
         constexpr float kStatusHeight = 46.0f;
         constexpr float kCommandHeight = 56.0f;
         constexpr float kMinimumLogHeight = 120.0f;
+        constexpr float kShortcutHeight = 46.0f;
+        // Two rows of buttons stay visible; more scroll inside the strip.
+        constexpr float kShortcutStripHeight = kShortcutHeight * 2.0f + kGap * 3.0f;
     }
 
     void ConsoleTab::draw(const ConsoleStatus& status)
@@ -29,12 +32,84 @@ namespace rock_configurator
         ImGui::BeginGroup();
         const float bodyHeight = ImGui::GetWindowHeight() - kPadding * 2.0f;
         const float logHeight = (std::max)(kMinimumLogHeight,
-            bodyHeight - kStatusHeight - kCommandHeight - kGap * 2.0f);
+            bodyHeight - kStatusHeight - kShortcutStripHeight - kCommandHeight - kGap * 3.0f);
         drawStatusRow(status);
+        drawShortcuts(kShortcutStripHeight);
         drawLog(logHeight);
         drawCommandRow();
         ImGui::EndGroup();
         ImGui::PopStyleVar();
+    }
+
+    void ConsoleTab::setShortcuts(std::vector<ConsoleShortcut> shortcuts, std::string problem)
+    {
+        _shortcuts = std::move(shortcuts);
+        _shortcutProblem = std::move(problem);
+    }
+
+    void ConsoleTab::drawShortcuts(float height)
+    {
+        constexpr float kReloadWidth = 120.0f;
+        constexpr float kButtonPadding = 36.0f;
+        constexpr float kMinimumButtonWidth = 110.0f;
+        const float width = ImGui::GetWindowWidth() - kPadding * 2.0f;
+        ImGui::PushStyleColor(ImGuiCol_Border, palm::theme::border());
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { kGap, kGap });
+        ImGui::BeginChild("console-shortcuts", { width, height },
+            ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+        {
+            Font font(FontRole::Medium, 20.0f);
+            const float rowWidth = ImGui::GetContentRegionAvail().x;
+            float x = 0.0f;
+            const auto place = [&](float buttonWidth) {
+                // Wrap to a new row when this button would run past the edge.
+                if (x > 0.0f && x + buttonWidth > rowWidth) {
+                    x = 0.0f;
+                } else if (x > 0.0f) {
+                    ImGui::SameLine(0.0f, kGap);
+                }
+                x += buttonWidth + kGap;
+            };
+            if (_shortcuts.empty()) {
+                const float textWidth = (std::max)(0.0f, rowWidth - kReloadWidth - kGap);
+                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + textWidth);
+                ImGui::TextColored(devui::visual::muted(), "%s", _shortcutProblem.c_str());
+                ImGui::PopTextWrapPos();
+                // Reload goes to the right edge.
+                ImGui::SetCursorPos({ ImGui::GetWindowContentRegionMax().x - kReloadWidth, kGap });
+            } else {
+                for (std::size_t index = 0; index < _shortcuts.size(); ++index) {
+                    const auto& shortcut = _shortcuts[index];
+                    const float buttonWidth = (std::min)(rowWidth,
+                        (std::max)(kMinimumButtonWidth, ImGui::CalcTextSize(shortcut.label.c_str()).x + kButtonPadding));
+                    place(buttonWidth);
+                    ImGui::PushID(static_cast<int>(index));
+                    if (devui::visual::button(shortcut.label.c_str(), { buttonWidth, kShortcutHeight })) {
+                        runShortcut(shortcut);
+                    }
+                    ImGui::PopID();
+                }
+                place(kReloadWidth);
+            }
+            if (devui::visual::button("Reload", { kReloadWidth, kShortcutHeight })) {
+                _reloadRequested = true;
+            }
+        }
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+    }
+
+    void ConsoleTab::runShortcut(const ConsoleShortcut& shortcut)
+    {
+        _followLatest = true;
+        for (const auto& command : shortcut.commands) {
+            if (commandIsSafe(command)) {
+                _commands.push_back(command);
+            } else {
+                _rows.push_back("Not run from " + shortcut.label + ": console commands cannot contain %");
+            }
+        }
     }
 
     void ConsoleTab::drawStatusRow(const ConsoleStatus& status)

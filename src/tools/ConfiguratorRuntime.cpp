@@ -142,6 +142,7 @@ namespace rock_configurator
         std::atomic_uint32_t s_consoleSelectedReference{ 0 };
         std::atomic_bool s_consoleCommandsPending = false;
         std::uint32_t s_consoleSelectionAge = 0; // Game thread only.
+        bool s_consoleWasActive = false;         // Game thread only.
         // Lines and keyboard state are guarded by s_runtimeMutex; the field is read lock-free
         // to decide whether the keyboard panel is up.
         OnScreenKeyboard s_keyboard;
@@ -1423,7 +1424,7 @@ namespace rock_configurator
                 status.outputCaptured = console::captureInstalled();
                 if (const auto reference = s_consoleSelectedReference.load(std::memory_order_acquire)) status.selectedReference = reference;
                 s_consoleTab.draw(status);
-                if (s_consoleTab.hasCommands()) s_consoleCommandsPending.store(true, std::memory_order_release);
+                if (s_consoleTab.hasCommands() || s_consoleTab.hasReloadRequest()) s_consoleCommandsPending.store(true, std::memory_order_release);
                 return;
             }
             const float railWidth = devui::visual::railWidth(ImGui::GetContentRegionAvail().x);
@@ -1720,10 +1721,16 @@ namespace rock_configurator
             s_consoleSelectionAge = 0;
             s_consoleSelectedReference.store(console::selectedReference().value_or(0), std::memory_order_release);
         }
-        if (keys.empty() && !s_consoleCommandsPending.exchange(false, std::memory_order_acq_rel)) {
+        // Shortcuts reload on each visit to the tab and on Reload, never per frame, so an
+        // edited ConsoleCommands.ini applies without restarting and costs no polling.
+        const bool entered = active && !s_consoleWasActive;
+        s_consoleWasActive = active;
+        const bool pending = s_consoleCommandsPending.exchange(false, std::memory_order_acq_rel);
+        if (keys.empty() && !pending && !entered) {
             return;
         }
         std::vector<std::string> commands;
+        bool reloadShortcuts = entered;
         {
             std::scoped_lock lock(s_runtimeMutex);
             auto* line = keyboardLineLocked();
@@ -1746,6 +1753,13 @@ namespace rock_configurator
             }
             syncSpawnSearchLocked();
             commands = s_consoleTab.takeCommands();
+            reloadShortcuts = s_consoleTab.takeReloadRequest() || reloadShortcuts;
+        }
+        if (reloadShortcuts) {
+            // File I/O outside the mutex so rendering never waits on the disk.
+            auto file = console::loadShortcuts();
+            std::scoped_lock lock(s_runtimeMutex);
+            s_consoleTab.setShortcuts(std::move(file.shortcuts), std::move(file.problem));
         }
         // Not under the mutex: the engine prints the echo through the capture hook, and
         // rendering should not wait on it. A closed panel leaves no stale command to run.
