@@ -54,6 +54,7 @@ void RPSUI_CALL drawFrame(const rpsui::api::framework::PanelDrawFrame* frame,voi
   if(!frame || frame->size<sizeof(*frame))return;
   ticket=wheelDrawGeneration();if(!ticket)return;
   RPSUI_IMGUI_BIND(frame->imgui);
+  palm::theme::Scope theme(frame->theme);
   auto& render=renderState();std::scoped_lock lock(render.mutex);
   if(render.contextGeneration!=frame->contextGeneration)throw std::runtime_error("the wheel's ImGui context was not set up");
   Action action;
