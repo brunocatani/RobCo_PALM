@@ -25,7 +25,7 @@ float FontSize(FontRole role) noexcept { return kFontSizes[static_cast<std::size
 void SyncKeyboardPanel(bool) noexcept {}
 void Shutdown() noexcept {}
 bool InstallFrameworkPanel() noexcept { return false; }
-bool ResetFrameworkPanelSize() noexcept {
+bool ResetFrameworkPanelLayout() noexcept {
  rock_configurator::onFrameworkPanelFrame(kDefaultPanelPhysicalWidth,
   rock_configurator::panel_resize::Handle::None,rock_configurator::panel_resize::Handle::None);
  return true;

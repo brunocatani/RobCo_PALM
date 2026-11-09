@@ -59,7 +59,7 @@ namespace rock_configurator
             UiSetOptionRow,
             UiReload,
             UiRefreshSettings,
-            UiResetPanelSize,
+            UiResetPanelLayout,
             UiSpawnSelectPlugin,
             UiSpawnSelectCategory,
             UiSpawnOpenItem,
@@ -530,17 +530,17 @@ namespace rock_configurator
             }
         }
 
-        void resetPanelSizeLocked()
+        void resetPanelLayoutLocked()
         {
             s_hoveredResizeHandle.store(panel_resize::Handle::None, std::memory_order_release);
             s_activeResizeHandle.store(panel_resize::Handle::None, std::memory_order_release);
-            if (devui::render::ResetFrameworkPanelSize()) {
+            if (devui::render::ResetFrameworkPanelLayout()) {
                 s_sessionPanelPhysicalWidth.store(
                     devui::render::kDefaultPanelPhysicalWidth,
                     std::memory_order_release);
-                s_statusMessage = "Panel size reset to 100%";
+                s_statusMessage = "Panel back where it opened, at 100%";
             } else {
-                s_statusMessage = "RPS UI Framework rejected the panel size reset";
+                s_statusMessage = "RPS UI Framework rejected the panel reset";
             }
         }
 
@@ -608,8 +608,8 @@ namespace rock_configurator
             case RuntimeActionKind::UiReload:
                 reloadActiveLocked(action.tab);
                 break;
-            case RuntimeActionKind::UiResetPanelSize:
-                resetPanelSizeLocked();
+            case RuntimeActionKind::UiResetPanelLayout:
+                resetPanelLayoutLocked();
                 break;
             case RuntimeActionKind::UiSpawnSelectPlugin:
                 if (spawnTabActive()) {
@@ -915,9 +915,10 @@ namespace rock_configurator
             ImGui::SameLine(0, 10);
             const float percent = s_sessionPanelPhysicalWidth.load(std::memory_order_acquire) / devui::render::kDefaultPanelPhysicalWidth * 100;
             std::array<char, 32> sizeLabel{};
-            std::snprintf(sizeLabel.data(), sizeLabel.size(), "SIZE  %.0f%%", percent);
+            // The panel's size, and a reset of its size and place (grip held moves it).
+            std::snprintf(sizeLabel.data(), sizeLabel.size(), "RESET %.0f%%", percent);
             { ScopedFont font(devui::render::FontRole::Medium, 18);
-              if (devui::visual::button(sizeLabel.data(), {126, 54})) (void)queueUiAction({.kind = RuntimeActionKind::UiResetPanelSize}); }
+              if (devui::visual::button(sizeLabel.data(), {126, 54})) (void)queueUiAction({.kind = RuntimeActionKind::UiResetPanelLayout}); }
             ImGui::SameLine(0, 10);
             if (devui::visual::button("X##close", {52, 54})) (void)queueUiAction({.kind = RuntimeActionKind::UiClose});
         }

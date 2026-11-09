@@ -359,6 +359,9 @@ void selectWheel(bool closeAfterSelect,const std::optional<Action>& clicked) {
   s.held=false;(void)presentPanel(false);s.gesture.cancel(true);
  }
  s.choiceGeneration=ticket;
+ // The press chose something: the same tick RPS UI gives a pressed control.
+ if(hover && !hover->cancelHovered && hover->hand!=PointerHand::None)
+  pulseHand(hover->hand==PointerHand::Left?rpsui::api::framework::PhysicalHand::Left:rpsui::api::framework::PhysicalHand::Right,.5f);
  if(hover && hover->section)s.sectionChoice=(static_cast<std::uint64_t>(hover->section)<<32)|hover->sectionItem;
  s.choiceHand=hover?hover->hand:PointerHand::None;
  s.choice=hover?(hover->configHovered?kConfigChoice:hover->hoveredGesture?hover->hoveredGesture:

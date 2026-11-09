@@ -27,7 +27,6 @@ namespace devui::render
             std::array<ImFont*,
                 static_cast<std::size_t>(FontRole::Count)> fonts{};
             std::uint64_t contextGeneration{ 0 };
-            bool backWasDown{ false };
             bool backRequested{ false };
             bool keyboard{ false };
         };
@@ -144,9 +143,7 @@ namespace devui::render
                     localResizeHandle(frame->activeResizeHandle));
             }
 
-            const bool backDown = frame->pointerValid != 0 && frame->backDown != 0;
-            state.backRequested |= backDown && !state.backWasDown;
-            state.backWasDown = backDown;
+            state.backRequested |= frame->backPressed != 0;
             const bool drawn = state.keyboard ?
                 rock_configurator::drawKeyboardPanel(0, 0, kKeyboardPanelLayoutWidth, kKeyboardPanelLayoutHeight, state.backRequested) :
                 rock_configurator::drawImGui(0, 0, kPanelLayoutWidth, kPanelLayoutHeight, state.backRequested);
@@ -220,7 +217,9 @@ namespace devui::render
         panel.minimumPhysicalWidth = kMinimumPanelPhysicalWidth;
         panel.maximumPhysicalWidth = kMaximumPanelPhysicalWidth;
         panel.sortOrder = 310;
-        panel.flags = static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::ConfigNavigation);
+        // Grip held on Config carries it; the keyboard below follows it.
+        panel.flags = static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::ConfigNavigation) |
+                      static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::Movable);
         panel.imgui = RPSUI_IMGUI_BUILD();
         panel.setupCallback = &setupPanel;
         panel.drawCallback = &drawPanel;
@@ -329,14 +328,14 @@ namespace devui::render
         state.keyboardFollows = config.sequence;
     }
 
-    bool ResetFrameworkPanelSize() noexcept
+    bool ResetFrameworkPanelLayout() noexcept
     {
         auto& state = frameworkState();
         std::scoped_lock lock(state.mutex);
         return state.installed &&
                state.api &&
-               state.api->resetPanelSize &&
-               state.api->resetPanelSize(
+               state.api->resetPanelLayout &&
+               state.api->resetPanelLayout(
                    state.ownerToken,
                    state.panelHandle) ==
                    rpsui::api::Result::Ok;

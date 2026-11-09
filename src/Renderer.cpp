@@ -122,6 +122,10 @@ bool presentPanel(bool open,const rpsui::api::framework::PanelPose* pose) {
  p.lastPresentationResult=result;
  return result==rpsui::api::Result::Ok;
 }
+void pulseHand(rpsui::api::framework::PhysicalHand hand,float strength) {
+ auto& p=panelState();std::scoped_lock lock(p.mutex);
+ if(p.api && p.owner && p.api->pulseHaptic)(void)p.api->pulseHaptic(p.owner,hand,strength);
+}
 bool frameworkReady() {
  auto& p=panelState();std::scoped_lock lock(p.mutex);
  return p.panel && p.api && p.api->isFrameworkReady && p.api->isFrameworkReady();

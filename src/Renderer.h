@@ -5,4 +5,6 @@ bool installPanel();
 void unregisterPanel();
 bool frameworkReady();
 bool presentPanel(bool open,const rpsui::api::framework::PanelPose* pose=nullptr);
+// A controller pulse through RPS UI, at the player's haptic strength.
+void pulseHand(rpsui::api::framework::PhysicalHand hand,float strength);
 }

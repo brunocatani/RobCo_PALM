@@ -432,6 +432,10 @@ namespace rock_configurator::setting_control
         // RPS_UI.toml: the range RPS UI clamps Sharpness to.
         if(mod==RpsMod::RpsUi && key=="Sharpness")
             return {.kind=Kind::Numeric,.bounded=true,.minimum=1.0,.maximum=3.0,.step=0.25};
+        if(mod==RpsMod::RpsUi && key=="HapticStrength")
+            return {.kind=Kind::Numeric,.bounded=true,.minimum=0.0,.maximum=1.0,.step=0.1};
+        if(mod==RpsMod::RpsUi && key=="GripMoveSeconds")
+            return {.kind=Kind::Numeric,.bounded=true,.minimum=0.2,.maximum=1.5,.step=0.05};
         if(mod==RpsMod::Diamond)if(const auto* setting=diamond::configuration::find(key)) {
             if(setting->boolean)return {.kind=Kind::Checkbox};
             return {.kind=Kind::Numeric,.bounded=true,.minimum=setting->minimum,.maximum=setting->maximum,.step=setting->step};
