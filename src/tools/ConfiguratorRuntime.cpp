@@ -14,6 +14,7 @@
 #include "render/NativeRenderer.h"
 #include <imgui_internal.h>
 #include "render/ConfigUi.h"
+#include <RPS_UI_Framework/BindingIcons.h>
 
 
 namespace rock_configurator
@@ -994,6 +995,30 @@ namespace rock_configurator
             return "%.0f";
         }
 
+        // The hand of a ROCK button-layout row, whose options are physical controls.
+        [[nodiscard]] std::optional<rpsui::binding::Hand> controllerInputHand(std::string_view section) noexcept
+        {
+            if (section == "ControllerInput.Left") return rpsui::binding::Hand::Left;
+            if (section == "ControllerInput.Right") return rpsui::binding::Hand::Right;
+            return std::nullopt;
+        }
+
+        // A physical control in a ROCK button-layout list: its icon, then its label.
+        [[nodiscard]] bool bindingOption(const setting_control::Option& option, rpsui::binding::Hand hand, bool selected, int id)
+        {
+            constexpr float height = 40.0f;
+            ImGui::PushID(id);
+            const bool chosen = ImGui::Selectable("##option", selected, ImGuiSelectableFlags_None, {0.0f, height});
+            ImGui::PopID();
+            const ImVec2 lo = ImGui::GetItemRectMin();
+            auto* draw = ImGui::GetWindowDrawList();
+            const auto ink = packed(textColor(1.0f));
+            rpsui::binding::drawIcon(draw, {lo.x + height * 0.5f, lo.y + height * 0.5f}, height * 0.85f,
+                {.input = {hand, rpsui::binding::parseControl(option.value).value_or(rpsui::binding::Control::None)}}, ink);
+            draw->AddText({lo.x + height + 8.0f, lo.y + (height - ImGui::GetFontSize()) * 0.5f}, ink, option.label.c_str());
+            return chosen;
+        }
+
         void drawSettingRow(
             const SettingRecord& setting,
             std::size_t index,
@@ -1154,15 +1179,27 @@ namespace rock_configurator
                     *setting.selectedOptionIndex < setting.control.options.size()) {
                     preview = setting.control.options[*setting.selectedOptionIndex].label.c_str();
                 }
-                rowCursor(controlsStart, 10.0f);
-                ImGui::SetNextItemWidth(controlsWidth - 20.0f);
+                // ROCK's button layout: each option is a physical control, shown with its icon.
+                const auto bindingHand = controllerInputHand(setting.section);
+                float comboStart = controlsStart, comboWidth = controlsWidth - 20.0f;
+                if (bindingHand) {
+                    constexpr float iconSize = 44.0f;
+                    rpsui::binding::drawIcon(draw, {windowPosition.x + controlsStart + iconSize * 0.5f, windowPosition.y + 30.0f}, iconSize,
+                        {.input = {*bindingHand, rpsui::binding::parseControl(setting.value).value_or(rpsui::binding::Control::None)}},
+                        packed(textColor(1.0f)));
+                    comboStart += iconSize + 10.0f;
+                    comboWidth -= iconSize + 10.0f;
+                }
+                rowCursor(comboStart, 10.0f);
+                ImGui::SetNextItemWidth(comboWidth);
                 if (ImGui::BeginCombo("##dropdown", preview)) {
                     for (std::size_t optionIndex = 0;
                          optionIndex < setting.control.options.size(); ++optionIndex) {
                         const bool selected = setting.selectedOptionIndex &&
                             *setting.selectedOptionIndex == optionIndex;
-                        if (ImGui::Selectable(
-                                setting.control.options[optionIndex].label.c_str(), selected)) {
+                        const auto& option = setting.control.options[optionIndex];
+                        if (bindingHand ? bindingOption(option, *bindingHand, selected, static_cast<int>(optionIndex)) :
+                                ImGui::Selectable(option.label.c_str(), selected)) {
                             (void)queueUiAction({
                                 .kind = RuntimeActionKind::UiSetOptionRow,
                                 .tab = tab,
