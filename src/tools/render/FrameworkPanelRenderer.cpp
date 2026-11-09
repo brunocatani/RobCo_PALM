@@ -90,9 +90,9 @@ namespace devui::render
                 configureFonts(state, io);
                 devui::visual::applyStyle();
                 if (state.keyboard) {
-                    // The keyboard panel has more pixels per metre; keep its cursor the Config panel's size.
+                    // The keyboard panel has more layout units per metre; keep its cursor the Config panel's size.
                     ImGui::GetStyle().MouseCursorScale =
-                        static_cast<float>(kKeyboardPanelPixelWidth) / static_cast<float>(kPanelPixelWidth);
+                        static_cast<float>(kKeyboardPanelLayoutWidth) / static_cast<float>(kPanelLayoutWidth);
                 }
                 state.imguiContext = ImGui::GetCurrentContext();
                 state.contextGeneration = setup->contextGeneration;
@@ -140,8 +140,8 @@ namespace devui::render
             state.backRequested |= backDown && !state.backWasDown;
             state.backWasDown = backDown;
             const bool drawn = state.keyboard ?
-                rock_configurator::drawKeyboardPanel(0, 0, kKeyboardPanelPixelWidth, kKeyboardPanelPixelHeight, state.backRequested) :
-                rock_configurator::drawImGui(0, 0, kPanelPixelWidth, kPanelPixelHeight, state.backRequested);
+                rock_configurator::drawKeyboardPanel(0, 0, kKeyboardPanelLayoutWidth, kKeyboardPanelLayoutHeight, state.backRequested) :
+                rock_configurator::drawImGui(0, 0, kPanelLayoutWidth, kPanelLayoutHeight, state.backRequested);
             if (drawn) {
                 state.backRequested = false;
             }
@@ -207,8 +207,8 @@ namespace devui::render
             panel.displayName,
             sizeof(panel.displayName),
             "PALM Config");
-        panel.pixelWidth = kPanelPixelWidth;
-        panel.pixelHeight = kPanelPixelHeight;
+        panel.layoutWidth = static_cast<float>(kPanelLayoutWidth);
+        panel.layoutHeight = static_cast<float>(kPanelLayoutHeight);
         panel.defaultPhysicalWidth = kDefaultPanelPhysicalWidth;
         panel.minimumPhysicalWidth = kMinimumPanelPhysicalWidth;
         panel.maximumPhysicalWidth = kMaximumPanelPhysicalWidth;
@@ -240,8 +240,8 @@ namespace devui::render
         rpsui::api::framework::PanelRegistration keyboard{};
         std::snprintf(keyboard.panelId, sizeof(keyboard.panelId), "robco.palm.workshop.keyboard");
         std::snprintf(keyboard.displayName, sizeof(keyboard.displayName), "PALM Keyboard");
-        keyboard.pixelWidth = kKeyboardPanelPixelWidth;
-        keyboard.pixelHeight = kKeyboardPanelPixelHeight;
+        keyboard.layoutWidth = static_cast<float>(kKeyboardPanelLayoutWidth);
+        keyboard.layoutHeight = static_cast<float>(kKeyboardPanelLayoutHeight);
         keyboard.defaultPhysicalWidth = kDefaultPanelPhysicalWidth;
         keyboard.minimumPhysicalWidth = kMinimumPanelPhysicalWidth;
         keyboard.maximumPhysicalWidth = kMaximumPanelPhysicalWidth;
@@ -305,7 +305,7 @@ namespace devui::render
         presentation.open = 1;
         auto& pose = presentation.pose;
         pose = config.pose;
-        pose.physicalHeight = pose.physicalWidth * static_cast<float>(kKeyboardPanelPixelHeight) / static_cast<float>(kKeyboardPanelPixelWidth);
+        pose.physicalHeight = pose.physicalWidth * static_cast<float>(kKeyboardPanelLayoutHeight) / static_cast<float>(kKeyboardPanelLayoutWidth);
         const float drop = config.pose.physicalHeight * 0.5f + config.pose.physicalWidth * 0.02f + pose.physicalHeight * 0.5f;
         for (std::size_t axis = 0; axis < 3; ++axis) {
             pose.center[axis] = config.pose.center[axis] - config.pose.up[axis] * drop;

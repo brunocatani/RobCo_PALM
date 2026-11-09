@@ -85,7 +85,7 @@ bool installPanel() {
  rpsui::api::framework::PanelRegistration panel;
  std::snprintf(panel.panelId,sizeof(panel.panelId),"robco.palm.main");
  std::snprintf(panel.displayName,sizeof(panel.displayName),"RobCo PALM");
- panel.pixelWidth=1024;panel.pixelHeight=1024;
+ panel.layoutWidth=1024;panel.layoutHeight=1024;
  panel.defaultPhysicalWidth=95;panel.minimumPhysicalWidth=95;panel.maximumPhysicalWidth=95;
  panel.flags=static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::Transparent)|
   static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::FixedSize)|static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::CircularInput);

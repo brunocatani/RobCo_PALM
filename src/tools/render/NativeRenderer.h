@@ -9,19 +9,19 @@ struct ImFont;
 
 namespace devui::render
 {
-    inline constexpr std::uint32_t kPanelPixelWidth = 1440;
-    inline constexpr std::uint32_t kPanelPixelHeight = 900;
+    inline constexpr std::uint32_t kPanelLayoutWidth = 1440;
+    inline constexpr std::uint32_t kPanelLayoutHeight = 900;
     inline constexpr float kPanelAspectRatio =
-        static_cast<float>(kPanelPixelWidth) / static_cast<float>(kPanelPixelHeight);
+        static_cast<float>(kPanelLayoutWidth) / static_cast<float>(kPanelLayoutHeight);
     inline constexpr float kDefaultPanelPhysicalWidth = 96.0f;
     inline constexpr float kDefaultPanelPhysicalHeight =
         kDefaultPanelPhysicalWidth / kPanelAspectRatio;
     inline constexpr float kMinimumPanelPhysicalWidth = 72.0f;
     inline constexpr float kMaximumPanelPhysicalWidth = 180.0f;
-    // The keyboard panel sits under the Config panel at the same physical width. RPS UI
-    // needs at least 480 pixels of height, which sets the 2080 width for the keyboard's shape.
-    inline constexpr std::uint32_t kKeyboardPanelPixelWidth = 2080;
-    inline constexpr std::uint32_t kKeyboardPanelPixelHeight = 480;
+    // Panel layouts in ImGui units; RPS UI picks the textures' resolution. The keyboard
+    // panel sits under the Config panel at the same physical width.
+    inline constexpr std::uint32_t kKeyboardPanelLayoutWidth = 2080;
+    inline constexpr std::uint32_t kKeyboardPanelLayoutHeight = 480;
 
     enum class FontRole : std::uint8_t
     {
