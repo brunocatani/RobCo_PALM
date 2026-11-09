@@ -35,7 +35,7 @@ void sector(ImDrawList* draw, ImVec2 center, float inner, float outer, float a, 
  draw->Flags=flags;
  if(outline) {
   draw->PathArcTo(center,outer,a,b,pieces);draw->PathArcTo(center,inner,b,a,pieces);
-  draw->PathStroke(outline,ImDrawFlags_Closed,1.f);
+  draw->PathStroke(outline,1.f,ImDrawFlags_Closed);
  }
 }
 }

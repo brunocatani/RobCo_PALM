@@ -4,26 +4,24 @@
 #include "Fonts.h"
 #include "WheelConfig.h"
 #include "IconAtlas.h"
-#include "PanelInput.h"
 #include "RpsUiQuery.h"
 #include <imgui.h>
-#include <imgui_impl_dx11.h>
+#include <imgui_internal.h>
+#include <RPS_UI_Framework/ImGuiBuild.h>
 #include <wrl/client.h>
 #include <d3d11.h>
-#include <cfloat>
 
 namespace wheel {
 namespace {
 using Microsoft::WRL::ComPtr;
-struct ContextDeleter {void operator()(ImGuiContext* context)const{if(context)ImGui::DestroyContext(context);}};
+// Render thread only. RPS UI owns the wheel's ImGui context; the font and the
+// icon atlases made for it in setupFrame live with that context generation.
 struct RenderState {
  std::mutex mutex;
  ComPtr<ID3D11Device> device;
  IconAtlas icons;
- std::unique_ptr<ImGuiContext,ContextDeleter> imgui;
- bool backend{},primaryDown{};std::uint64_t clickGeneration{};
- ~RenderState(){release();}
- void release(){if(imgui){ImGui::SetCurrentContext(imgui.get());if(backend)ImGui_ImplDX11_Shutdown();imgui.reset();}backend=false;icons.clear();device.Reset();}
+ std::uint64_t deviceGeneration{},contextGeneration{};
+ bool primaryDown{};std::uint64_t clickGeneration{};
 };
 RenderState& renderState(){static RenderState s;return s;}
 struct PanelState {
@@ -31,36 +29,34 @@ struct PanelState {
  rpsui::api::Result lastPresentationResult{rpsui::api::Result::Ok};
 };
 PanelState& panelState(){static PanelState s;return s;}
-void RPSUI_CALL drawFrame(const rpsui::api::framework::PanelRenderFrame* frame,void*) noexcept {
+void RPSUI_CALL setupFrame(const rpsui::api::framework::PanelSetup* setup,void*) noexcept {
+ try {
+  if(!setup || setup->size<sizeof(*setup) || !setup->d3dDevice)return;
+  RPSUI_IMGUI_BIND(setup->imgui);
+  auto& render=renderState();std::scoped_lock lock(render.mutex);
+  installFonts();
+  auto* device=static_cast<ID3D11Device*>(setup->d3dDevice);
+  if(render.device.Get()!=device || render.deviceGeneration!=setup->deviceGeneration) {
+   ComPtr<ID3D11DeviceContext> context;device->GetImmediateContext(&context);
+   if(!render.icons.create(device,context.Get()))throw std::runtime_error("Embedded wheel icon atlases unavailable");
+   render.device=device;render.deviceGeneration=setup->deviceGeneration;
+  }
+  render.contextGeneration=setup->contextGeneration;
+  spdlog::info("PALM renderer initialized (context generation {})",setup->contextGeneration);
+ } catch(const std::exception& e){spdlog::error("PALM renderer setup failed: {}",e.what());}
+ catch(...){spdlog::error("PALM renderer setup failed");}
+}
+void RPSUI_CALL drawFrame(const rpsui::api::framework::PanelDrawFrame* frame,void*) noexcept {
  std::uint64_t ticket{};
  try {
-  if(!frame || frame->size<sizeof(*frame) || !frame->d3dDevice || !frame->d3dContext || !frame->renderTargetView)return;
+  if(!frame || frame->size<sizeof(*frame))return;
   ticket=wheelDrawGeneration();if(!ticket)return;
+  RPSUI_IMGUI_BIND(frame->imgui);
   auto& render=renderState();std::scoped_lock lock(render.mutex);
-  auto* device=static_cast<ID3D11Device*>(frame->d3dDevice);
-  auto* context=static_cast<ID3D11DeviceContext*>(frame->d3dContext);
-  if(render.device.Get()!=device || !render.backend) {
-   render.release();render.device=device;render.imgui.reset(ImGui::CreateContext());
-   if(!render.imgui)throw std::runtime_error("ImGui context unavailable");
-   ImGui::SetCurrentContext(render.imgui.get());installFonts();
-   configurePanelInput(ImGui::GetIO());
-   if(!render.icons.create(device,context))throw std::runtime_error("Embedded wheel icon atlases unavailable");
-   if(!ImGui_ImplDX11_Init(device,context))throw std::runtime_error("DX11 backend unavailable");
-   render.backend=true;spdlog::info("PALM renderer initialized");
-  }
-  ImGui::SetCurrentContext(render.imgui.get());auto& io=ImGui::GetIO();
-  io.DisplaySize={static_cast<float>(frame->pixelWidth),static_cast<float>(frame->pixelHeight)};
-  io.DeltaTime=std::clamp(frame->deltaSeconds,1.f/240,.1f);io.MouseDrawCursor=true;
-  io.AddMousePosEvent(frame->pointerValid?frame->pointerPixelX:-FLT_MAX,frame->pointerValid?frame->pointerPixelY:-FLT_MAX);
-  io.AddMouseButtonEvent(0,false); // The wheel selects on chord release, never pointer clicks.
-  io.AddMouseWheelEvent(0,frame->scrollAxisY*5.5f*io.DeltaTime);
-  auto* target=static_cast<ID3D11RenderTargetView*>(frame->renderTargetView);
-  context->OMSetRenderTargets(1,&target,nullptr);
-  ImGui_ImplDX11_NewFrame();ImGui::NewFrame();
+  if(render.contextGeneration!=frame->contextGeneration)throw std::runtime_error("the wheel's ImGui context was not set up");
   Action action;
   {auto& shared=sharedModel();std::unique_lock modelLock(shared.mutex,std::try_to_lock);
    if(modelLock.owns_lock()){refreshWheelSections(shared.model);action=drawWheel(shared.model,shared.view,{},{},render.icons.ids());}}
-  ImGui::Render();ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
   action.hand=frame->pointerHand==rpsui::api::framework::PhysicalHand::Left?PointerHand::Left:
    frame->pointerHand==rpsui::api::framework::PhysicalHand::Right?PointerHand::Right:PointerHand::None;
   publishWheelSelection(ticket,action);
@@ -93,7 +89,7 @@ bool installPanel() {
  panel.defaultPhysicalWidth=95;panel.minimumPhysicalWidth=95;panel.maximumPhysicalWidth=95;
  panel.flags=static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::Transparent)|
   static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::FixedSize)|static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::CircularInput);
- panel.sortOrder=300;panel.renderCallback=drawFrame;
+ panel.sortOrder=300;panel.imgui=RPSUI_IMGUI_BUILD();panel.setupCallback=setupFrame;panel.drawCallback=drawFrame;
  const auto panelResult=p.api->registerPanel(p.owner,&panel,&p.panel);
  if(panelResult!=rpsui::api::Result::Ok) {
   spdlog::error("PALM startup failed: wheel panel registration rejected ({})",static_cast<unsigned>(panelResult));

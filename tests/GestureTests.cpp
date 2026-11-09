@@ -1,3 +1,4 @@
+#include <imgui_impl_null.h>
 #include "RockServices.h"
 #include <F4SE/Impl/PCH.h>
 #include "Gestures.h"
@@ -115,7 +116,7 @@ void checkRuntime() {
 }
 void checkSelection() {
  ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;io.DisplaySize={1024,1024};io.DeltaTime=1.f/90;
- unsigned char* pixels;int width,height;io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
+ ImGui_ImplNullRender_Init(); // Headless: accepts the font atlas's texture requests.
  Model model;View view;model.gestures.availability.fill(GestureAvailability::Free);
  const auto draw=[&](float x,float y){io.AddMousePosEvent(x,y);ImGui::NewFrame();auto action=drawWheel(model,view);ImGui::Render();return action;};
  for(bool left:{false,true}) {

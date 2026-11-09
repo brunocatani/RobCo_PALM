@@ -1,3 +1,4 @@
+#include <imgui_impl_null.h>
 #include "PanelInput.h"
 #include <imgui_internal.h>
 #include <cmath>
@@ -26,8 +27,8 @@ void testInput(float rate, bool snapshotMode) {
     io.DisplaySize = {600, 400};
     io.DeltaTime = 1.0f / rate;
     if (snapshotMode) wheel::configurePanelInput(io);
-    unsigned char* pixels{}; int width{}, height{};
-    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    // Headless: ImGui's null renderer accepts the font atlas's texture requests.
+    ImGui_ImplNullRender_Init();
     for (int i = 0; i < 3; ++i) { ImGui::NewFrame(); draw(); }
     io.AddMousePosEvent(100, 100);
     ImGui::NewFrame(); draw();

@@ -1518,7 +1518,6 @@ namespace rock_configurator
                 { maximum.x - 3.0f, maximum.y - 3.0f },
                 packed(active != panel_resize::Handle::None ? accentColor(0.72f) : accentColor(0.24f)),
                 0.0f,
-                0,
                 active != panel_resize::Handle::None ? 3.0f : 1.0f);
 
             const auto handleColor = [&](panel_resize::Handle handle) {

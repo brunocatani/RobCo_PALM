@@ -8,28 +8,25 @@
 #include "RpsUiQuery.h"
 #include <RPS_UI_Framework/Framework.h>
 
-#include <imgui_impl_dx11.h>
+#include <imgui_internal.h>
+#include <RPS_UI_Framework/ImGuiBuild.h>
 
-#include <cfloat>
 #include "Fonts.h"
-#include "PanelInput.h"
 
 namespace devui::render
 {
     namespace
     {
-        // One per panel: each has its own ImGui context, so pointer state and fonts never mix.
+        // One per panel. RPS UI owns each panel's ImGui context, so pointer
+        // state and fonts never mix; the fonts added in setupPanel live with
+        // that context generation. Render thread only, except Shutdown.
         struct RenderState
         {
             std::mutex mutex;
-            Microsoft::WRL::ComPtr<ID3D11Device> device;
-            Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
-            ImGuiContext* imguiContext{ nullptr };
+            ImGuiContext* imguiContext{ nullptr }; // Identity only, for GetFont.
             std::array<ImFont*,
                 static_cast<std::size_t>(FontRole::Count)> fonts{};
-            std::uint64_t deviceGeneration{ 0 };
-            bool backendReady{ false };
-            bool initializationFailed{ false };
+            std::uint64_t contextGeneration{ 0 };
             bool backWasDown{ false };
             bool backRequested{ false };
             bool keyboard{ false };
@@ -76,64 +73,19 @@ namespace devui::render
             ImGui::GetStyle().FontSizeBase=20.0f;
             ImGui::GetStyle().FontScaleMain=1.0f;
         }
-        void releaseRenderState(RenderState& state) noexcept
-        {
-            if (state.imguiContext) {
-                ImGui::SetCurrentContext(state.imguiContext);
-                if (state.backendReady) {
-                    ImGui_ImplDX11_Shutdown();
-                }
-                ImGui::DestroyContext(state.imguiContext);
-            }
-            state.imguiContext = nullptr;
-            state.fonts = {};
-            state.backendReady = false;
-            state.context.Reset();
-            state.device.Reset();
-            state.deviceGeneration = 0;
-        }
 
-        [[nodiscard]] bool initializeRenderState(
-            RenderState& state,
-            const rpsui::api::framework::PanelRenderFrame& frame) noexcept
+        void RPSUI_CALL setupPanel(
+            const rpsui::api::framework::PanelSetup* setup,
+            void* userData) noexcept
         {
-            auto* device =
-                static_cast<ID3D11Device*>(frame.d3dDevice);
-            auto* context =
-                static_cast<ID3D11DeviceContext*>(frame.d3dContext);
-            if (!device ||
-                !context ||
-                state.initializationFailed) {
-                return false;
+            if (!setup || setup->size < sizeof(*setup) || !userData) {
+                return;
             }
-            if (state.imguiContext &&
-                state.device.Get() == device &&
-                state.deviceGeneration == frame.deviceGeneration) {
-                return true;
-            }
-            releaseRenderState(state);
-
+            auto& state = *static_cast<RenderState*>(userData);
+            std::scoped_lock lock(state.mutex);
             try {
-                state.device = device;
-                state.context = context;
-                state.deviceGeneration = frame.deviceGeneration;
-                IMGUI_CHECKVERSION();
-                state.imguiContext = ImGui::CreateContext();
-                if (!state.imguiContext) {
-                    throw std::runtime_error(
-                        "ImGui context creation failed");
-                }
-                ImGui::SetCurrentContext(state.imguiContext);
+                RPSUI_IMGUI_BIND(setup->imgui);
                 auto& io = ImGui::GetIO();
-                wheel::configurePanelInput(io);
-                io.IniFilename = nullptr;
-                io.LogFilename = nullptr;
-                io.DisplaySize = {
-                    static_cast<float>(frame.pixelWidth),
-                    static_cast<float>(frame.pixelHeight),
-                };
-                io.DisplayFramebufferScale = { 1.0f, 1.0f };
-                io.MouseDrawCursor = true;
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
                 configureFonts(state, io);
                 devui::visual::applyStyle();
@@ -142,27 +94,16 @@ namespace devui::render
                     ImGui::GetStyle().MouseCursorScale =
                         static_cast<float>(kKeyboardPanelPixelWidth) / static_cast<float>(kPanelPixelWidth);
                 }
-                if (!ImGui_ImplDX11_Init(device, context)) {
-                    throw std::runtime_error(
-                        "ImGui DX11 backend initialization failed");
-                }
-                state.backendReady = true;
+                state.imguiContext = ImGui::GetCurrentContext();
+                state.contextGeneration = setup->contextGeneration;
                 logger::info(
-                    "PALM Config initialized its RPS UI consumer renderer "
-                    "(device generation {})",
-                    frame.deviceGeneration);
-                return true;
+                    "PALM Config set up its RPS UI panel context (generation {})",
+                    setup->contextGeneration);
             } catch (const std::exception& error) {
-                logger::critical(
-                    "PALM Config consumer renderer initialization failed: {}",
-                    error.what());
+                logger::critical("PALM Config panel setup failed: {}", error.what());
             } catch (...) {
-                logger::critical(
-                    "PALM Config consumer renderer initialization failed");
+                logger::critical("PALM Config panel setup failed");
             }
-            releaseRenderState(state);
-            state.initializationFailed = true;
-            return false;
         }
 
         [[nodiscard]] rock_configurator::panel_resize::Handle localResizeHandle(
@@ -172,21 +113,21 @@ namespace devui::render
                 static_cast<std::uint32_t>(handle));
         }
 
-        void RPSUI_CALL renderPanel(
-            const rpsui::api::framework::PanelRenderFrame* frame,
+        void RPSUI_CALL drawPanel(
+            const rpsui::api::framework::PanelDrawFrame* frame,
             void* userData) noexcept
         {
             if (!frame ||
                 frame->size < sizeof(*frame) ||
-                !frame->renderTargetView ||
                 !userData) {
                 return;
             }
             auto& state = *static_cast<RenderState*>(userData);
             std::scoped_lock lock(state.mutex);
-            if (!initializeRenderState(state, *frame)) {
+            if (state.contextGeneration != frame->contextGeneration) {
                 return;
             }
+            RPSUI_IMGUI_BIND(frame->imgui);
 
             if (!state.keyboard) {
                 rock_configurator::onFrameworkPanelFrame(
@@ -195,67 +136,15 @@ namespace devui::render
                     localResizeHandle(frame->activeResizeHandle));
             }
 
-            ImGui::SetCurrentContext(state.imguiContext);
-            auto& io = ImGui::GetIO();
-            io.DeltaTime = std::clamp(
-                frame->deltaSeconds,
-                1.0f / 240.0f,
-                0.1f);
-            io.DisplaySize = {
-                static_cast<float>(frame->pixelWidth),
-                static_cast<float>(frame->pixelHeight),
-            };
-            if (frame->pointerValid != 0) {
-                io.AddMousePosEvent(
-                    frame->pointerPixelX,
-                    frame->pointerPixelY);
-            } else {
-                io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
-            }
-            io.AddMouseButtonEvent(
-                0,
-                frame->pointerValid != 0 &&
-                    frame->primaryDown != 0);
-            if (frame->pointerValid != 0) {
-                constexpr float wheelUnitsPerSecond = 5.5f;
-                io.AddMouseWheelEvent(
-                    frame->scrollAxisX *
-                        wheelUnitsPerSecond *
-                        io.DeltaTime,
-                    frame->scrollAxisY *
-                        wheelUnitsPerSecond *
-                        io.DeltaTime);
-            }
-
-            auto* renderTarget =
-                static_cast<ID3D11RenderTargetView*>(
-                    frame->renderTargetView);
-            state.context->OMSetRenderTargets(
-                1,
-                &renderTarget,
-                nullptr);
-            D3D11_VIEWPORT viewport{};
-            viewport.Width = static_cast<float>(frame->pixelWidth);
-            viewport.Height = static_cast<float>(frame->pixelHeight);
-            viewport.MinDepth = 0.0f;
-            viewport.MaxDepth = 1.0f;
-            state.context->RSSetViewports(1, &viewport);
-
-            ImGui_ImplDX11_NewFrame();
-            ImGui::NewFrame();
             const bool backDown = frame->pointerValid != 0 && frame->backDown != 0;
             state.backRequested |= backDown && !state.backWasDown;
             state.backWasDown = backDown;
             const bool drawn = state.keyboard ?
                 rock_configurator::drawKeyboardPanel(0, 0, kKeyboardPanelPixelWidth, kKeyboardPanelPixelHeight, state.backRequested) :
                 rock_configurator::drawImGui(0, 0, kPanelPixelWidth, kPanelPixelHeight, state.backRequested);
-            if (!drawn) {
-                ImGui::EndFrame();
-                return;
+            if (drawn) {
+                state.backRequested = false;
             }
-            state.backRequested = false;
-            ImGui::Render();
-            ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
         }
     }
 
@@ -325,7 +214,9 @@ namespace devui::render
         panel.maximumPhysicalWidth = kMaximumPanelPhysicalWidth;
         panel.sortOrder = 310;
         panel.flags = static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::ConfigNavigation);
-        panel.renderCallback = &renderPanel;
+        panel.imgui = RPSUI_IMGUI_BUILD();
+        panel.setupCallback = &setupPanel;
+        panel.drawCallback = &drawPanel;
         panel.userData = &configState();
         if (state.api->registerPanel(
                 state.ownerToken,
@@ -357,7 +248,9 @@ namespace devui::render
         keyboard.sortOrder = 311;
         keyboard.flags = static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::ConfigNavigation) |
                          static_cast<std::uint32_t>(rpsui::api::framework::PanelFlag::FixedSize);
-        keyboard.renderCallback = &renderPanel;
+        keyboard.imgui = RPSUI_IMGUI_BUILD();
+        keyboard.setupCallback = &setupPanel;
+        keyboard.drawCallback = &drawPanel;
         keyboard.userData = &keyboardState();
         if (state.api->registerPanel(state.ownerToken, &keyboard, &state.keyboardHandle) != rpsui::api::Result::Ok) {
             state.keyboardHandle = 0;
@@ -535,9 +428,12 @@ namespace devui::render
             framework.installed = false;
         }
 
+        // RPS UI retired both panels' contexts with their registrations.
         for (auto* state : { &configState(), &keyboardState() }) {
             std::scoped_lock lock(state->mutex);
-            releaseRenderState(*state);
+            state->imguiContext = nullptr;
+            state->fonts = {};
+            state->contextGeneration = 0;
         }
     }
 }

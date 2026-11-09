@@ -117,7 +117,7 @@ namespace rock_configurator
         const ImVec2 minimum = ImGui::GetCursorScreenPos();
         const ImVec2 maximum{ minimum.x + width, minimum.y + height };
         auto* draw = ImGui::GetWindowDrawList();
-        draw->AddRect(minimum, maximum, packed(devui::visual::accent(editing ? 1.0f : 0.7f)), 0.0f, 0, editing ? 2.0f : 1.0f);
+        draw->AddRect(minimum, maximum, packed(devui::visual::accent(editing ? 1.0f : 0.7f)), 0.0f, editing ? 2.0f : 1.0f);
         ImGui::Dummy({ width, height });
 
         Font font(FontRole::Mono, fontSize);

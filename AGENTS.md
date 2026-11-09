@@ -4,6 +4,10 @@ RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM'
 
 - Build with `cmake --preset custom-fast`, then `cmake --build build-fast --config Release --target RobCoPALM`. Targeted CTest suites also use `build-fast`, Release. Deploys `wheelmenu.dll` and its PDB only to `F4SE/Plugins` under the mod folder set by `COPY_PLUGIN_BASE_PATH` in `CMakeUserPresets.json`.
 
+## Drawing
+
+- RPS UI Framework owns every in-game panel's Dear ImGui context, renderer and frame. The wheel (`src/Renderer.cpp`) and the Config and keyboard panels (`src/tools/render/FrameworkPanelRenderer.cpp`) add their fonts, style and icon textures in the panel's setup callback and issue ImGui calls in its draw callback. PALM's Dear ImGui copy is built with RPS UI's shared configuration (`RPS_UI_Framework/ImGuiBuild.h`) and no renderer backend; only the desktop preview, the capture tool and the headless tests add a backend.
+
 ## Provider pages
 
 - Runtime availability comes from the loaded modules (`src/tools/RpsMod.h`). PALM never changes a provider's published contract.

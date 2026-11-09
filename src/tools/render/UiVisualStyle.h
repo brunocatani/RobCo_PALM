@@ -90,7 +90,7 @@ namespace devui::visual
         colors[ImGuiCol_Tab] = surface();
         colors[ImGuiCol_TabHovered] = accent(0.24f);
         colors[ImGuiCol_TabSelected] = accent(0.20f);
-        colors[ImGuiCol_NavHighlight] = accent(0.82f);
+        colors[ImGuiCol_NavCursor] = accent(0.82f);
         colors[ImGuiCol_TableHeaderBg] = accent(0.06f);
         colors[ImGuiCol_TableRowBg] = surface(0.4f);
         colors[ImGuiCol_TableRowBgAlt] = accent(0.025f);

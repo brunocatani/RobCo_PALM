@@ -6,6 +6,8 @@
 #include "OnScreenKeyboard.h"
 #include "render/ConfigUi.h"
 
+#include <imgui_internal.h>
+
 namespace rock_configurator
 {
     namespace
@@ -76,7 +78,8 @@ namespace rock_configurator
                 ImGui::TextColored(devui::visual::muted(), "%s", _shortcutProblem.c_str());
                 ImGui::PopTextWrapPos();
                 // Reload goes to the right edge.
-                ImGui::SetCursorPos({ ImGui::GetWindowContentRegionMax().x - kReloadWidth, kGap });
+                // The window content region's right edge in window coordinates.
+                ImGui::SetCursorPos({ ImGui::GetCurrentWindow()->ContentRegionRect.Max.x - ImGui::GetWindowPos().x - kReloadWidth, kGap });
             } else {
                 for (std::size_t index = 0; index < _shortcuts.size(); ++index) {
                     const auto& shortcut = _shortcuts[index];

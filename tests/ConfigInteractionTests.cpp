@@ -1,3 +1,4 @@
+#include <imgui_impl_null.h>
 #include "ConfiguratorRuntime.h"
 #include "WheelConfig.h"
 #include "PanelInput.h"
@@ -94,8 +95,8 @@ int main(int argc, char** argv) {
         io.IniFilename = nullptr; io.LogFilename = nullptr;
         io.DisplaySize = {1440, 540}; io.DeltaTime = 1.0f / 90;
         io.FontDefault = io.Fonts->AddFontDefaultVector();
-        unsigned char* pixels{}; int width{}, height{};
-        io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+        // Headless: ImGui's null renderer accepts the font atlas's texture requests.
+        ImGui_ImplNullRender_Init();
         devui::visual::applyStyle();
         rock_configurator::initializePreview(path);
         rock_configurator::setPreviewOpen(true);

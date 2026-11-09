@@ -31,12 +31,22 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(RPSFramework CONFIG REQUIRED)
 set(IMGUI "${WORKSPACE}/../devtools/imgui")
+# RPS UI owns the in-game panels' ImGui contexts and renders them. PALM's copy
+# of Dear ImGui only issues calls into those contexts, so it is built with RPS
+# UI's shared configuration and without a renderer backend.
 add_library(wheel_imgui STATIC "${IMGUI}/imgui.cpp" "${IMGUI}/imgui_draw.cpp"
-  "${IMGUI}/imgui_tables.cpp" "${IMGUI}/imgui_widgets.cpp" "${IMGUI}/backends/imgui_impl_dx11.cpp")
-target_include_directories(wheel_imgui PUBLIC "${IMGUI}" "${IMGUI}/backends")
+  "${IMGUI}/imgui_tables.cpp" "${IMGUI}/imgui_widgets.cpp")
+target_include_directories(wheel_imgui PUBLIC "${IMGUI}" "${RPSUI_INCLUDE_DIR}")
 target_compile_features(wheel_imgui PUBLIC cxx_std_23)
-target_compile_definitions(wheel_imgui PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(wheel_imgui PUBLIC d3d11 dxgi d3dcompiler)
+target_compile_definitions(wheel_imgui PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN IMGUI_USER_CONFIG="RPS_UI_Framework/ImGuiBuild.h")
+# Headless tests use ImGui's null renderer.
+add_library(wheel_imgui_null_tests STATIC "${IMGUI}/backends/imgui_impl_null.cpp")
+target_include_directories(wheel_imgui_null_tests PUBLIC "${IMGUI}/backends")
+target_link_libraries(wheel_imgui_null_tests PUBLIC wheel_imgui)
+# The desktop preview and capture tool render their own window.
+add_library(wheel_imgui_dx11 STATIC "${IMGUI}/backends/imgui_impl_dx11.cpp")
+target_include_directories(wheel_imgui_dx11 PUBLIC "${IMGUI}/backends")
+target_link_libraries(wheel_imgui_dx11 PUBLIC wheel_imgui d3d11 dxgi d3dcompiler)
 add_library(wheel_view STATIC src/WheelView.cpp src/Fonts.cpp src/WheelConfig.cpp src/IconAtlas.cpp src/SectionRegistry.cpp src/DeveloperActions.cpp src/PalmControls.cpp external/F4VR-Input/InputBindingParser.cpp)
 target_include_directories(wheel_view PUBLIC src external/F4VR-Input
  "${WORKSPACE}/libraries_and_tools/F4VR-CommonFramework/external/openvr")
@@ -67,7 +77,7 @@ target_precompile_headers(RobCoPALM PRIVATE src/PCH.h)
 target_compile_options(RobCoPALM PRIVATE /MP /Zi /wd4715 /utf-8)
 target_link_options(RobCoPALM PRIVATE /DEBUG:FULL)
 add_executable(PALMPreview WIN32 preview/Main.cpp preview/WorkshopAdapter.cpp src/IconResources.rc "${IMGUI}/backends/imgui_impl_win32.cpp")
-target_link_libraries(PALMPreview PRIVATE wheel_view wheel_workshop_preview shell32)
+target_link_libraries(PALMPreview PRIVATE wheel_view wheel_workshop_preview wheel_imgui_dx11 shell32)
 target_compile_options(wheel_view PRIVATE /utf-8)
 target_compile_options(PALMPreview PRIVATE /utf-8)
 set(COPY_PLUGIN_BASE_PATH "" CACHE PATH "MO2 mod root for auto-deployment")
@@ -100,7 +110,7 @@ target_compile_definitions(PALMDeveloperActionsTests PRIVATE NOMINMAX WIN32_LEAN
 add_test(NAME PALM.DeveloperActions COMMAND PALMDeveloperActionsTests)
 add_executable(WheelPanelInputTests tests/PanelInputTests.cpp)
 target_include_directories(WheelPanelInputTests PRIVATE src)
-target_link_libraries(WheelPanelInputTests PRIVATE wheel_imgui)
+target_link_libraries(WheelPanelInputTests PRIVATE wheel_imgui_null_tests)
 add_test(NAME Wheel.PanelInput COMMAND WheelPanelInputTests)
 add_executable(WheelPolicyTests tests/PolicyTests.cpp)
 target_include_directories(WheelPolicyTests PRIVATE src)
@@ -108,7 +118,7 @@ target_compile_features(WheelPolicyTests PRIVATE cxx_std_23)
 add_test(NAME Wheel.Policy COMMAND WheelPolicyTests)
 add_executable(WheelGestureTests tests/GestureTests.cpp src/Gestures.cpp)
 target_include_directories(WheelGestureTests PRIVATE src "${ROCK_INCLUDE_DIR}")
-target_link_libraries(WheelGestureTests PRIVATE CommonLibF4::CommonLibF4 spdlog::spdlog wheel_view)
+target_link_libraries(WheelGestureTests PRIVATE CommonLibF4::CommonLibF4 spdlog::spdlog wheel_view wheel_imgui_null_tests)
 target_compile_options(WheelGestureTests PRIVATE /MP /utf-8 /wd4715)
 add_test(NAME Wheel.Gestures COMMAND WheelGestureTests)
 add_executable(WheelPreferencesTests tests/WheelPreferencesTests.cpp)
@@ -211,7 +221,7 @@ foreach(target WheelIniSettingsStoreControlTests WheelRockConfigurationBridgeTes
 endforeach()
 
 add_executable(WheelConfigInteractionTests tests/ConfigInteractionTests.cpp preview/WorkshopAdapter.cpp)
-target_link_libraries(WheelConfigInteractionTests PRIVATE wheel_workshop_preview)
+target_link_libraries(WheelConfigInteractionTests PRIVATE wheel_workshop_preview wheel_imgui_null_tests)
 target_compile_definitions(WheelConfigInteractionTests PRIVATE WHEEL_DESKTOP_PREVIEW)
 add_test(NAME Wheel.ConfigInteraction COMMAND WheelConfigInteractionTests)
 
@@ -225,7 +235,7 @@ target_compile_definitions(PalmControlsTests PRIVATE PALM_CONTROLS_TEST_DIR="${C
 add_test(NAME Wheel.Controls COMMAND PalmControlsTests)
 
 add_executable(PALMCapture preview/Capture.cpp preview/WorkshopAdapter.cpp src/IconResources.rc)
-target_link_libraries(PALMCapture PRIVATE wheel_workshop_preview windowscodecs ole32)
+target_link_libraries(PALMCapture PRIVATE wheel_workshop_preview wheel_imgui_dx11 windowscodecs ole32)
 target_compile_definitions(PALMCapture PRIVATE WHEEL_DESKTOP_PREVIEW)
 
 # Tests share build-fast but stay out of the default build, so building and deploying the
