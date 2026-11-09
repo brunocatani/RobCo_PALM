@@ -5,20 +5,68 @@
 #include <mutex>
 #include <format>
 #include <cwchar>
+#include <algorithm>
+#include <charconv>
+#include <span>
+#include <vector>
 
 namespace wheel {
 namespace {
+namespace settings=RPS::Settings;
 // controls retains the custom binding while a fixed input mode is selected.
-struct State {std::mutex mutex;Controls controls;InputMode inputMode{InputMode::StickClick};PointerAim aim;std::filesystem::path path;std::string status;bool dirty{},aimDirty{};std::atomic_bool save{},aimChanged{},gestures{true};};
+// store is PALM.toml's store; every use holds mutex.
+struct State {std::mutex mutex;Controls controls;InputMode inputMode{InputMode::StickClick};PointerAim aim;std::unique_ptr<settings::Store> store;std::string status;bool dirty{},aimDirty{};std::atomic_bool save{},aimChanged{},gestures{true};};
 State& state(){static State value;return value;}
-constexpr std::array pitchKeys{L"fLeftPitchDegrees",L"fRightPitchDegrees"};
-constexpr std::array yawKeys{L"fLeftYawDegrees",L"fRightYawDegrees"};
-bool readAngle(const std::filesystem::path& path,const wchar_t* key,float& value) {
- const auto fallback=std::to_wstring(value);
- std::array<wchar_t,64> text{};GetPrivateProfileStringW(L"Pointer",key,fallback.c_str(),text.data(),static_cast<DWORD>(text.size()),path.c_str());
- wchar_t* end{};const float parsed=std::wcstof(text.data(),&end);
- if(end==text.data() || *end || !std::isfinite(parsed) || std::fabs(parsed)>90)return false;
+constexpr std::array pitchKeys{"LeftPitchDegrees","RightPitchDegrees"};
+constexpr std::array yawKeys{"LeftYawDegrees","RightYawDegrees"};
+constexpr std::string_view kDefaultMode="press";
+bool readAngle(const settings::Store& store,const char* key,float& value) {
+ const auto& text=store.find("Pointer",key)->value;float parsed{};
+ const auto result=std::from_chars(text.data(),text.data()+text.size(),parsed);
+ if(result.ec!=std::errc{} || result.ptr!=text.data()+text.size() || !std::isfinite(parsed) || std::fabs(parsed)>90)return false;
  value=parsed;return true;
+}
+std::string angleText(float value){return settings::normalizeValue(settings::ValueType::Float,std::to_string(value)).value_or("0.0");}
+std::vector<settings::Definition> palmDefinitions() {
+ const auto player=settings::Group::Player;const PointerAim aim;
+ std::vector<settings::Definition> result{
+  {"Controls","InputMode","01. Controls","How PALM opens: 1 = click the right thumbstick, 2 = hold grip and trigger, 3 = Custom (Mode and OpenMenu).\n"
+   "Change it in game under Config > PALM > Controls.",player,settings::ValueType::Integer,"1"},
+  {"Controls","Mode","01. Controls","Custom only: press (click to select) or hold (release to select).",player,settings::ValueType::String,std::string(kDefaultMode)},
+  {"Controls","OpenMenu","01. Controls","Custom only: the button that opens PALM, as hand, activation and button, for example 'right release thumbstick suppress'.\n"
+   "Set it in game under Config > PALM > Controls.",player,settings::ValueType::String,bindingText(Controls{})},
+ };
+ for(unsigned hand=0;hand<2;++hand) {
+  const auto side=hand?"right":"left";
+  result.push_back({"Pointer",pitchKeys[hand],"02. Pointer Aim",std::format("Tilts the {} hand's pointer up or down, in degrees. Range: -90 to 90.",side),player,settings::ValueType::Float,angleText(aim.pitch[hand])});
+  result.push_back({"Pointer",yawKeys[hand],"02. Pointer Aim",std::format("Turns the {} hand's pointer left or right, in degrees. Range: -90 to 90.",side),player,settings::ValueType::Float,angleText(aim.yaw[hand])});
+ }
+ result.push_back({"Developer","Enabled","03. Developer","Adds the Developer section to the wheel. Restart the game after changing it.",player,settings::ValueType::Boolean,"false"});
+ return result;
+}
+// The keys of PALM.ini, with the defaults it was written with.
+std::span<const settings::LegacyKey> palmLegacyKeys() {
+ static const auto table=[] {
+  // texts owns every string the keys view; reserved so it never reallocates.
+  struct Table{std::vector<std::string> texts;std::vector<settings::LegacyKey> keys;} result;
+  const auto definitions=palmDefinitions();result.texts.reserve(definitions.size());
+  const auto row=[&](std::string_view oldKey,std::string_view section,std::string_view key) {
+   const auto found=std::find_if(definitions.begin(),definitions.end(),[&](const auto& d){return d.table==section && d.key==key;});
+   settings::LegacyKey legacy{};legacy.oldKey=oldKey;legacy.table=section;legacy.key=key;legacy.oldSection=section;
+   legacy.oldDefault=result.texts.emplace_back(found->defaultValue);
+   result.keys.push_back(legacy);
+  };
+  row("iInputMode","Controls","InputMode");row("sMode","Controls","Mode");row("sOpenMenu","Controls","OpenMenu");
+  row("fLeftPitchDegrees","Pointer","LeftPitchDegrees");row("fRightPitchDegrees","Pointer","RightPitchDegrees");
+  row("fLeftYawDegrees","Pointer","LeftYawDegrees");row("fRightYawDegrees","Pointer","RightYawDegrees");
+  row("bEnabled","Developer","Enabled");
+  return result;
+ }();
+ return table.keys;
+}
+// An INI without iInputMode kept its binding: the matching preset, else Custom.
+InputMode inferredMode(const Controls& controls) {
+ return controls==Controls{}?InputMode::StickClick:controls==controlsForMode(InputMode::GripTriggerHold)?InputMode::GripTriggerHold:InputMode::Custom;
 }
 constexpr std::array activationTypes{f4cf::vrcf::ActivationType::Press,f4cf::vrcf::ActivationType::Tap,f4cf::vrcf::ActivationType::DoublePress,f4cf::vrcf::ActivationType::HoldDown,f4cf::vrcf::ActivationType::LongPress,f4cf::vrcf::ActivationType::Release};
 constexpr std::array activationNames{"press","tap","double","hold","longpress","release"};
@@ -56,35 +104,55 @@ InputMode snapshotInputMode(){auto& s=state();std::scoped_lock lock(s.mutex);ret
 bool applyInputMode(InputMode mode) {
  if(mode!=InputMode::StickClick && mode!=InputMode::GripTriggerHold && mode!=InputMode::Custom)return false;
  auto& s=state();std::scoped_lock lock(s.mutex);s.inputMode=mode;s.save=true;
- s.status=s.path.empty()?"Preview controls updated":"Saving controls...";return true;
+ s.status=!s.store?"Preview controls updated":"Saving controls...";return true;
+}
+std::unique_ptr<settings::Store> openPalmSettings(const std::filesystem::path& path) {
+ if(path.empty())return {};
+ const auto directory=path.parent_path(),ini=directory/"PALM.ini";
+ std::filesystem::create_directories(directory);
+ // An INI written before input modes existed kept its binding through the
+ // matching preset or Custom; the migration keeps that choice.
+ bool inferMode=false;
+ if(!std::filesystem::exists(path) && std::filesystem::exists(ini)) {
+  std::array<wchar_t,16> mode{};
+  GetPrivateProfileStringW(L"Controls",L"iInputMode",L"",mode.data(),static_cast<DWORD>(mode.size()),ini.c_str());
+  inferMode=mode[0]==L'\0';
+ }
+ auto store=std::make_unique<settings::Store>(settings::Files{directory,"RobCo PALM",path.filename().string(),{},
+   "## PALM.toml - RobCo PALM controls and pointer aim\n"
+   "## Change these in game under Config > PALM, or edit this file while the game is closed.\n"
+   "## Each option has its help above it. When PALM starts it adds new options with their defaults and rewrites its\n"
+   "## help lines (##). Your own notes are kept when they start with a single # on the lines above an option.\n",{}},
+  palmDefinitions(),settings::LegacyIni{{ini},palmLegacyKeys()});
+ store->load(true);
+ if(inferMode) {
+  Controls controls;std::string error;
+  if(parseControls(store->find("Controls","Mode")->value,store->find("Controls","OpenMenu")->value,controls,error))
+   if(const auto mode=inferredMode(controls);mode!=InputMode::StickClick &&
+    store->setValue(settings::Group::Player,"Controls","InputMode",std::to_string(static_cast<int>(mode))))
+    store->load(false); // A write changes the file; reading it shows the new value.
+ }
+ return store;
 }
 void initializeControls(const std::filesystem::path& path) {
- auto& s=state();std::scoped_lock lock(s.mutex);s.path=path;s.controls={};s.inputMode=InputMode::StickClick;s.aim={};s.dirty=false;s.save=false;s.status.clear();s.aimDirty=false;s.aimChanged=true;
+ auto& s=state();std::scoped_lock lock(s.mutex);s.store.reset();s.controls={};s.inputMode=InputMode::StickClick;s.aim={};s.dirty=false;s.save=false;s.status.clear();s.aimDirty=false;s.aimChanged=true;
  if(path.empty())return;
- if(!std::filesystem::exists(path)){s.save=true;return;}
- std::array<wchar_t,256> mode{},binding{};
- GetPrivateProfileStringW(L"Controls",L"sMode",L"press",mode.data(),static_cast<DWORD>(mode.size()),path.c_str());
- GetPrivateProfileStringW(L"Controls",L"sOpenMenu",L"right release thumbstick suppress",binding.data(),static_cast<DWORD>(binding.size()),path.c_str());
- const std::wstring_view m(mode.data()),b(binding.data());
- const auto ascii=[](std::wstring_view wide){std::string text;for(wchar_t c:wide){if(c>127)return std::string{"invalid"};text.push_back(static_cast<char>(c));}return text;};
+ try{s.store=openPalmSettings(path);}
+ catch(const std::exception& error){s.status=std::format("Could not open {}: {}",path.filename().string(),error.what());return;}
+ const auto& store=*s.store;
+ if(!store.messages().empty())s.status=store.messages().front();
  Controls value;
- if(parseControls(ascii(m),ascii(b),value,s.status)){s.controls=value;s.status="Controls loaded";}
- // Existing installations keep their exact binding. Presets are authoritative
- // once iInputMode is present; the other two keys then store Custom's binding.
- std::array<wchar_t,16> inputMode{};
- GetPrivateProfileStringW(L"Controls",L"iInputMode",L"",inputMode.data(),static_cast<DWORD>(inputMode.size()),path.c_str());
- const std::wstring_view selected(inputMode.data());
- if(selected.empty()) {
-  s.inputMode=s.controls==Controls{}?InputMode::StickClick:
-   s.controls==controlsForMode(InputMode::GripTriggerHold)?InputMode::GripTriggerHold:InputMode::Custom;
- }else if(selected==L"1")s.inputMode=InputMode::StickClick;
- else if(selected==L"2")s.inputMode=InputMode::GripTriggerHold;
- else if(selected==L"3")s.inputMode=InputMode::Custom;
+ if(parseControls(store.find("Controls","Mode")->value,store.find("Controls","OpenMenu")->value,value,s.status)){s.controls=value;if(store.messages().empty())s.status="Controls loaded";}
+ // Presets are authoritative; Mode and OpenMenu store Custom's binding.
+ const auto& selected=store.find("Controls","InputMode")->value;
+ if(selected=="1")s.inputMode=InputMode::StickClick;
+ else if(selected=="2")s.inputMode=InputMode::GripTriggerHold;
+ else if(selected=="3")s.inputMode=InputMode::Custom;
  else s.status="Invalid input mode; using mode 1";
  bool valid=true;
  for(unsigned hand=0;hand<2;++hand) {
-  valid=readAngle(path,pitchKeys[hand],s.aim.pitch[hand]) && valid;
-  valid=readAngle(path,yawKeys[hand],s.aim.yaw[hand]) && valid;
+  valid=readAngle(store,pitchKeys[hand],s.aim.pitch[hand]) && valid;
+  valid=readAngle(store,yawKeys[hand],s.aim.yaw[hand]) && valid;
  }
  if(!valid)s.status="Invalid pointer angle; using its default";
 }
@@ -93,25 +161,22 @@ bool applyControls(const Controls& controls,bool queueSave) {
  if(!parseControls(controls.mode==OpenMode::Hold?"hold":"press",bindingText(controls),validated,error)){auto& s=state();std::scoped_lock lock(s.mutex);s.status=error;return false;}
  auto& s=state();std::scoped_lock lock(s.mutex);
  if(s.inputMode!=InputMode::Custom){s.status="Select mode 3 - Custom to remap controls";return false;}
- s.controls=validated;s.dirty=true;if(queueSave)s.save=true;s.status=s.path.empty()?"Preview controls updated":"Saving controls...";return true;
+ s.controls=validated;s.dirty=true;if(queueSave)s.save=true;s.status=!s.store?"Preview controls updated":"Saving controls...";return true;
 }
 bool takeControlsSaveRequest(){return state().save.exchange(false);}
 void persistControls() {
  auto& s=state();std::scoped_lock lock(s.mutex);
- if(s.path.empty()){s.dirty=false;return;}
+ if(!s.store){s.dirty=false;return;}
  try {
-  std::filesystem::create_directories(s.path.parent_path());
-  const auto text=bindingText(s.controls);const std::wstring binding(text.begin(),text.end());
-  bool written=WritePrivateProfileStringW(L"Controls",L"iInputMode",std::to_wstring(static_cast<int>(s.inputMode)).c_str(),s.path.c_str()) &&
-   WritePrivateProfileStringW(L"Controls",L"sMode",s.controls.mode==OpenMode::Hold?L"hold":L"press",s.path.c_str()) &&
-   WritePrivateProfileStringW(L"Controls",L"sOpenMenu",binding.c_str(),s.path.c_str());
-  for(unsigned hand=0;hand<2;++hand) {
-   written=WritePrivateProfileStringW(L"Pointer",pitchKeys[hand],std::to_wstring(s.aim.pitch[hand]).c_str(),s.path.c_str()) && written;
-   written=WritePrivateProfileStringW(L"Pointer",yawKeys[hand],std::to_wstring(s.aim.yaw[hand]).c_str(),s.path.c_str()) && written;
-  }
+  const auto mode=std::to_string(static_cast<int>(s.inputMode)),binding=bindingText(s.controls);
+  std::array<std::string,4> angles{angleText(s.aim.pitch[0]),angleText(s.aim.pitch[1]),angleText(s.aim.yaw[0]),angleText(s.aim.yaw[1])};
+  const std::array<settings::Change,7> changes{{
+   {"Controls","InputMode",mode},{"Controls","Mode",s.controls.mode==OpenMode::Hold?"hold":"press"},{"Controls","OpenMenu",binding},
+   {"Pointer",pitchKeys[0],angles[0]},{"Pointer",pitchKeys[1],angles[1]},{"Pointer",yawKeys[0],angles[2]},{"Pointer",yawKeys[1],angles[3]}}};
+  const bool written=s.store->setValues(settings::Group::Player,changes);
   s.dirty=false;
-  s.status=written?"Settings saved to PALM.ini":"Could not save PALM.ini; controls apply to this session";
- }catch(...){s.dirty=false;s.status="Could not save PALM.ini; controls apply to this session";}
+  s.status=written?"Settings saved to PALM.toml":"Could not save PALM.toml ("+s.store->error()+"); controls apply to this session";
+ }catch(...){s.dirty=false;s.status="Could not save PALM.toml; controls apply to this session";}
 }
 PointerAim snapshotPointerAim(){auto& s=state();std::scoped_lock lock(s.mutex);return s.aim;}
 bool takePointerAimChange(){return state().aimChanged.exchange(false);}
@@ -120,7 +185,7 @@ bool applyPointerAim(const PointerAim& aim,bool commit) {
   if(!std::isfinite(aim.pitch[side]) || !std::isfinite(aim.yaw[side]) || std::fabs(aim.pitch[side])>90 || std::fabs(aim.yaw[side])>90)return false;
  auto& s=state();std::scoped_lock lock(s.mutex);s.aim=aim;s.aimDirty=!commit;
  if(commit){s.aimChanged=true;s.save=true;}
- s.status=s.path.empty()?"Preview aim updated":commit?"Saving pointer aim...":"Release to apply";return true;
+ s.status=!s.store?"Preview aim updated":commit?"Saving pointer aim...":"Release to apply";return true;
 }
 void drawPointerAim() {
  using namespace devui;

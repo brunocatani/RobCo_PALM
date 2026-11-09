@@ -7,7 +7,7 @@ int main(int argc,char** argv) {
     assert(argc==2);
     assert(!isRockConfiguration(RpsMod::Scissors)&&!isRockConfiguration(RpsMod::ScissorsDeveloper));
     assert(std::wstring_view(modInfo(RpsMod::Scissors).module)==L"SCISSORS.dll");
-    assert(std::string_view(modInfo(RpsMod::ScissorsDeveloper).ini)=="SCISSORS_Developer.ini");
+    assert(std::string_view(modInfo(RpsMod::ScissorsDeveloper).ini)=="SCISSORS_Developer.toml");
     IniSettingsStore absent("never-read.ini",RpsMod::Scissors);assert(!absent.load());
     const auto module=LoadLibraryA(argv[1]);assert(module);
     const auto query=reinterpret_cast<config::Query>(GetProcAddress(module,config::kQueryExport));assert(query);
@@ -49,12 +49,12 @@ int main(int argc,char** argv) {
     assert(consumer.settings().size()+developer.settings().size()==config::kSettings.size()+config::kNumbers.size());
     assert(!consumer.needsReload()&&!developer.needsReload());
     // Writes go through SCISSORS by key, from the page that owns the setting.
-    const auto collisionIndex=indexOf(consumer,"npcDynamicCollisions");
-    const auto visualizerIndex=indexOf(developer,"bDebugShowColliders");
+    const auto collisionIndex=indexOf(consumer,"NpcDynamicCollisions");
+    const auto visualizerIndex=indexOf(developer,"DebugShowColliders");
     const auto collision=consumer.setBooleanByIndex(collisionIndex,false);assert(collision.changed&&collision.saved);
     const auto visualizer=developer.setBooleanByIndex(visualizerIndex,true);assert(visualizer.changed&&visualizer.saved);
-    const auto physical=developer.setBooleanByIndex(indexOf(developer,"bPhysicalMelee"),false);assert(physical.changed&&physical.saved);
-    const auto hunchIndex=indexOf(developer,"fRagdollHunch");
+    const auto physical=developer.setBooleanByIndex(indexOf(developer,"PhysicalMelee"),false);assert(physical.changed&&physical.saved);
+    const auto hunchIndex=indexOf(developer,"RagdollHunch");
     const auto hunch=developer.setNumericByIndex(hunchIndex,2.5);assert(hunch.changed&&hunch.saved&&developer.settings()[hunchIndex].overridden);
     config::Snapshot state;assert(api->snapshot(&state)==config::Status::Ok);
     config::NumberSnapshot numbers;assert(api->numbers(&numbers)==config::Status::Ok);

@@ -96,20 +96,28 @@ int main()
     expect(saved.find("fExperimentalRecovery = 5.25") != std::string::npos,
         "unbounded numeric commits retain fine adjustment");
 
-    const auto paperPath = directory / "PAPER.ini";
+    // A TOML file as RPS Framework's settings store writes it.
+    const auto paperPath = directory / "PAPER.toml";
     const auto emittersPath = directory / "ROCK_Emitters.ini";
     {
         std::ofstream paper(paperPath);
-        paper << "[Main]\nbEnabled = true\nfContactIntensity = 0.5\n"
-              << "[DevelopmentCapture]\nsMaximumMode = User\n[WeaponMotionCache]\nsAccess = Off\n";
+        paper << "## PAPER.toml - PAPER options\n\n## === 01. General ===\n[Main]\n## Enables PAPER.\n"
+              << "# my note\nEnabled = true\n\n## Contact help.\nContactIntensity = 0.5\n\n"
+              << "## === 04. Development Capture ===\n[DevelopmentCapture]\n## User, Observe, Harvest or Capture.\n"
+              << "MaximumMode = 'User'\n\n## === 05. Weapon Motion Cache ===\n[WeaponMotionCache]\nAccess = \"Off\"\n";
         std::ofstream emitters(emittersPath);
         emitters << "; untouched sibling\n[Main]\nbEnabled = true\nfContactIntensity = 0.5\n";
     }
     const auto emittersBefore = readAll(emittersPath);
     rock_configurator::IniSettingsStore paper(paperPath, rock_configurator::RpsMod::Paper);
     rock_configurator::IniSettingsStore emitters(emittersPath, rock_configurator::RpsMod::Emitters);
-    expect(paper.load() && emitters.load(), "each mod loads its own INI");
+    expect(paper.load() && emitters.load(), "each mod loads its own file");
+    expect(paper.settings().size() == 4, "TOML comments, headings and notes are not settings");
     expect(paper.settings()[0].control.kind == Kind::Checkbox, "PAPER boolean remains a checkbox");
+    expect(paper.settings()[0].category == "01. General" && paper.settings()[0].description == "Enables PAPER.",
+        "a TOML option takes its category heading and its ## help, never the player's note");
+    expect(paper.settings()[2].category == "04. Development Capture" && paper.settings()[2].value == "User",
+        "a TOML string shows without its quotes");
     expect(!paper.settings()[1].control.bounded && !emitters.settings()[1].control.bounded,
         "ROCK-specific ranges cannot constrain another mod's matching key");
     expect(paper.setBooleanByIndex(0, false).saved, "PAPER checkbox writes to its own file");
@@ -117,6 +125,12 @@ int main()
         "PAPER development modes use supported values");
     expect(paper.setOptionByIndex(3, 2).saved && paper.settings()[3].value == "ReadWrite",
         "PAPER cache access uses supported values");
+    auto paperSaved = readAll(paperPath);
+    std::erase(paperSaved, '\r'); // PALM writes through a text stream.
+    expect(paperSaved.find("# my note\nEnabled = false\n") != std::string::npos &&
+               paperSaved.find("MaximumMode = 'Harvest'\n") != std::string::npos &&
+               paperSaved.find("Access = 'ReadWrite'\n") != std::string::npos,
+        "TOML edits keep notes, write booleans bare and strings quoted");
     expect(readAll(emittersPath) == emittersBefore && readAll(iniPath) == saved,
         "editing PAPER leaves ROCK and Emitters unchanged");
     expect(emitters.setBooleanByIndex(0, false).saved, "Emitters checkbox writes its own file");

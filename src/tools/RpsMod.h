@@ -15,13 +15,13 @@ struct RpsModInfo {
 };
 inline constexpr std::array kRpsMods{
  RpsModInfo{RpsMod::Rock,"ROCK",L"ROCK.dll","Mods_Config/ROCK","ROCK.toml","Consumer options are saved to ROCK.toml"},
- RpsModInfo{RpsMod::Paper,"PAPER",L"PAPER.dll","Mods_Config/PAPER","PAPER.ini","Changes save to PAPER.ini and apply live; cache size limits apply next launch"},
+ RpsModInfo{RpsMod::Paper,"PAPER",L"PAPER.dll","Mods_Config/PAPER","PAPER.toml","Changes save to PAPER.toml and apply live; cache size limits apply next launch"},
  RpsModInfo{RpsMod::RockDeveloper,"ROCK Dev",L"ROCK.dll","Mods_Config/ROCK","ROCK_Developer.toml","Only changes from defaults are saved to ROCK_Developer.toml"},
  RpsModInfo{RpsMod::Csah,"CSAH",L"CSAH.dll","Mods_Config/CSAH","CSAH.ini","Changes apply through CSAH's watcher; controls marked Restart apply next launch"},
  RpsModInfo{RpsMod::Diamond,"DIAMOND",L"DIAMOND.dll","Mods_Config/DIAMOND","DIAMOND.ini","PouchUI moves and rotates the pouch indicator. Enable Show grab zone boundary to preview while adjusting. Changes apply immediately and save to DIAMOND.ini"},
  RpsModInfo{RpsMod::Emitters,"Emitters",L"ROCK_Emitters.dll","Mods_Config/ROCK_Emitters","ROCK_Emitters.ini","Changes save to ROCK_Emitters.ini and apply live within about 250 ms"},
- RpsModInfo{RpsMod::Scissors,"SCISSORS",L"SCISSORS.dll","Mods_Config/SCISSORS","SCISSORS.ini","NPC settings are saved by SCISSORS and apply next frame"},
- RpsModInfo{RpsMod::ScissorsDeveloper,"SCISSORS Dev",L"SCISSORS.dll","Mods_Config/SCISSORS","SCISSORS_Developer.ini","NPC visualization is independent of ROCK. Only developer overrides are saved by SCISSORS"}
+ RpsModInfo{RpsMod::Scissors,"SCISSORS",L"SCISSORS.dll","Mods_Config/SCISSORS","SCISSORS.toml","NPC settings are saved by SCISSORS and apply next frame"},
+ RpsModInfo{RpsMod::ScissorsDeveloper,"SCISSORS Dev",L"SCISSORS.dll","Mods_Config/SCISSORS","SCISSORS_Developer.toml","NPC visualization is independent of ROCK. Only developer overrides are saved by SCISSORS"}
 };
 inline constexpr const RpsModInfo& modInfo(RpsMod mod){return kRpsMods[static_cast<std::size_t>(mod)];}
 inline constexpr std::array kRpsModDisplayOrder{

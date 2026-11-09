@@ -583,7 +583,7 @@ bool startRuntime() {
  }
  PWSTR documents{};
  if(SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents,0,nullptr,&documents))) {
-  const auto path=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"Mods_Config"/"RobCo_PALM"/"PALM.ini";
+  const auto path=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"Mods_Config"/"RobCo_PALM"/"PALM.toml";
   CoTaskMemFree(documents);initializeControls(path);if(takeControlsSaveRequest())persistControls();
   spdlog::info("PALM settings path: {}",path.string());
  }else {spdlog::error("PALM Documents folder unavailable");return false;}

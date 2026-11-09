@@ -132,7 +132,7 @@ void drawWheelSettings() {
   }else if(ImGui::BeginTable("mod-section-toggles",2,ImGuiTableFlags_SizingStretchSame)) {
    for(unsigned i=0;i<catalog.count;++i) {
     const auto& section=catalog.sections[i];bool enabled=s.prefs.sectionEnabled(section.id);
-    if(isDeveloperSection(section.id)){ImGui::TableNextColumn();ImGui::TextUnformatted("Developer — controlled by PALM.ini");continue;}
+    if(isDeveloperSection(section.id)){ImGui::TableNextColumn();ImGui::TextUnformatted("Developer — controlled by PALM.toml");continue;}
     ImGui::PushID(section.id);
     if(toggle(section.name,section.modName,enabled,1) && s.prefs.setSectionEnabled(section.id,enabled,enabledCount()))s.changed=true;
     ImGui::PopID();

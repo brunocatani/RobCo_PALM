@@ -7,10 +7,11 @@ RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM'
 ## Provider pages
 
 - Runtime availability comes from the loaded modules (`src/tools/RpsMod.h`). PALM never changes a provider's published contract.
-- ROCK's consumer and developer pages share one configuration registration: read the catalog from ROCK's negotiated Configuration API and route writes to ROCK. PAPER uses its INI adapter and watcher behaviour.
-- Item and gesture integration use ROCK when it is loaded; without it, PALM keeps its standalone RPS UI behaviour. A loaded ROCK that does not serve the ROCK API PALM was built for stops the game at the main menu with an error box (`src/RockServices.cpp`, RPS Framework's `RPS/Runtime/RequiredUpdate.h` through `RPS_FRAMEWORK_INCLUDE_DIR`).
-- SCISSORS pages (consumer and developer) bind only `SCISSORS.dll`'s `SCISSORS_GetConfiguration` 2.0 table, from SCISSORS' own `include/` (`SCISSORS_INCLUDE_DIR`). Never forward NPC settings through ROCK or write SCISSORS INIs directly. `bPhysicalMelee` lives on the SCISSORS Dev page and goes through SCISSORS Configuration, never ROCK configuration.
-- Preview fixture flags never alter production discovery or write runtime INIs; preview never discovers or writes a real provider, and injected fixtures stay read-only.
+- ROCK's consumer and developer pages share one configuration registration: read the catalog from ROCK's negotiated Configuration API and route writes to ROCK. PAPER's page edits `PAPER.toml` line by line through the file editor (`src/tools/IniSettingsStore.cpp`), which reads TOML files as RPS Framework's settings store writes them (`## === ` category headings, `##` help, single-`#` player notes, quoted strings) and INI files (DIAMOND) as before; PAPER's watcher applies the edit.
+- Item and gesture integration use ROCK when it is loaded; without it, PALM keeps its standalone RPS UI behaviour. A loaded ROCK that does not serve the ROCK API PALM was built for stops the game at the main menu with an error box (`src/RockServices.cpp`, RPS Framework's `RPS/Runtime/RequiredUpdate.h` from its staged package, `RPSFramework_DIR`).
+- SCISSORS pages (consumer and developer) bind only `SCISSORS.dll`'s `SCISSORS_GetConfiguration` 2.0 table, from SCISSORS' own `include/` (`SCISSORS_INCLUDE_DIR`). Never forward NPC settings through ROCK or write SCISSORS' settings files directly. `PhysicalMelee` lives on the SCISSORS Dev page and goes through SCISSORS Configuration, never ROCK configuration.
+- PALM's own settings are `PALM.toml` through RPS Framework's settings store (`RPS::Settings`, `openPalmSettings` in `src/PalmControls.cpp`); its first open migrates `PALM.ini` once and deletes it. `ConsoleCommands.ini` is a player-written list of console shortcuts, not settings, and keeps its plain format.
+- Preview fixture flags never alter production discovery or write runtime settings files; preview never discovers or writes a real provider, and injected fixtures stay read-only.
 
 ## Console tab
 

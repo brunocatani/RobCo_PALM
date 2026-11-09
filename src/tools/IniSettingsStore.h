@@ -34,6 +34,8 @@ namespace rock_configurator
         std::string description;
         std::string defaultValue;
         bool fromRockApi = false;
+        // A TOML string: shown without its quotes and written back quoted.
+        bool tomlString = false;
         bool overridden = false;
         SettingType type{ SettingType::String };
         setting_control::Spec control;
@@ -123,6 +125,10 @@ namespace rock_configurator
         const scissors::configuration::Api* _scissorsApi = nullptr;
         bool _useRockApi = false;
         std::uint64_t _loadedRevision = 0;
+        // A .toml file as RPS Framework's settings store writes it: "## === "
+        // category headings, "##" help lines, single-"#" player notes, quoted
+        // strings. Any other file is an INI.
+        bool _toml = false;
         std::vector<IniLine> _lines;
         std::vector<SettingRecord> _settings;
         std::string _lastError;

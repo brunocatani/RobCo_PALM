@@ -4,6 +4,7 @@
 #include "WheelConfig.h"
 #include "WheelSaveRecord.h"
 #include "DeveloperActions.h"
+#include "PalmControls.h"
 #include <ShlObj.h>
 #include "tools/ConfiguratorRuntime.h"
 #include "tools/ConsoleService.h"
@@ -74,12 +75,18 @@ extern "C" __declspec(dllexport) bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadIn
   PWSTR documents{};
   bool developer=false;
   if(SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents,0,nullptr,&documents))) {
-   const auto path=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"Mods_Config"/"RobCo_PALM"/"PALM.ini";
+   const auto path=std::filesystem::path(documents)/"My Games"/"Fallout4VR"/"Mods_Config"/"RobCo_PALM"/"PALM.toml";
    CoTaskMemFree(documents);
-   developer=GetPrivateProfileIntW(L"Developer",L"bEnabled",0,path.c_str())!=0;
+   // The first open organizes PALM.toml and migrates PALM.ini; the controls read it again at startup.
+   try {
+    const auto settings=wheel::openPalmSettings(path);
+    for(const auto& notice:settings->notices())spdlog::info("{}",notice);
+    for(const auto& message:settings->messages())spdlog::warn("{}",message);
+    developer=settings->find("Developer","Enabled")->value=="true";
+   }catch(const std::exception& error){spdlog::error("PALM settings unavailable: {}",error.what());}
   }
   if(!wheel::developerActions().initialize(developer))spdlog::error("PALM Developer section unavailable; existing mod sections preserved");
-  spdlog::info("PALM Developer wheel {} (PALM.ini [Developer] bEnabled; restart required)",developer?"enabled":"disabled");
+  spdlog::info("PALM Developer wheel {} (PALM.toml [Developer] Enabled; restart required)",developer?"enabled":"disabled");
   const auto* messaging=F4SE::GetMessagingInterface();
   const auto* serialization=F4SE::GetSerializationInterface();
   if(!serialization || !messaging || !messaging->RegisterListener(onMessage))return false;

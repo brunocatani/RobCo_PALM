@@ -135,6 +135,41 @@ namespace rock_configurator
             return setting_control::ValueType::String;
         }
 
+        // A TOML string value ('literal' or "basic") without its quotes, or
+        // nullopt for any other value.
+        [[nodiscard]] std::optional<std::string> tomlStringText(std::string_view value)
+        {
+            if (value.size() < 2 || value.front() != value.back() || (value.front() != '\'' && value.front() != '"'))
+                return std::nullopt;
+            const auto inner = value.substr(1, value.size() - 2);
+            if (value.front() == '\'')
+                return std::string(inner);
+            std::string text;
+            for (std::size_t i = 0; i < inner.size(); ++i) {
+                if (inner[i] == '\\' && i + 1 < inner.size()) {
+                    ++i;
+                    text.push_back(inner[i] == 'n' ? '\n' : inner[i] == 't' ? '\t' : inner[i]);
+                } else {
+                    text.push_back(inner[i]);
+                }
+            }
+            return text;
+        }
+
+        // A string as TOML text: a literal string unless it holds a quote.
+        [[nodiscard]] std::string tomlQuoted(std::string_view text)
+        {
+            if (text.find('\'') == std::string_view::npos)
+                return std::format("'{}'", text);
+            std::string quoted = "\"";
+            for (const char c : text) {
+                if (c == '"' || c == '\\')
+                    quoted.push_back('\\');
+                quoted.push_back(c);
+            }
+            return quoted + '"';
+        }
+
         // ROCK writes Float3 values as "[x, y, z]".
         [[nodiscard]] std::optional<std::array<std::string, 3>> splitFloat3(std::string_view text)
         {
@@ -233,7 +268,7 @@ namespace rock_configurator
         setting.selectedOptionIndex.reset();
         setting.numericValueValid = false;
         if (_mod != RpsMod::Csah) {
-            if (!setting.fromRockApi) setting.type = inferType(setting.value);
+            if (!setting.fromRockApi) setting.type = setting.tomlString ? SettingType::String : inferType(setting.value);
             if(_mod==RpsMod::Diamond)if(const auto* entry=diamond::configuration::find(setting.key);entry&&setting.section==entry->section) {
                 setting.type=entry->boolean?SettingType::Boolean:SettingType::Float;
                 setting.label=entry->label;setting.defaultValue=entry->defaultValue;
@@ -405,10 +440,11 @@ namespace rock_configurator
 
         std::ifstream input(_path);
         if (!input) {
-            _lastError = std::format("Configuration INI is not readable: {}", _path.string());
+            _lastError = std::format("Configuration file is not readable: {}", _path.string());
             return false;
         }
 
+        _toml = _path.extension() == ".toml";
         std::string currentSection;
         std::string currentCategory;
         std::vector<std::string> pendingComments;
@@ -429,6 +465,20 @@ namespace rock_configurator
                 continue;
             }
 
+            if (_toml && trimmed.front() == '#') {
+                // "## === Category ===" headings and "##" help; single-"#" lines
+                // are the player's own notes and never become help.
+                if (trimmed.starts_with("## === ")) {
+                    currentCategory = commentText(trimmed);
+                    pendingComments.clear();
+                } else if (trimmed.starts_with("##")) {
+                    if (const auto text = commentText(trimmed); !text.empty())
+                        pendingComments.push_back(text);
+                }
+                _lines.push_back(std::move(line));
+                continue;
+            }
+
             if (trimmed.front() == ';') {
                 const auto text = commentText(trimmed);
                 if (!text.empty()) {
@@ -445,7 +495,9 @@ namespace rock_configurator
 
             if (trimmed.front() == '[' && trimmed.back() == ']') {
                 currentSection = trim(trimmed.substr(1, trimmed.size() - 2));
-                currentCategory = currentSection;
+                // A TOML table sits under the category heading written before it.
+                if (!_toml || currentCategory.empty())
+                    currentCategory = currentSection;
                 pendingComments.clear();
                 line.section = currentSection;
                 _lines.push_back(std::move(line));
@@ -483,6 +535,12 @@ namespace rock_configurator
             setting.key = line.key;
             setting.id = currentSection + "." + line.key;
             setting.value = line.value;
+            if (_toml) {
+                if (auto text = tomlStringText(line.value)) {
+                    setting.value = std::move(*text);
+                    setting.tomlString = true;
+                }
+            }
             setting.category = currentCategory.empty() ? currentSection : currentCategory;
             setting.description = description;
             refreshControl(setting);
@@ -793,7 +851,8 @@ namespace rock_configurator
 #endif
         std::error_code ec;
         if (_path.empty() || !std::filesystem::is_regular_file(_path, ec) || ec) {
-            _lastError = "The existing production Configuration INI is unavailable; PALM Config will not create or replace it";
+            _lastError = std::format("{} is unavailable; PALM Config will not create or replace it; the mod creates it when it starts",
+                _path.filename().string());
             return false;
         }
 
@@ -905,8 +964,8 @@ namespace rock_configurator
         const auto previousLine = line;
         const auto previousSetting = setting;
         const std::string nextValue(*normalizedValue);
-        line.value = nextValue;
-        line.raw = std::format("{} = {}", line.key, nextValue);
+        line.value = setting.tomlString ? tomlQuoted(nextValue) : nextValue;
+        line.raw = std::format("{} = {}", line.key, line.value);
         setting.value = nextValue;
         refreshControl(setting);
 

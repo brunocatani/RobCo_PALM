@@ -17,11 +17,9 @@ if(NOT EXISTS "${RPSUI_INCLUDE_DIR}/RPS_UI_Framework/Framework.h")
 endif()
 # ROCK publishes its provider API from its own include/ directory.
 set(ROCK_INCLUDE_DIR "${WORKSPACE}/main_projects/ROCK/include" CACHE PATH "ROCK public include directory")
-# RPS Framework's header-only required-update stop (RPS/Runtime/RequiredUpdate.h).
-set(RPS_FRAMEWORK_INCLUDE_DIR "${WORKSPACE}/my_frameworks_and_sdks/RPS_Framework/include" CACHE PATH "RPS Framework public include directory")
-if(NOT EXISTS "${RPS_FRAMEWORK_INCLUDE_DIR}/RPS/Runtime/RequiredUpdate.h")
- message(FATAL_ERROR "RPS Framework headers not found in '${RPS_FRAMEWORK_INCLUDE_DIR}'; set RPS_FRAMEWORK_INCLUDE_DIR.")
-endif()
+# RPS Framework's staged package: PALM.toml (RPS::Settings) and the
+# header-only required-update stop (RPS/Runtime/RequiredUpdate.h).
+set(RPSFramework_DIR "${WORKSPACE}/my_frameworks_and_sdks/RPS_Framework/build-fast/stage/lib/cmake/RPSFramework" CACHE PATH "RPS Framework staged package")
 set(COMMON_LIB_F4VR_PATH "${WORKSPACE}/libraries_and_tools/CommonLibF4VR" CACHE PATH "")
 set(ENABLE_FALLOUT_VR ON CACHE BOOL "" FORCE)
 set(ENABLE_FALLOUT_F4 OFF CACHE BOOL "" FORCE)
@@ -31,6 +29,7 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 add_subdirectory("${COMMON_LIB_F4VR_PATH}" CommonLibF4 EXCLUDE_FROM_ALL)
 find_package(spdlog CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(RPSFramework CONFIG REQUIRED)
 set(IMGUI "${WORKSPACE}/../devtools/imgui")
 add_library(wheel_imgui STATIC "${IMGUI}/imgui.cpp" "${IMGUI}/imgui_draw.cpp"
   "${IMGUI}/imgui_tables.cpp" "${IMGUI}/imgui_widgets.cpp" "${IMGUI}/backends/imgui_impl_dx11.cpp")
@@ -41,7 +40,7 @@ target_link_libraries(wheel_imgui PUBLIC d3d11 dxgi d3dcompiler)
 add_library(wheel_view STATIC src/WheelView.cpp src/Fonts.cpp src/WheelConfig.cpp src/IconAtlas.cpp src/SectionRegistry.cpp src/DeveloperActions.cpp src/PalmControls.cpp external/F4VR-Input/InputBindingParser.cpp)
 target_include_directories(wheel_view PUBLIC src external/F4VR-Input
  "${WORKSPACE}/libraries_and_tools/F4VR-CommonFramework/external/openvr")
-target_link_libraries(wheel_view PUBLIC wheel_imgui windowscodecs ole32)
+target_link_libraries(wheel_view PUBLIC wheel_imgui RPS::Settings windowscodecs ole32)
 set(WORKSHOP_SOURCES src/tools/ConfiguratorRuntime.cpp src/tools/IniSettingsStore.cpp src/tools/ScissorsSettings.cpp src/tools/CsahSettings.cpp
  src/tools/RockSettingControlPolicy.cpp src/tools/SpawnBrowser.cpp src/tools/ConsoleService.cpp src/tools/ConsoleTab.cpp src/tools/OnScreenKeyboard.cpp)
 foreach(target wheel_workshop wheel_workshop_preview)
@@ -62,7 +61,6 @@ set_source_files_properties(src/Gestures.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS 
 set_source_files_properties(src/MenuApi.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_include_directories(RobCoPALM PRIVATE src
  "${ROCK_INCLUDE_DIR}"
- "${RPS_FRAMEWORK_INCLUDE_DIR}"
  "${RPSUI_INCLUDE_DIR}")
 target_link_libraries(RobCoPALM PRIVATE CommonLibF4::CommonLibF4 spdlog::spdlog wheel_view wheel_workshop shell32 version bcrypt)
 target_precompile_headers(RobCoPALM PRIVATE src/PCH.h)
@@ -222,6 +220,7 @@ add_test(NAME Wheel.SaveState COMMAND WheelSaveStateTests)
 
 add_executable(PalmControlsTests tests/PalmControlsTests.cpp preview/WorkshopAdapter.cpp)
 target_link_libraries(PalmControlsTests PRIVATE wheel_workshop_preview)
+target_compile_definitions(PalmControlsTests PRIVATE PALM_CONTROLS_TEST_DIR="${CMAKE_CURRENT_BINARY_DIR}/palm-controls-test")
 add_test(NAME Wheel.Controls COMMAND PalmControlsTests)
 
 add_executable(PALMCapture preview/Capture.cpp preview/WorkshopAdapter.cpp src/IconResources.rc)

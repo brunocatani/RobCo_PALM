@@ -4,7 +4,9 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <string>
+#include <RPS/Settings/Store.h>
 
 namespace wheel {
 enum class OpenMode { Hold, Press };
@@ -122,6 +124,11 @@ std::string bindingText(const Controls& controls);
 Controls snapshotControls(InputMode* inputMode=nullptr);
 InputMode snapshotInputMode();
 bool applyInputMode(InputMode mode);
+// PALM.toml at path through RPS Framework's settings store, loaded at startup:
+// organized, created when missing, and PALM.ini beside it migrated once.
+std::unique_ptr<RPS::Settings::Store> openPalmSettings(const std::filesystem::path& path);
+// Loads controls and pointer aim from PALM.toml at path; an empty path keeps
+// them in memory only (the desktop preview).
 void initializeControls(const std::filesystem::path& path);
 bool applyControls(const Controls& controls,bool queueSave=true); // Memory only; explicit save is queued for the game task.
 bool takeControlsSaveRequest();

@@ -29,9 +29,9 @@ Choose your items in **Config → Items**. Select either preset or **Mode 3 — 
 
 In **Click to select**, release the opening buttons before selecting with the pointing hand's trigger or A/X. The wheel stays open until you click **Cancel** or enter Config. Opening bindings support press, tap, double tap, hold, long press, and release, with an optional modifier on either hand. Touch and axis inputs are excluded; thumbstick click is supported. Tap and release bindings use click-to-select.
 
-PALM saves its controls and pointer calibration to `Documents\My Games\Fallout4VR\Mods_Config\RobCo_PALM\PALM.ini`; manual edits are read at startup.
+PALM saves its controls and pointer calibration to `Documents\My Games\Fallout4VR\Mods_Config\RobCo_PALM\PALM.toml`; manual edits are read at startup. Each option has its help above it, and `[Developer] Enabled` adds the Developer section to the wheel after a restart.
 
-New configurations use `Controls/iInputMode = 1`. Existing files without that key retain their previous binding by selecting the matching preset or Custom. Presets do not use `sMode` or `sOpenMenu` as their binding; those keys store Custom's settings.
+New configurations use `[Controls] InputMode = 1`. Presets do not use `Mode` or `OpenMenu` as their binding; those keys store Custom's settings. The first start after an update carries your `PALM.ini` settings into `PALM.toml` and deletes the INI; an INI from before input modes keeps its binding through the matching preset or Custom.
 
 ROCK's trigger-equip, Rocky gesture, and bipod clicks take priority over opening PALM. A bound hand inside a Virtual Holsters zone or unrelated held buttons can also block opening. Release the opening buttons fully before trying again.
 
@@ -83,6 +83,6 @@ Optional ROCK integration negotiates feature interfaces through `ROCKAPI_QueryIn
 
 SCISSORS has separate consumer and developer settings pages. NPC collision,
 blade penetration and native/supplemental NPC visualization controls come from
-SCISSORS' own Configuration 2.0 API and are written by SCISSORS into its own INIs.
+SCISSORS' own Configuration 2.0 API and are written by SCISSORS into its own settings files.
 No NPC setting is forwarded through ROCK, and the NPC visualization master is
 independent of ROCK's hand and weapon visualization master.

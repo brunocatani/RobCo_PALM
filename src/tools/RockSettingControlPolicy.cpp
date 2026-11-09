@@ -435,9 +435,9 @@ namespace rock_configurator::setting_control
         }
         if (mod != RpsMod::Rock && mod != RpsMod::RockDeveloper) {
             if (type == ValueType::Boolean) return { .kind = Kind::Checkbox };
-            if (mod == RpsMod::Paper && key == "sMaximumMode")
+            if (mod == RpsMod::Paper && key == "MaximumMode")
                 return { .kind = Kind::Dropdown, .options = {{"User","User"},{"Observe","Observe"},{"Harvest","Harvest"},{"Capture","Capture"}} };
-            if (mod == RpsMod::Paper && key == "sAccess")
+            if (mod == RpsMod::Paper && key == "Access")
                 return { .kind = Kind::Dropdown, .options = {{"Off","Off"},{"ReadOnly","Read only"},{"ReadWrite","Read and write"}} };
             if (type == ValueType::String) return { .kind = Kind::Text };
             // ROCK's keyed ranges and naming heuristics are not other mods' contracts.

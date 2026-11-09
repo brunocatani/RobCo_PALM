@@ -243,10 +243,16 @@ int main(){try {
  check(update(false,false,1.3)==ControlEdge::None,"release binding ignored its maximum hold");
  check(parseControls("hold","left tap b +grip",parsed,error) && parsed.mode==OpenMode::Press,"tap offered impossible release-to-select");
  check(parseControls("press",bindingText(Controls{}),parsed,error) && parsed==Controls{},"default binding did not roundtrip");
- const auto path=std::filesystem::temp_directory_path()/("PALM-controls-"+std::to_string(GetCurrentProcessId())+".ini");
- struct Cleanup{std::filesystem::path path;~Cleanup(){std::error_code error;std::filesystem::remove(path,error);}} cleanup{path};
- {std::ofstream file(path);file<<"[Other]\nuntouched=hello\n[Controls]\nsMode=press\nsOpenMenu=left press b +grip\n";}
- initializeControls(path);const auto loaded=snapshotControls();check(loaded.mode==OpenMode::Press && loaded.binding.hand==Hand::Left,"PALM did not load its own INI");
+ // Fixtures stay with the test build, never in the system temporary directory.
+ const std::filesystem::path directory(PALM_CONTROLS_TEST_DIR);
+ std::error_code ignored;std::filesystem::remove_all(directory,ignored);std::filesystem::create_directories(directory);
+ struct Cleanup{std::filesystem::path path;~Cleanup(){initializeControls({});std::error_code error;std::filesystem::remove_all(path,error);}} cleanup{directory};
+ const auto path=directory/"PALM.toml",ini=directory/"PALM.ini";
+ const auto write=[](const std::filesystem::path& file,const char* text){std::ofstream(file,std::ios::binary)<<text;};
+ // An INI from before input modes keeps its remapped binding as Custom, and goes.
+ write(ini,"[Other]\nuntouched=hello\n[Controls]\nsMode=press\nsOpenMenu=left press b +grip\n");
+ initializeControls(path);const auto loaded=snapshotControls();check(loaded.mode==OpenMode::Press && loaded.binding.hand==Hand::Left,"PALM did not migrate its INI");
+ check(!std::filesystem::exists(ini) && std::filesystem::exists(path),"PALM.ini was not replaced by PALM.toml");
  check(snapshotInputMode()==InputMode::Custom,"legacy remapping was not retained as Custom");
  for(const auto mode:{InputMode::StickClick,InputMode::GripTriggerHold}) {
   check(applyInputMode(mode) && snapshotControls()==controlsForMode(mode),"fixed input mode used custom binding");
@@ -271,19 +277,17 @@ int main(){try {
  check(!applyPointerAim(invalidAim) && snapshotPointerAim()==aim,"out-of-range calibration changed pointer settings");
  invalidAim=aim;invalidAim.yaw[1]=std::numeric_limits<float>::quiet_NaN();
  check(!applyPointerAim(invalidAim),"non-finite calibration was accepted");
- WritePrivateProfileStringW(L"Pointer",L"fLeftPitchDegrees",L"invalid",path.c_str());initializeControls(path);
+ write(path,"[Pointer]\nLeftPitchDegrees = 'invalid'\nRightPitchDegrees = -68.0\n");initializeControls(path);
  check(snapshotPointerAim().pitch[0]==PointerAim{}.pitch[0] && snapshotPointerAim().pitch[1]==aim.pitch[1],"invalid pointer angle did not use its default independently");
- WritePrivateProfileStringW(L"Pointer",L"fLeftPitchDegrees",L"0",path.c_str());
- WritePrivateProfileStringW(L"Pointer",L"fRightPitchDegrees",nullptr,path.c_str());initializeControls(path);
- check(snapshotPointerAim().pitch[0]==0 && snapshotPointerAim().pitch[1]==PointerAim{}.pitch[1],"missing pitch overrode an explicitly saved zero");
- wchar_t preserved[32]{};GetPrivateProfileStringW(L"Other",L"untouched",L"",preserved,32,path.c_str());
- check(std::wstring_view(preserved)==L"hello","PALM rewrote unrelated INI values");
+ write(path,"[Pointer]\nLeftPitchDegrees = 95.0\n");initializeControls(path);
+ check(snapshotPointerAim().pitch[0]==PointerAim{}.pitch[0],"an out-of-range saved angle was used");
  std::filesystem::remove(path);initializeControls(path);
- check(snapshotInputMode()==InputMode::StickClick && snapshotControls()==Controls{} && snapshotPointerAim()==PointerAim{} && takeControlsSaveRequest(),"first run did not prepare mode 1 and pointer settings");
- persistControls();initializeControls(path);
- check(snapshotPointerAim()==PointerAim{},"first-run pointer defaults did not persist");
- WritePrivateProfileStringW(L"Controls",L"iInputMode",L"99",path.c_str());initializeControls(path);
+ check(snapshotInputMode()==InputMode::StickClick && snapshotControls()==Controls{} && snapshotPointerAim()==PointerAim{} && std::filesystem::exists(path),"first run did not create mode 1 and pointer defaults");
+ write(path,"[Controls]\nInputMode = 99\n");initializeControls(path);
  check(snapshotInputMode()==InputMode::StickClick && snapshotControls()==Controls{},"invalid saved mode did not use default");
+ // An INI with a chosen preset keeps it.
+ std::filesystem::remove(path);write(ini,"[Controls]\niInputMode=2\nsMode=press\nsOpenMenu=right release thumbstick suppress\n");
+ initializeControls(path);check(snapshotInputMode()==InputMode::GripTriggerHold,"a migrated preset was not kept");
  initializeControls({});std::cout<<"Control gestures, binding validation, handedness, and isolated persistence passed\n";
  return 0;
  }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}
