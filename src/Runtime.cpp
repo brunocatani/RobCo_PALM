@@ -429,14 +429,22 @@ void RPSUI_CALL onFrame(const rpsui::api::input::Frame* frame,void*) noexcept {
   const bool gameActionPending=s.gameActionPending.load(),configOpen=rock_configurator::isOpen(),configOpening=rock_configurator::isOpening();
   const bool eligible=!s.command && !gameActionPending && !configOpen && !configOpening;
   const auto masks=controlMasks(s.controls,frame->leftHanded);
-  const std::array pressed{frame->hands[0].pressed,frame->hands[1].pressed};
+  std::array pressed{frame->hands[0].pressed,frame->hands[1].pressed};
+  // The right stick click opens the wheel only while it is PALM's under ROCK's
+  // [Bindings]: ROCK presents a moved PALM binding as that click, and a stick
+  // click bound to the bipod, placement or Favorites is not PALM's.
+  if(inputMode==InputMode::StickClick && rockReady && (pressed[1]&(1ull<<vr::k_EButton_SteamVR_Touchpad))) {
+   rock::api::input::LogicalInputActionState palm;
+   if(rockServices().input->getLogicalInputActionState(s.owner,rock::api::input::LogicalInputAction::PalmWheel,&palm)==rock::api::Status::Ok &&
+      palm.available && !palm.held)pressed[1]&=~(1ull<<vr::k_EButton_SteamVR_Touchpad);
+  }
   const std::array<bool,2> handValid{frame->hands[0].valid!=0,frame->hands[1].valid!=0};
   const bool rockyOwnsInput=s.rockLoaded && s.rockyPriority.update(pressed,handValid);
   bool allDown=true,anyDown=false,valid=true;
   for(unsigned hand=0;hand<2;++hand)if(masks.buttons[hand]) {
    valid &= frame->hands[hand].valid!=0;
-   allDown &= (frame->hands[hand].pressed&masks.buttons[hand])==masks.buttons[hand];
-   anyDown |= (frame->hands[hand].pressed&masks.buttons[hand])!=0;
+   allDown &= (pressed[hand]&masks.buttons[hand])==masks.buttons[hand];
+   anyDown |= (pressed[hand]&masks.buttons[hand])!=0;
   }
   std::array<bool,2> inHolster{};
   // Optional provider readiness gates only its zone queries, never the wheel.

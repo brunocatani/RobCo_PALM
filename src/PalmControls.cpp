@@ -30,7 +30,7 @@ std::string angleText(float value){return settings::normalizeValue(settings::Val
 std::vector<settings::Definition> palmDefinitions() {
  const auto player=settings::Group::Player;const PointerAim aim;
  std::vector<settings::Definition> result{
-  {"Controls","InputMode","01. Controls","How PALM opens: 1 = click the right thumbstick, 2 = hold grip and trigger, 3 = Custom (Mode and OpenMenu).\n"
+  {"Controls","InputMode","01. Controls","How PALM opens: 1 = click the right thumbstick (or ROCK's Palm binding when ROCK's setup wizard moves it), 2 = hold grip and trigger, 3 = Custom (Mode and OpenMenu).\n"
    "Change it in game under Config > PALM > Controls.",player,settings::ValueType::Integer,"1"},
   {"Controls","Mode","01. Controls","Custom only: press (click to select) or hold (release to select).",player,settings::ValueType::String,std::string(kDefaultMode)},
   {"Controls","OpenMenu","01. Controls","Custom only: the button that opens PALM, as hand, activation and button, for example 'right release thumbstick suppress'.\n"
@@ -245,7 +245,7 @@ void drawControls() {
  }
  auto value=snapshotControls();bool changed=false;
  {visual::Font font(render::FontRole::Body,18);ImGui::TextWrapped("%s",inputMode==InputMode::StickClick?
-  "Click and release the right stick to open. Click to select; click Cancel to close.":inputMode==InputMode::GripTriggerHold?
+  "Click and release the right stick to open, or use ROCK's Palm binding when the ROCK setup wizard moves it. Click to select; click Cancel to close.":inputMode==InputMode::GripTriggerHold?
   "Hold right grip + trigger for 0.50 seconds. Release to select. A held weapon's trigger-equip and the two-hand Rocky gesture take priority.":
   "Remap the opening gesture and selection below. Your custom binding is kept when switching modes.");}
  ImGui::Dummy({0,12});
