@@ -4,6 +4,7 @@
 
 #include "ConsoleService.h"
 #include "ConsoleTab.h"
+#include "RockConfigurationClient.h"
 #include "OnScreenKeyboard.h"
 #include "IniSettingsStore.h"
 #include "LoadedRpsMods.h"
@@ -61,6 +62,7 @@ namespace rock_configurator
             UiReload,
             UiRefreshSettings,
             UiResetPanelLayout,
+            UiOpenRockSetup,
             UiSpawnSelectPlugin,
             UiSpawnSelectCategory,
             UiSpawnOpenItem,
@@ -531,6 +533,21 @@ namespace rock_configurator
             }
         }
 
+        // ROCK's setup wizard opens in front of the player; Config closes so it is not in the way.
+        void openRockSetupLocked()
+        {
+            const auto connection = configurationConnection(RpsMod::Rock);
+            const auto status = connection.api && connection.api->openSetupWizard
+                ? connection.api->openSetupWizard(connection.owner)
+                : rock::api::Status::NotReady;
+            if (status != rock::api::Status::Ok) {
+                s_statusMessage = "ROCK could not open its setup wizard";
+                logger::warn("PALM Config: ROCK setup wizard request failed ({})", static_cast<unsigned>(status));
+                return;
+            }
+            closePanelLocked("ROCK setup wizard opened");
+        }
+
         void resetPanelLayoutLocked()
         {
             s_hoveredResizeHandle.store(panel_resize::Handle::None, std::memory_order_release);
@@ -611,6 +628,9 @@ namespace rock_configurator
                 break;
             case RuntimeActionKind::UiResetPanelLayout:
                 resetPanelLayoutLocked();
+                break;
+            case RuntimeActionKind::UiOpenRockSetup:
+                openRockSetupLocked();
                 break;
             case RuntimeActionKind::UiSpawnSelectPlugin:
                 if (spawnTabActive()) {
@@ -938,6 +958,9 @@ namespace rock_configurator
                 ScopedFont font(devui::render::FontRole::Body, 17);
                 if (devui::visual::button("Reload from disk", {-1, 40})) {
                     (void)queueUiAction({.kind = RuntimeActionKind::UiReload, .tab = tab});
+                }
+                if (static_cast<RpsMod>(s_modIndex) == RpsMod::Rock && devui::visual::button("Setup wizard", {-1, 40})) {
+                    (void)queueUiAction({.kind = RuntimeActionKind::UiOpenRockSetup});
                 }
             }
             ImGui::Dummy({0, 12});
