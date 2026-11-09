@@ -6,7 +6,9 @@
 #include <array>
 #include <cmath>
 #include <fstream>
+#include <map>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 
 namespace rock_configurator {
@@ -50,6 +52,51 @@ std::filesystem::path productionCatalog()
     if (!size || size >= executable.size()) return {};
     return std::filesystem::path(executable.data()).parent_path() / "Data/F4SE/Plugins/CSAH/PALMSettings.json";
 }
+
+std::string readFile(const std::filesystem::path& path)
+{
+    std::ifstream input(path, std::ios::binary);
+    if (!input) throw std::runtime_error("CSAH.toml is unavailable; CSAH must start once to write its settings");
+    std::ostringstream text;
+    text << input.rdbuf();
+    return text.str();
+}
+
+// Every "key = value" line of CSAH.toml by "table.key": the line's position and
+// its value. CSAH writes only simple keys and scalar values.
+struct TomlEntry
+{
+    std::size_t begin{}, end{}; // the value's bytes in the file
+    std::string value;
+};
+std::map<std::string, TomlEntry, std::less<>> readEntries(const std::string& text)
+{
+    std::map<std::string, TomlEntry, std::less<>> entries;
+    std::string table;
+    std::size_t start = 0;
+    while (start < text.size()) {
+        auto end = text.find('\n', start);
+        if (end == std::string::npos) end = text.size();
+        auto lineEnd = end;
+        if (lineEnd > start && text[lineEnd - 1] == '\r') --lineEnd;
+        const auto first = text.find_first_not_of(" \t", start);
+        if (first < lineEnd && text[first] != '#') {
+            if (text[first] == '[') {
+                const auto close = text.find(']', first);
+                if (close < lineEnd) table = IniSettingsStore::trim(std::string_view(text).substr(first + 1, close - first - 1));
+            } else if (const auto equals = text.find('=', first); equals < lineEnd) {
+                const auto key = IniSettingsStore::trim(std::string_view(text).substr(first, equals - first));
+                auto valueBegin = text.find_first_not_of(" \t", equals + 1);
+                if (valueBegin > lineEnd) valueBegin = lineEnd;
+                auto valueEnd = lineEnd;
+                while (valueEnd > valueBegin && (text[valueEnd - 1] == ' ' || text[valueEnd - 1] == '\t')) --valueEnd;
+                entries.insert_or_assign(table + "." + key, TomlEntry{ valueBegin, valueEnd, text.substr(valueBegin, valueEnd - valueBegin) });
+            }
+        }
+        start = end + 1;
+    }
+    return entries;
+}
 }
 
 bool IniSettingsStore::loadCsahSettings()
@@ -62,12 +109,11 @@ bool IniSettingsStore::loadCsahSettings()
         std::error_code error;
         if (catalog.empty() || std::filesystem::file_size(catalog, error) > 1024 * 1024 || error)
             throw std::runtime_error("CSAH's PALM settings catalog is missing or unreadable; install the matching CSAH build");
-        if (!std::filesystem::is_regular_file(_path, error) || error)
-            throw std::runtime_error("CSAH.ini is unavailable; CSAH must initialize its settings before editing");
         std::ifstream input(catalog);
         const auto menu = Json::parse(input);
-        if (menu.at("schemaVersion") != 1 || menu.at("id") != "csah")
-            throw std::runtime_error("Unsupported CSAH settings catalog");
+        if (menu.at("schemaVersion") != 2 || menu.at("id") != "csah")
+            throw std::runtime_error("Unsupported CSAH settings catalog; install the matching CSAH and RobCo PALM builds");
+        const auto entries = readEntries(readFile(_path));
         std::vector<SettingRecord> settings;
         std::set<std::string> ids, bindings;
         for (const auto& tab : menu.at("tabs")) {
@@ -78,14 +124,15 @@ bool IniSettingsStore::loadCsahSettings()
                         if (settings.size() >= 512) throw std::runtime_error("Too many CSAH settings");
                         SettingRecord setting;
                         const auto& binding = control.at("binding");
-                        if (binding.at("type") != "ini" || binding.at("root") != "documents" ||
-                            binding.at("path") != "Mods_Config/CSAH/CSAH.ini")
-                            throw std::runtime_error("CSAH settings must belong to CSAH.ini");
+                        if (binding.at("type") != "toml" || binding.at("root") != "documents" ||
+                            binding.at("path") != "Mods_Config/CSAH/CSAH.toml")
+                            throw std::runtime_error("CSAH settings must belong to CSAH.toml");
                         setting.id = identifier(control.at("id"));
-                        setting.section = identifier(binding.at("section"));
+                        setting.section = identifier(binding.at("table"));
                         setting.key = identifier(binding.at("key"));
                         if (!ids.insert(setting.id).second || !bindings.insert(setting.section + "." + setting.key).second)
                             throw std::runtime_error("Duplicate CSAH setting or binding");
+                        const auto valueType = binding.at("value").get<std::string>();
                         setting.label = label(control.at("label"));
                         setting.category = category;
                         if (control.contains("help")) setting.description = label(control.at("help"));
@@ -96,11 +143,12 @@ bool IniSettingsStore::loadCsahSettings()
                         setting.defaultValue = scalar(control.at("default"));
                         const auto type = control.at("type").get<std::string>();
                         if (type == "toggle") {
-                            if (!control.at("default").is_boolean()) throw std::runtime_error("Invalid toggle default");
+                            if (valueType != "boolean" || !control.at("default").is_boolean()) throw std::runtime_error("Invalid toggle");
                             setting.type = SettingType::Boolean;
                             setting.control.kind = setting_control::Kind::Checkbox;
                         } else if (type == "choice") {
-                            setting.type = control.at("default").is_string() ? SettingType::String : SettingType::Integer;
+                            if (valueType != "integer") throw std::runtime_error("CSAH choices must be integers");
+                            setting.type = SettingType::Integer;
                             setting.control.kind = setting_control::Kind::Dropdown;
                             const auto& choices = control.at("choices");
                             if (choices.empty() || choices.size() > 64) throw std::runtime_error("Invalid CSAH choices");
@@ -112,7 +160,8 @@ bool IniSettingsStore::loadCsahSettings()
                             }
                             if (!values.contains(setting.defaultValue)) throw std::runtime_error("Invalid CSAH choice default");
                         } else if (type == "slider" || type == "number") {
-                            setting.type = setting.key.starts_with('i') ? SettingType::Integer : SettingType::Float;
+                            if (valueType != "integer" && valueType != "float") throw std::runtime_error("CSAH numbers must be integer or float");
+                            setting.type = valueType == "integer" ? SettingType::Integer : SettingType::Float;
                             auto& spec = setting.control;
                             spec.kind = setting_control::Kind::Numeric;
                             spec.bounded = true;
@@ -126,30 +175,12 @@ bool IniSettingsStore::loadCsahSettings()
                                 throw std::runtime_error("Invalid CSAH numeric range or default");
                         } else throw std::runtime_error("Unsupported CSAH control type");
 
-                        // Read through the same Windows INI interface as CSAH. Catalog order,
-                        // types and labels survive missing keys and integer-looking floats.
-                        const std::wstring section(setting.section.begin(), setting.section.end());
-                        const std::wstring key(setting.key.begin(), setting.key.end());
-                        const std::wstring fallback(setting.defaultValue.begin(), setting.defaultValue.end());
-                        std::array<wchar_t, 256> value{};
-                        const auto count = GetPrivateProfileStringW(section.c_str(), key.c_str(), fallback.c_str(),
-                            value.data(), static_cast<DWORD>(value.size()), _path.c_str());
-                        if (count >= value.size() - 1) throw std::runtime_error("CSAH setting value is too long");
-                        std::array<char, 1024> utf8{};
-                        const auto bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(),
-                            static_cast<int>(count), utf8.data(), static_cast<int>(utf8.size()), nullptr, nullptr);
-                        if (count && !bytes) throw std::runtime_error("Invalid CSAH setting encoding");
-                        setting.value.assign(utf8.data(), bytes);
-                        if (setting.type == SettingType::Boolean) {
-                            const auto text = trim(setting.value);
-                            if (text == "1" || setting_control::equalsIgnoreCase(text, "true") ||
-                                setting_control::equalsIgnoreCase(text, "on") || setting_control::equalsIgnoreCase(text, "yes"))
-                                setting.value = "true";
-                            else if (text == "0" || setting_control::equalsIgnoreCase(text, "false") ||
-                                setting_control::equalsIgnoreCase(text, "off") || setting_control::equalsIgnoreCase(text, "no"))
-                                setting.value = "false";
-                            else setting.value = setting.defaultValue;
-                        }
+                        // CSAH writes every option at startup; a missing one shows its
+                        // default and cannot be saved until CSAH has started once.
+                        const auto found = entries.find(setting.section + "." + setting.key);
+                        setting.value = found != entries.end() ? found->second.value : setting.defaultValue;
+                        if (setting.type == SettingType::Boolean && setting.value != "true" && setting.value != "false")
+                            setting.value = setting.defaultValue;
                         refreshControl(setting);
                         settings.push_back(std::move(setting));
                     }
@@ -168,19 +199,34 @@ bool IniSettingsStore::loadCsahSettings()
 bool IniSettingsStore::saveCsahSetting(const SettingRecord& setting, std::string_view value)
 {
 #ifndef WHEEL_DESKTOP_PREVIEW
-    std::error_code error;
-    if (!std::filesystem::is_regular_file(_path, error) || error) {
-        _lastError = "CSAH.ini is unavailable; no settings were written";
-        return false;
-    }
-    const std::wstring section(setting.section.begin(), setting.section.end());
-    const std::wstring key(setting.key.begin(), setting.key.end());
-    const std::string stored = setting.type == SettingType::Boolean ? (value == "true" ? "1" : "0") : std::string(value);
-    const std::wstring text(stored.begin(), stored.end());
-    // Change only the selected key, including a missing key. Do not replace an
-    // earlier whole-file snapshot over edits made by another settings writer.
-    if (!WritePrivateProfileStringW(section.c_str(), key.c_str(), text.c_str(), _path.c_str())) {
-        _lastError = "CSAH setting write failed: Windows error " + std::to_string(GetLastError());
+    try {
+        // Change only the selected value in the file as it is now, never an
+        // earlier snapshot, so edits from CSAH or another editor survive.
+        auto text = readFile(_path);
+        const auto entries = readEntries(text);
+        const auto found = entries.find(setting.section + "." + setting.key);
+        if (found == entries.end()) {
+            _lastError = std::format("CSAH.toml has no [{}] {}; start the game once so CSAH writes every option", setting.section, setting.key);
+            return false;
+        }
+        std::string stored(value);
+        // TOML floats carry a decimal point or an exponent.
+        if (setting.type == SettingType::Float && stored.find_first_of(".eE") == std::string::npos) stored += ".0";
+        text.replace(found->second.begin, found->second.end - found->second.begin, stored);
+        const auto temporary = std::filesystem::path(_path.native() + L".tmp");
+        {
+            std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+            output << text;
+            if (!output.flush()) throw std::runtime_error("CSAH.toml temporary write failed");
+        }
+        if (!MoveFileExW(temporary.c_str(), _path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+            std::error_code ignored;
+            std::filesystem::remove(temporary, ignored);
+            _lastError = "CSAH setting write failed: Windows error " + std::to_string(GetLastError());
+            return false;
+        }
+    } catch (const std::exception& error) {
+        _lastError = std::string("CSAH setting write failed: ") + error.what();
         return false;
     }
 #endif
