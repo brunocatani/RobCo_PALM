@@ -1,6 +1,5 @@
 #include "PCH.h"
 #include "Runtime.h"
-#include "Fonts.h"
 #include "WheelConfig.h"
 #include "WheelSaveRecord.h"
 #include "DeveloperActions.h"
@@ -50,7 +49,6 @@ void onMessage(F4SE::MessagingInterface::Message* message) noexcept {
   // Before the ROCK connection in startRuntime can find a version mismatch.
   if(!RPS::Runtime::RequiredUpdate::watchMainMenu(L"RobCo PALM: update required"))
    spdlog::error("PALM: the UI is unavailable; a ROCK version mismatch cannot stop the game at the main menu");
-  wheel::prepareFonts();
   if(!wheel::startRuntime())spdlog::critical("PALM menu initialization failed; see the preceding subsystem error");
   else {rock_configurator::onGameDataReady();spdlog::info("PALM and workshop ready for gameplay input");}
  }catch(const std::exception& e){spdlog::critical("PALM startup: {}",e.what());}

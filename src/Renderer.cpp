@@ -1,7 +1,7 @@
 #include "PCH.h"
 #include "Renderer.h"
 #include "Runtime.h"
-#include "Fonts.h"
+#include "PalmTheme.h"
 #include "WheelConfig.h"
 #include "IconAtlas.h"
 #include "RpsUiQuery.h"
@@ -33,8 +33,10 @@ void RPSUI_CALL setupFrame(const rpsui::api::framework::PanelSetup* setup,void*)
  try {
   if(!setup || setup->size<sizeof(*setup) || !setup->d3dDevice)return;
   RPSUI_IMGUI_BIND(setup->imgui);
+  palm::theme::Scope theme(setup->theme);
   auto& render=renderState();std::scoped_lock lock(render.mutex);
-  installFonts();
+  // The wheel's text on the theme's Interface face, which RPS UI made the default.
+  ImGui::GetStyle().FontSizeBase=24*palm::theme::textScale();
   auto* device=static_cast<ID3D11Device*>(setup->d3dDevice);
   if(render.device.Get()!=device || render.deviceGeneration!=setup->deviceGeneration) {
    ComPtr<ID3D11DeviceContext> context;device->GetImmediateContext(&context);

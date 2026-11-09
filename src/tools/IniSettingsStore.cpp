@@ -263,6 +263,21 @@ namespace rock_configurator
         }
     }
 
+    setting_control::Spec IniSettingsStore::themeChoices(std::string_view current) const
+    {
+        setting_control::Spec spec{ .kind = setting_control::Kind::Dropdown };
+        std::error_code error;
+        for (const auto& entry : std::filesystem::directory_iterator(_path.parent_path() / "Themes", error)) {
+            if (!entry.is_regular_file(error) || entry.path().extension() != ".toml") continue;
+            const auto name = entry.path().stem().string();
+            spec.options.push_back({ name, name });
+        }
+        std::ranges::sort(spec.options, {}, &setting_control::Option::label);
+        if (!current.empty() && std::ranges::none_of(spec.options, [&](const auto& option) { return option.value == current; }))
+            spec.options.insert(spec.options.begin(), { std::string(current), std::string(current) });
+        return spec;
+    }
+
     void IniSettingsStore::refreshControl(SettingRecord& setting) const
     {
         setting.selectedOptionIndex.reset();
@@ -284,6 +299,7 @@ namespace rock_configurator
                 setting.key,
                 setting.value,
                 setting.description, _mod, setting.section);
+            if (_mod == RpsMod::RpsUi && setting.key == "Theme") setting.control = themeChoices(setting.value);
         }
         if (setting.type == SettingType::Integer) {
             long long value = 0;

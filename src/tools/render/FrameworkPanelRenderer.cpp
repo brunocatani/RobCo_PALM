@@ -11,7 +11,7 @@
 #include <imgui_internal.h>
 #include <RPS_UI_Framework/ImGuiBuild.h>
 
-#include "Fonts.h"
+#include "PalmTheme.h"
 
 namespace devui::render
 {
@@ -65,13 +65,19 @@ namespace devui::render
             return state;
         }
 
-        void configureFonts(RenderState& state, ImGuiIO& io)
+        // PALM's roles on the theme's faces; each role keeps its own size.
+        void configureFonts(RenderState& state, const rpsui::api::framework::PanelSetup& setup)
         {
-            for(std::size_t i=0;i<state.fonts.size();++i)
-                state.fonts[i]=wheel::addPreparedFont(kFontSizes[i]);
-            io.FontDefault=state.fonts[static_cast<std::size_t>(FontRole::Body)];
-            ImGui::GetStyle().FontSizeBase=20.0f;
-            ImGui::GetStyle().FontScaleMain=1.0f;
+            using Face = rpsui::api::framework::FontRole;
+            const auto face = [&](Face role) { return static_cast<ImFont*>(setup.fonts[static_cast<std::size_t>(role)]); };
+            state.fonts[static_cast<std::size_t>(FontRole::Body)] = face(Face::Interface);
+            state.fonts[static_cast<std::size_t>(FontRole::Medium)] = face(Face::Interface);
+            state.fonts[static_cast<std::size_t>(FontRole::Heading)] = face(Face::Strong);
+            state.fonts[static_cast<std::size_t>(FontRole::Display)] = face(Face::Strong);
+            state.fonts[static_cast<std::size_t>(FontRole::Mono)] = face(Face::Mono);
+            ImGui::GetIO().FontDefault = state.fonts[static_cast<std::size_t>(FontRole::Body)];
+            ImGui::GetStyle().FontSizeBase = FontSize(FontRole::Body);
+            ImGui::GetStyle().FontScaleMain = 1.0f;
         }
 
         void RPSUI_CALL setupPanel(
@@ -85,9 +91,10 @@ namespace devui::render
             std::scoped_lock lock(state.mutex);
             try {
                 RPSUI_IMGUI_BIND(setup->imgui);
+                palm::theme::Scope theme(setup->theme);
                 auto& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-                configureFonts(state, io);
+                configureFonts(state, *setup);
                 devui::visual::applyStyle();
                 if (state.keyboard) {
                     // The keyboard panel has more layout units per metre; keep its cursor the Config panel's size.
@@ -128,6 +135,7 @@ namespace devui::render
                 return;
             }
             RPSUI_IMGUI_BIND(frame->imgui);
+            palm::theme::Scope theme(frame->theme);
 
             if (!state.keyboard) {
                 rock_configurator::onFrameworkPanelFrame(
@@ -148,10 +156,9 @@ namespace devui::render
         }
     }
 
-    void PrepareFonts() noexcept
+    float FontSize(FontRole role) noexcept
     {
-        try {wheel::prepareFonts();}
-        catch(...){logger::error("PALM terminal font preload failed; using the ImGui font");}
+        return kFontSizes[static_cast<std::size_t>(role)] * palm::theme::textScale();
     }
     ImFont* GetFont(FontRole role) noexcept
     {

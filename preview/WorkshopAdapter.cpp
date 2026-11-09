@@ -2,6 +2,7 @@
 #include "render/FrameworkPanelRenderer.h"
 #include "ConfiguratorRuntime.h"
 #include "Fonts.h"
+#include "PalmTheme.h"
 #include <imgui.h>
 #include <Windows.h>
 #include <array>
@@ -20,6 +21,7 @@ void PrepareFonts() noexcept {
  for(std::size_t i=0;i<configFonts.size();++i)configFonts[i]=wheel::addPreparedFont(kFontSizes[i]);
 }
 bool SetPanelOpen(bool, const PanelPose*) noexcept { return true; }
+float FontSize(FontRole role) noexcept { return kFontSizes[static_cast<std::size_t>(role)] * palm::theme::textScale(); }
 void SyncKeyboardPanel(bool) noexcept {}
 void Shutdown() noexcept {}
 bool InstallFrameworkPanel() noexcept { return false; }

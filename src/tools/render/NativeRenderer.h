@@ -44,8 +44,11 @@ namespace devui::render
         float physicalHeight{ kDefaultPanelPhysicalHeight };
     };
 
+    // The desktop preview loads its own faces; the game takes RPS UI's theme faces.
     void PrepareFonts() noexcept;
     [[nodiscard]] ImFont* GetFont(FontRole role) noexcept;
+    // A role's size, scaled by the theme's body size.
+    [[nodiscard]] float FontSize(FontRole role) noexcept;
     // Closing the Config panel closes the keyboard panel with it.
     bool SetPanelOpen(bool open, const PanelPose* pose = nullptr) noexcept;
     // Game thread, once per input frame: opens the keyboard panel under the Config panel while

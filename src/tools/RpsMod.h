@@ -4,7 +4,7 @@
 #include <string_view>
 
 namespace rock_configurator {
-enum class RpsMod : std::uint8_t { Rock, Paper, RockDeveloper, Csah, Diamond, Emitters, Scissors, ScissorsDeveloper };
+enum class RpsMod : std::uint8_t { Rock, Paper, RockDeveloper, Csah, Diamond, Emitters, Scissors, ScissorsDeveloper, RpsUi };
 struct RpsModInfo {
  RpsMod id;
  const char* name;
@@ -21,12 +21,13 @@ inline constexpr std::array kRpsMods{
  RpsModInfo{RpsMod::Diamond,"DIAMOND",L"DIAMOND.dll","Mods_Config/DIAMOND","DIAMOND.ini","PouchUI moves and rotates the pouch indicator. Enable Show grab zone boundary to preview while adjusting. Changes apply immediately and save to DIAMOND.ini"},
  RpsModInfo{RpsMod::Emitters,"Emitters",L"ROCK_Emitters.dll","Mods_Config/ROCK_Emitters","ROCK_Emitters.toml","Changes save to ROCK_Emitters.toml and apply live within about 250 ms"},
  RpsModInfo{RpsMod::Scissors,"SCISSORS",L"SCISSORS.dll","Mods_Config/SCISSORS","SCISSORS.toml","NPC settings are saved by SCISSORS and apply next frame"},
- RpsModInfo{RpsMod::ScissorsDeveloper,"SCISSORS Dev",L"SCISSORS.dll","Mods_Config/SCISSORS","SCISSORS_Developer.toml","NPC visualization is independent of ROCK. Only developer overrides are saved by SCISSORS"}
+ RpsModInfo{RpsMod::ScissorsDeveloper,"SCISSORS Dev",L"SCISSORS.dll","Mods_Config/SCISSORS","SCISSORS_Developer.toml","NPC visualization is independent of ROCK. Only developer overrides are saved by SCISSORS"},
+ RpsModInfo{RpsMod::RpsUi,"RPS UI",L"RPS_UI_Framework.dll","Mods_Config/RPS_UI_Framework","RPS_UI.toml","Every mod's panels follow these. Changes save to RPS_UI.toml and apply within a second; themes are files in the Themes folder beside it"}
 };
 inline constexpr const RpsModInfo& modInfo(RpsMod mod){return kRpsMods[static_cast<std::size_t>(mod)];}
 inline constexpr std::array kRpsModDisplayOrder{
  RpsMod::Rock,RpsMod::RockDeveloper,
- RpsMod::Paper,RpsMod::Csah,RpsMod::Diamond,RpsMod::Emitters,RpsMod::Scissors,RpsMod::ScissorsDeveloper
+ RpsMod::Paper,RpsMod::Csah,RpsMod::Diamond,RpsMod::Emitters,RpsMod::Scissors,RpsMod::ScissorsDeveloper,RpsMod::RpsUi
 };
 inline constexpr bool isRockConfiguration(RpsMod mod) {
  return mod==RpsMod::Rock || mod==RpsMod::RockDeveloper;

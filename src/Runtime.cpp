@@ -574,7 +574,6 @@ bool startRuntime() {
   bool complete{};
   ~RegistrationRollback(){if(!complete){devui::render::Shutdown();unregisterPanel();}}
  } rollback;
- devui::render::PrepareFonts();
  if(!devui::render::InstallFrameworkPanel())return false;
 
  auto& s=state();

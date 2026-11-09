@@ -131,7 +131,8 @@ namespace rock_configurator
             ModSettings{IniSettingsStore({}, RpsMod::Diamond)},
             ModSettings{IniSettingsStore({}, RpsMod::Emitters)},
             ModSettings{IniSettingsStore({}, RpsMod::Scissors)},
-            ModSettings{IniSettingsStore({}, RpsMod::ScissorsDeveloper)}
+            ModSettings{IniSettingsStore({}, RpsMod::ScissorsDeveloper)},
+            ModSettings{IniSettingsStore({}, RpsMod::RpsUi)}
         };
         std::size_t s_modIndex = 0;
         ModSettings& activeSettings() { return s_modSettings[s_modIndex]; }
@@ -779,7 +780,7 @@ namespace rock_configurator
             explicit ScopedFont(devui::render::FontRole role, float size = 0.0f) noexcept
             {
                 if (auto* font = devui::render::GetFont(role)) {
-                    ImGui::PushFont(font, size > 0.0f ? size : font->LegacySize);
+                    ImGui::PushFont(font, size > 0.0f ? size : devui::render::FontSize(role));
                     pushed_ = true;
                 }
             }

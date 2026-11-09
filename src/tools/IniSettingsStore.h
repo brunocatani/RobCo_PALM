@@ -102,6 +102,9 @@ namespace rock_configurator
         [[nodiscard]] std::filesystem::path resolveProductionIniPath() const;
         [[nodiscard]] static SettingType inferType(std::string_view value);
         void refreshControl(SettingRecord& setting) const;
+        // RPS UI's Theme: the theme files beside RPS_UI.toml, and the current
+        // value even when its file is missing (RPS UI then creates it).
+        [[nodiscard]] setting_control::Spec themeChoices(std::string_view current) const;
         [[nodiscard]] bool connectRockApi();
         [[nodiscard]] bool reloadRockSnapshot();
         [[nodiscard]] bool loadScissorsSettings();

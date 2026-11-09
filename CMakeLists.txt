@@ -36,7 +36,9 @@ set(IMGUI "${WORKSPACE}/../devtools/imgui")
 # UI's shared configuration and without a renderer backend.
 add_library(wheel_imgui STATIC "${IMGUI}/imgui.cpp" "${IMGUI}/imgui_draw.cpp"
   "${IMGUI}/imgui_tables.cpp" "${IMGUI}/imgui_widgets.cpp")
-target_include_directories(wheel_imgui PUBLIC "${IMGUI}" "${RPSUI_INCLUDE_DIR}")
+# RPS UI's support headers: its built-in theme and how a theme becomes ImGui's style.
+get_filename_component(RPSUI_SUPPORT_DIR "${RPSUI_INCLUDE_DIR}/../support" ABSOLUTE)
+target_include_directories(wheel_imgui PUBLIC "${IMGUI}" "${RPSUI_INCLUDE_DIR}" "${RPSUI_SUPPORT_DIR}")
 target_compile_features(wheel_imgui PUBLIC cxx_std_23)
 target_compile_definitions(wheel_imgui PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN IMGUI_USER_CONFIG="RPS_UI_Framework/ImGuiBuild.h")
 # Headless tests use ImGui's null renderer.
@@ -47,7 +49,7 @@ target_link_libraries(wheel_imgui_null_tests PUBLIC wheel_imgui)
 add_library(wheel_imgui_dx11 STATIC "${IMGUI}/backends/imgui_impl_dx11.cpp")
 target_include_directories(wheel_imgui_dx11 PUBLIC "${IMGUI}/backends")
 target_link_libraries(wheel_imgui_dx11 PUBLIC wheel_imgui d3d11 dxgi d3dcompiler)
-add_library(wheel_view STATIC src/WheelView.cpp src/Fonts.cpp src/WheelConfig.cpp src/IconAtlas.cpp src/SectionRegistry.cpp src/DeveloperActions.cpp src/PalmControls.cpp external/F4VR-Input/InputBindingParser.cpp)
+add_library(wheel_view STATIC src/WheelView.cpp src/PalmTheme.cpp src/Fonts.cpp src/WheelConfig.cpp src/IconAtlas.cpp src/SectionRegistry.cpp src/DeveloperActions.cpp src/PalmControls.cpp external/F4VR-Input/InputBindingParser.cpp)
 target_include_directories(wheel_view PUBLIC src external/F4VR-Input
  "${WORKSPACE}/libraries_and_tools/F4VR-CommonFramework/external/openvr")
 target_link_libraries(wheel_view PUBLIC wheel_imgui RPS::Settings windowscodecs ole32)
