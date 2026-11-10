@@ -3,19 +3,28 @@
 #include <array>
 
 namespace wheel {
+// stickUsed: the opening binding uses that hand's stick click ([0] left,
+// [1] right). ROCK reserves a stick click per hand, so a click reserved on one
+// hand never blocks an opener on the other hand's stick or on other buttons.
 inline bool placementAllowsOpening(const rock::api::input::PlacementClickState& state,
- const wheel::RockFrame& frame) {
+ const wheel::RockFrame& frame,const std::array<bool,2>& stickUsed) {
  using Flag=rock::api::input::PlacementClickFlag;
- return sameRockSample(state.sample,frame) && !(state.flags&static_cast<std::uint32_t>(Flag::InputReserved));
+ const bool reserved=(stickUsed[0] && (state.flags&static_cast<std::uint32_t>(Flag::LeftInputReserved))) ||
+  (stickUsed[1] && (state.flags&static_cast<std::uint32_t>(Flag::RightInputReserved)));
+ return sameRockSample(state.sample,frame) && !reserved;
 }
 // ROCK owns the enabled setting and contact/latch decision for the primary
-// weapon (slot 0). A failed or stale query cannot grant an opening click
-// against an active provider.
+// weapon (slot 0); the bipod takes its firing hand's stick click. A failed or
+// stale query cannot grant an opening click against an active provider, and an
+// unknown firing hand counts as both.
 inline bool bipodAllowsOpening(const rock::api::weapon::WeaponState& weapon,
- const wheel::RockFrame& frame) {
+ const wheel::RockFrame& frame,const std::array<bool,2>& stickUsed) {
  using Flag=rock::api::weapon::WeaponStateFlag;
+ const bool firingLeft=weapon.firingHand==rock::api::Hand::Left;
+ const bool firingKnown=weapon.firingHand==rock::api::Hand::Left || weapon.firingHand==rock::api::Hand::Right;
+ const bool stickTaken=firingKnown ? stickUsed[firingLeft?0:1] : (stickUsed[0] || stickUsed[1]);
  return (weapon.flags&static_cast<std::uint32_t>(Flag::Valid)) && sameRockSample(weapon.sample,frame) &&
-  !(weapon.flags&static_cast<std::uint32_t>(Flag::BipodInputReserved));
+  !((weapon.flags&static_cast<std::uint32_t>(Flag::BipodInputReserved)) && stickTaken);
 }
 // Query only physical hands whose trigger participates in the opening binding.
 // A current empty hand permits capture; an unknown hand cannot take equip input.

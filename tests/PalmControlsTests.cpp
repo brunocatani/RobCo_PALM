@@ -112,38 +112,49 @@ int main(){try {
   using Flag=rock::api::weapon::WeaponStateFlag;
   wheel::RockFrame frame;frame.sample.frameIndex=5;frame.sample.worldGeneration=1;frame.sample.skeletonGeneration=2;frame.sample.providerGeneration=3;
   rock::api::weapon::WeaponState weapon;weapon.sample=frame.sample;
-  weapon.flags=static_cast<std::uint32_t>(Flag::Valid);
-  check(bipodAllowsOpening(weapon,frame),"disabled/inactive bipod blocked opening");
-  const auto step=[&](bool down,double time){return gesture.update(true,controls,down,down,false,time,bipodAllowsOpening(weapon,frame));};
+  weapon.flags=static_cast<std::uint32_t>(Flag::Valid);weapon.firingHand=rock::api::Hand::Right;
+  constexpr std::array<bool,2> rightStick{false,true},leftStick{true,false};
+  check(bipodAllowsOpening(weapon,frame,rightStick),"disabled/inactive bipod blocked opening");
+  const auto step=[&](bool down,double time){return gesture.update(true,controls,down,down,false,time,bipodAllowsOpening(weapon,frame,rightStick));};
   for(bool touchWhilePressed:{false,true}) {
    gesture={};weapon.flags=static_cast<std::uint32_t>(Flag::Valid);step(false,0);
    if(touchWhilePressed)step(true,1);
    weapon.flags|=static_cast<std::uint32_t>(Flag::BipodInputReserved);
-   check(!bipodAllowsOpening(weapon,frame) && step(true,2)==ControlEdge::None,"bipod contact/latch opened PALM");
+   check(!bipodAllowsOpening(weapon,frame,rightStick) && step(true,2)==ControlEdge::None,"bipod contact/latch opened PALM");
    weapon.flags=static_cast<std::uint32_t>(Flag::Valid);
    check(step(true,3)==ControlEdge::None && step(false,4)==ControlEdge::None,"bipod release or contact loss replayed click");
    step(true,5);check(step(false,5.01)==ControlEdge::Open,"fresh click after bipod stopped reserving input failed");
   }
-  weapon.flags=0;check(!bipodAllowsOpening(weapon,frame),"invalid weapon observation granted opening");
+  // A left-hand weapon's bipod takes the left stick only.
+  weapon.flags=static_cast<std::uint32_t>(Flag::Valid)|static_cast<std::uint32_t>(Flag::BipodInputReserved);
+  weapon.firingHand=rock::api::Hand::Left;
+  check(bipodAllowsOpening(weapon,frame,rightStick),"left-hand bipod blocked the right stick opener");
+  check(!bipodAllowsOpening(weapon,frame,leftStick),"left-hand bipod left the left stick to PALM");
+  weapon.firingHand=rock::api::Hand::Right;
+  weapon.flags=0;check(!bipodAllowsOpening(weapon,frame,rightStick),"invalid weapon observation granted opening");
   weapon.flags=static_cast<std::uint32_t>(Flag::Valid);
-  --weapon.sample.frameIndex;check(!bipodAllowsOpening(weapon,frame),"stale bipod frame granted opening");++weapon.sample.frameIndex;
-  ++weapon.sample.worldGeneration;check(!bipodAllowsOpening(weapon,frame),"old world granted opening");--weapon.sample.worldGeneration;
-  ++weapon.sample.skeletonGeneration;check(!bipodAllowsOpening(weapon,frame),"old skeleton granted opening");--weapon.sample.skeletonGeneration;
-  ++weapon.sample.providerGeneration;check(!bipodAllowsOpening(weapon,frame),"old provider granted opening");
+  --weapon.sample.frameIndex;check(!bipodAllowsOpening(weapon,frame,rightStick),"stale bipod frame granted opening");++weapon.sample.frameIndex;
+  ++weapon.sample.worldGeneration;check(!bipodAllowsOpening(weapon,frame,rightStick),"old world granted opening");--weapon.sample.worldGeneration;
+  ++weapon.sample.skeletonGeneration;check(!bipodAllowsOpening(weapon,frame,rightStick),"old skeleton granted opening");--weapon.sample.skeletonGeneration;
+  ++weapon.sample.providerGeneration;check(!bipodAllowsOpening(weapon,frame,rightStick),"old provider granted opening");
   gesture={};
  }
  {
   wheel::RockFrame frame;frame.sample.frameIndex=5;frame.sample.worldGeneration=1;frame.sample.skeletonGeneration=2;frame.sample.providerGeneration=3;
   rock::api::input::PlacementClickState decoration;decoration.sample=frame.sample;
-  check(placementAllowsOpening(decoration,frame),"inactive decoration blocked PALM");
-  decoration.flags=static_cast<std::uint32_t>(rock::api::input::PlacementClickFlag::InputReserved);
-  check(!placementAllowsOpening(decoration,frame),"decoration click opened PALM");
+  constexpr std::array<bool,2> rightStick{false,true};
+  check(placementAllowsOpening(decoration,frame,rightStick),"inactive decoration blocked PALM");
+  // An object placed with the left click leaves the right stick to PALM.
+  decoration.flags=static_cast<std::uint32_t>(rock::api::input::PlacementClickFlag::LeftInputReserved);
+  check(placementAllowsOpening(decoration,frame,rightStick),"left-hand decoration blocked the right stick opener");
+  decoration.flags=static_cast<std::uint32_t>(rock::api::input::PlacementClickFlag::RightInputReserved);
+  check(!placementAllowsOpening(decoration,frame,rightStick),"decoration click opened PALM");
   gesture={};
   gesture.update(true,controls,false,false,false,0,true);
   gesture.update(true,controls,true,true,false,1,false);
   check(gesture.update(true,controls,false,false,false,2,false)==ControlEdge::None,"decoration release replayed in PALM");
   decoration.flags=0;--decoration.sample.frameIndex;
-  check(!placementAllowsOpening(decoration,frame),"stale decoration state allowed PALM capture");
+  check(!placementAllowsOpening(decoration,frame,rightStick),"stale decoration state allowed PALM capture");
   gesture={};
  }
  check(isPlainStickClick(controls),"default is not a plain physical stick click");

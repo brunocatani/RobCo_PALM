@@ -451,13 +451,14 @@ void RPSUI_CALL onFrame(const rpsui::api::input::Frame* frame,void*) noexcept {
   const bool holstersReady=s.holsters && s.holsters->IsInitialized();
   if(holstersReady)for(unsigned hand=0;hand<2;++hand)
    if(masks.buttons[hand])inHolster[hand]=s.holsters->IsHandInHolsterZone(hand==0);
+  const std::array<bool,2> stickUsed{(masks.buttons[0]&(1ull<<32))!=0,(masks.buttons[1]&(1ull<<32))!=0};
   bool bipodAllows=true;
   rock::api::weapon::WeaponState weapon;
   int weaponStatus=-1;
   if(rockReady) {
    bipodAllows=(rockServices().weapon!=nullptr) &&
     (weaponStatus=static_cast<int>(rockServices().weapon->getWeaponState(s.owner,0,&weapon)))==static_cast<int>(rock::api::Status::Ok) &&
-    bipodAllowsOpening(weapon,s.rockFrame);
+    bipodAllowsOpening(weapon,s.rockFrame,stickUsed);
   }
   bool triggerEquipAllows=true;
   std::array<rock::api::grab::HandInteractionState,2> interactions;
@@ -470,10 +471,10 @@ void RPSUI_CALL onFrame(const rpsui::api::input::Frame* frame,void*) noexcept {
     triggerEquipAllowsOpening(interaction,s.rockFrame,physical);
   }
   bool placementAllows=true;
-  if(rockReady && (masks.buttons[1]&(1ull<<32))) {
+  if(rockReady && (stickUsed[0] || stickUsed[1])) {
    rock::api::input::PlacementClickState placement;
    placementAllows=rockServices().input->getPlacementClickState(s.owner,&placement)==rock::api::Status::Ok &&
-    placementAllowsOpening(placement,s.rockFrame);
+    placementAllowsOpening(placement,s.rockFrame,stickUsed);
   }
   const bool openingAllowed=bipodAllows && placementAllows && triggerEquipAllows && openingInputAllowed(masks,pressed,handValid,inHolster);
   const bool openingBlocked=rockyOwnsInput || (!s.gesture.open && !openingAllowed);
