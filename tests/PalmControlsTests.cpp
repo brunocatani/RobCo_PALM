@@ -112,25 +112,23 @@ int main(){try {
   using Flag=rock::api::weapon::WeaponStateFlag;
   wheel::RockFrame frame;frame.sample.frameIndex=5;frame.sample.worldGeneration=1;frame.sample.skeletonGeneration=2;frame.sample.providerGeneration=3;
   rock::api::weapon::WeaponState weapon;weapon.sample=frame.sample;
-  weapon.flags=static_cast<std::uint32_t>(Flag::Valid);weapon.firingHand=rock::api::Hand::Right;
+  weapon.flags=static_cast<std::uint32_t>(Flag::Valid);
   constexpr std::array<bool,2> rightStick{false,true},leftStick{true,false};
   check(bipodAllowsOpening(weapon,frame,rightStick),"disabled/inactive bipod blocked opening");
   const auto step=[&](bool down,double time){return gesture.update(true,controls,down,down,false,time,bipodAllowsOpening(weapon,frame,rightStick));};
   for(bool touchWhilePressed:{false,true}) {
    gesture={};weapon.flags=static_cast<std::uint32_t>(Flag::Valid);step(false,0);
    if(touchWhilePressed)step(true,1);
-   weapon.flags|=static_cast<std::uint32_t>(Flag::BipodInputReserved);
+   weapon.flags|=static_cast<std::uint32_t>(Flag::BipodRightInputReserved);
    check(!bipodAllowsOpening(weapon,frame,rightStick) && step(true,2)==ControlEdge::None,"bipod contact/latch opened PALM");
    weapon.flags=static_cast<std::uint32_t>(Flag::Valid);
    check(step(true,3)==ControlEdge::None && step(false,4)==ControlEdge::None,"bipod release or contact loss replayed click");
    step(true,5);check(step(false,5.01)==ControlEdge::Open,"fresh click after bipod stopped reserving input failed");
   }
-  // A left-hand weapon's bipod takes the left stick only.
-  weapon.flags=static_cast<std::uint32_t>(Flag::Valid)|static_cast<std::uint32_t>(Flag::BipodInputReserved);
-  weapon.firingHand=rock::api::Hand::Left;
+  // A bipod on the left hand's stick leaves the right stick to PALM.
+  weapon.flags=static_cast<std::uint32_t>(Flag::Valid)|static_cast<std::uint32_t>(Flag::BipodLeftInputReserved);
   check(bipodAllowsOpening(weapon,frame,rightStick),"left-hand bipod blocked the right stick opener");
   check(!bipodAllowsOpening(weapon,frame,leftStick),"left-hand bipod left the left stick to PALM");
-  weapon.firingHand=rock::api::Hand::Right;
   weapon.flags=0;check(!bipodAllowsOpening(weapon,frame,rightStick),"invalid weapon observation granted opening");
   weapon.flags=static_cast<std::uint32_t>(Flag::Valid);
   --weapon.sample.frameIndex;check(!bipodAllowsOpening(weapon,frame,rightStick),"stale bipod frame granted opening");++weapon.sample.frameIndex;

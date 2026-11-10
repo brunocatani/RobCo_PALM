@@ -13,18 +13,15 @@ inline bool placementAllowsOpening(const rock::api::input::PlacementClickState& 
   (stickUsed[1] && (state.flags&static_cast<std::uint32_t>(Flag::RightInputReserved)));
  return sameRockSample(state.sample,frame) && !reserved;
 }
-// ROCK owns the enabled setting and contact/latch decision for the primary
-// weapon (slot 0); the bipod takes its firing hand's stick click. A failed or
-// stale query cannot grant an opening click against an active provider, and an
-// unknown firing hand counts as both.
+// ROCK owns the enabled setting, the contact/latch decision and the hand whose
+// stick the bipod takes for the primary weapon (slot 0). A failed or stale
+// query cannot grant an opening click against an active provider.
 inline bool bipodAllowsOpening(const rock::api::weapon::WeaponState& weapon,
  const wheel::RockFrame& frame,const std::array<bool,2>& stickUsed) {
  using Flag=rock::api::weapon::WeaponStateFlag;
- const bool firingLeft=weapon.firingHand==rock::api::Hand::Left;
- const bool firingKnown=weapon.firingHand==rock::api::Hand::Left || weapon.firingHand==rock::api::Hand::Right;
- const bool stickTaken=firingKnown ? stickUsed[firingLeft?0:1] : (stickUsed[0] || stickUsed[1]);
- return (weapon.flags&static_cast<std::uint32_t>(Flag::Valid)) && sameRockSample(weapon.sample,frame) &&
-  !((weapon.flags&static_cast<std::uint32_t>(Flag::BipodInputReserved)) && stickTaken);
+ const bool taken=(stickUsed[0] && (weapon.flags&static_cast<std::uint32_t>(Flag::BipodLeftInputReserved))) ||
+  (stickUsed[1] && (weapon.flags&static_cast<std::uint32_t>(Flag::BipodRightInputReserved)));
+ return (weapon.flags&static_cast<std::uint32_t>(Flag::Valid)) && sameRockSample(weapon.sample,frame) && !taken;
 }
 // Query only physical hands whose trigger participates in the opening binding.
 // A current empty hand permits capture; an unknown hand cannot take equip input.
