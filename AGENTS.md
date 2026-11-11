@@ -1,8 +1,8 @@
 # RobCo PALM
 
-RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM's runtime identity is defined in the UI workspace instructions.
+RobCo PALM is the wheel menu and the configuration pages for the RPS mods. Build target and F4SE registration `RobCoPALM`, DLL `wheelmenu.dll`, log `RobCoPALM.log`, settings `PALM.toml` in `Documents/My Games/Fallout4VR/Mods_Config/RobCo_PALM/`.
 
-- Build with `cmake --preset custom-fast`, then `cmake --build build-fast --config Release --target RobCoPALM`. Targeted CTest suites also use `build-fast`, Release. Deploys `wheelmenu.dll` and its PDB only to `F4SE/Plugins` under the mod folder set by `COPY_PLUGIN_BASE_PATH` in `CMakeUserPresets.json`.
+- Build with `cmake --preset custom-fast`, then `cmake --build build-fast --config Release --target RobCoPALM`. Tests: `cmake --build build-fast --config Release --target build_tests`, then `ctest --test-dir build-fast -C Release --output-on-failure`. Deploys `wheelmenu.dll` and its PDB only to `F4SE/Plugins` under the mod folder set by `COPY_PLUGIN_BASE_PATH` in `CMakeUserPresets.json`.
 
 ## Drawing
 
@@ -12,7 +12,7 @@ RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM'
 ## Provider pages
 
 - Runtime availability comes from the loaded modules (`src/tools/RpsMod.h`). PALM never changes a provider's published contract.
-- ROCK's consumer and developer pages share one configuration registration: read the catalog from ROCK's negotiated Configuration API and route writes to ROCK. PAPER's page edits `PAPER.toml` line by line through the file editor (`src/tools/IniSettingsStore.cpp`), which reads TOML files as RPS Framework's settings store writes them (`## === ` category headings, `##` help, single-`#` player notes, quoted strings) and INI files (DIAMOND) as before; PAPER's watcher applies the edit.
+- ROCK's consumer and developer pages share one configuration registration: read the catalog from ROCK's negotiated Configuration API and route writes to ROCK. PAPER's page edits `PAPER.toml` line by line through the file editor (`src/tools/IniSettingsStore.cpp`), which reads TOML files as RPS Framework's settings store writes them (`## === ` category headings, `##` help, single-`#` player notes, quoted strings) and INI files; PAPER's watcher applies the edit.
 - Item and gesture integration use ROCK when it is loaded; without it, PALM keeps its standalone RPS UI behaviour. A loaded ROCK that does not serve the ROCK API PALM was built for stops the game at the main menu with an error box (`src/RockServices.cpp`, RPS Framework's `RPS/Runtime/RequiredUpdate.h` from its staged package, `RPSFramework_DIR`).
 - SCISSORS pages (consumer and developer) bind only `SCISSORS.dll`'s `SCISSORS_GetConfiguration` 2.0 table, from SCISSORS' own `include/` (`SCISSORS_INCLUDE_DIR`). Never forward NPC settings through ROCK or write SCISSORS' settings files directly. `PhysicalMelee` lives on the SCISSORS Dev page and goes through SCISSORS Configuration, never ROCK configuration.
 - The RPS UI page edits `RPS_UI.toml` through the same file editor; its Theme dropdown lists the files in the `Themes` folder beside it.
@@ -31,8 +31,8 @@ RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM'
 
 ## Public API
 
-- `include/RobCoPALM/` is the only copy of PALM's public headers: the Menu and Developer interfaces at major 2, with one page per interface in `docs/api/`, updated in the same commit as the header. They include only the C++ standard library and each other.
+- `include/RobCoPALM/` is the only copy of PALM's public headers: the Menu and Developer interfaces at major 2, with one page per interface in `docs/api/`. They include only the C++ standard library and each other.
 - Consumers bind at runtime through `PALMAPI_QueryInterfaceV1`, never link PALM and never copy its headers. `Client.h` is the helper.
 - A mod built against PALM 1.2 (`PALMMenuApi.h`, `GetPALMMenuApi`) is updated with `docs/api/Migration.md`; ROCK's `skills/rock-1.0-migration/SKILL.md` covers it with ROCK, PAPER and RPS UI Framework.
-- Every version refusal and retired-export call is logged with the calling DLL and stops the game at the main menu with an error box (`src/RequiredUpdates.cpp`). `GetPALMMenuApi` and `GetPALMDeveloperApi` only refuse; their names are never reused.
+- Every version refusal and retired-export call is logged with the calling DLL and stops the game at the main menu with an error box (`src/RequiredUpdates.cpp`). `GetPALMMenuApi` and `GetPALMDeveloperApi` only refuse.
 - PALM binds RPS UI Framework from that project's `include/` (`RPSUI_INCLUDE_DIR`). A loaded RPS UI without its 2.0 discovery stops the game the same way.
