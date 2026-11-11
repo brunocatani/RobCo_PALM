@@ -8,7 +8,7 @@ RobCo P.A.L.M. is a customisable wheel menu for Fallout 4 VR, with quick access 
 
 - Choose up to eight items per category and hide sections you do not use.
 - Equip weapons and armor, use consumables, or bring items into your hand with ROCK.
-- Use eight hand gestures with ROCK and FRIK.
+- Use eight hand gestures with ROCK and FRIK (off by default; turn them on in Config → PALM settings → Wheel sections).
 - Change PALM controls and RPS mod settings in game.
 - Add wheel sections through supported mods.
 - Browse and spawn items by plugin and category.

@@ -66,7 +66,7 @@ int main(){try {
   check(registry.registerSection(&again,&rejected)==Result::Ok);
  }
  again=section("example.overflow",state);check(registry.registerSection(&again,&rejected)==Result::CapacityReached);
- wheel::Preferences prefs;
+ wheel::Preferences prefs;check(prefs.enabledEntries()==6);prefs.gesturesEnabled=true;
  check(prefs.enabledEntries()==8 && prefs.setSectionEnabled("example.magazines",true));
  check(prefs.setSectionEnabled("example.other",true) && prefs.enabledEntries()==10);
  check(!prefs.setSectionEnabled("example.third",true));
@@ -75,6 +75,6 @@ int main(){try {
  std::ostringstream out;wheel::writePreferences(out,prefs);wheel::Preferences loaded;std::istringstream in(out.str());
  check(wheel::readPreferences(in,loaded) && !loaded.gesturesEnabled && loaded.sections==prefs.sections);
  std::istringstream previous("PALMItems 1\ncategory 0 1\nitem 0 \"old-choice\" \"Stimpak\"\ncategory 1 0\ncategory 2 1\ncategory 3 1\ncategory 4 1\n");
- check(wheel::readPreferences(previous,loaded) && loaded.gesturesEnabled && loaded.slots[0].size()==1 && !loaded.enabled[1]);
+ check(wheel::readPreferences(previous,loaded) && !loaded.gesturesEnabled && loaded.slots[0].size()==1 && !loaded.enabled[1]);
  std::cout<<"Section capacity, snapshots, callback lifetime, stale selections and visibility persistence passed\n";return 0;
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

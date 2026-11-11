@@ -12,7 +12,7 @@ namespace wheel {
 struct Favorite {std::string key,name;unsigned slot{};};
 struct Preferences {
  std::array<bool,kCategoryCount> enabled{true,true,true,true,true};
- bool gesturesEnabled{true};
+ bool gesturesEnabled{false}; // Hand gestures are opt-in from PALM's settings.
  std::vector<std::string> sections;
  std::array<std::vector<Favorite>,kCategoryCount> slots;
  unsigned enabledEntries() const {return 1+static_cast<unsigned>(std::count(enabled.begin(),enabled.end(),true))+(gesturesEnabled?2:0)+static_cast<unsigned>(sections.size());}

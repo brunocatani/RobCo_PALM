@@ -32,7 +32,7 @@ struct Model {
  std::array<std::vector<Item>, kCategoryCount> items;
  Category category{Category::Aid};
  std::array<bool,kCategoryCount> enabled{true,true,true,true,true};
- bool gesturesEnabled{true};
+ bool gesturesEnabled{false};
  bool equipmentNamesAvailable{true};
  // Hold mode selects when the opening chord is released; press mode on a trigger click.
  bool holdToSelect{};

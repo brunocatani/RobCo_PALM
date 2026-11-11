@@ -107,10 +107,11 @@ int main(int argc, char** argv) {
         click(railWidth+42,294);
         require(!wheel::snapshotWheelPreferences().enabled[3] && wheel::takeWheelConfigChange(), "weapon visibility edit did not reach wheel preferences");
         click(railWidth+42,294);
-        click(railWidth+600,470);
-        require(!wheel::snapshotWheelPreferences().gesturesEnabled, "gesture visibility edit did not reach wheel preferences");
+        require(!wheel::snapshotWheelPreferences().gesturesEnabled, "gestures are not off by default");
         auto wheelModel=wheel::selectedWheelInventory(wheel::Model{});
         require(wheel::navigationLayout(wheelModel).count==6, "hidden gestures left empty navigation slots");
+        click(railWidth+600,470);
+        require(wheel::snapshotWheelPreferences().gesturesEnabled, "gesture visibility edit did not reach wheel preferences");
         click(railWidth+600,470);
         const auto originalPreferences=wheel::snapshotWheelPreferences();
         auto full=originalPreferences;full.enabled.fill(false);full.gesturesEnabled=false;

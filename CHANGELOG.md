@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Hand gestures are off by default. Turn them on in Config → PALM settings →
+  Wheel sections. A save that already shows them keeps them.
+
+### Fixed
+
+- A gesture can be put on the hand you point at the wheel with. The buttons
+  that hand uses to click made it read as "Hand poses unavailable", so the
+  right-hand gestures never worked with the right pointer. Gestures chosen
+  with the wheel opened by a binding other than grip and trigger no longer get
+  refused either.
+- A refused or interrupted gesture writes the reason for each hand to
+  `RobCoPALM.log`.
+
 ## 2.0.0
 
 ### Requirements
