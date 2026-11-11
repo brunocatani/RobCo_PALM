@@ -12,12 +12,13 @@ RobCo P.A.L.M. is a customisable wheel menu for Fallout 4 VR, with quick access 
 - Change PALM controls and RPS mod settings in game.
 - Add wheel sections through supported mods.
 - Browse and spawn items by plugin and category.
+- Read the game console and run commands in game, with an on-screen keyboard or your real keyboard.
 
 ## Requirements
 
 Fallout 4 VR, F4SEVR, and RPS UI Framework.
 
-ROCK adds physical item handling; hand gestures also need FRIK 0.79 / API 2.3 for current source. PAPER and SCISSORS are optional integrations for their settings pages.
+ROCK 1.0 adds physical item handling; hand gestures also need FRIK 0.79.1 or newer with FRIK API 2.3. PAPER 2.0 and SCISSORS 1.0 are optional integrations for their settings pages.
 
 ## Using PALM
 
@@ -33,9 +34,13 @@ PALM saves its controls and pointer calibration to `Documents\My Games\Fallout4V
 
 New configurations use `[Controls] InputMode = 1`. Presets do not use `Mode` or `OpenMenu` as their binding; those keys store Custom's settings. The first start after an update carries your `PALM.ini` settings into `PALM.toml` and deletes the INI; an INI from before input modes keeps its binding through the matching preset or Custom.
 
-ROCK's trigger-equip, Rocky gesture, and bipod clicks take priority over opening PALM. A bound hand inside a Virtual Holsters zone or unrelated held buttons can also block opening. Release the opening buttons fully before trying again.
+**Config → Console** shows everything the game console prints and runs commands as if typed into it. Point and click the on-screen keyboard, or type on your real keyboard while the game window on your PC has focus; while this tab is open, key presses go to the command line instead of the game. Enter runs the line, Up and Down recall earlier commands, Page Up and Page Down scroll, and Escape clears the line. Commands containing `%` are refused, because the game reads them as a format string and can crash. Commands without a target act on the selected reference shown above the log, which you set with `prid <id>`.
 
-Install the `.7z` asset from [GitHub Releases](https://github.com/brunocatani/RobCo_PALM/releases/latest) through your mod manager. The plugin remains `Data/F4SE/Plugins/wheelmenu.dll`; GitHub's automatic source archives are for development.
+The buttons above the log are shortcuts from `Documents\My Games\Fallout4VR\Mods_Config\RobCo_PALM\ConsoleCommands.ini`. Each `[Label]` section is one button, and the lines under it run in order when you press it. PALM creates the file with a few examples the first time, and reads it again each time you open the Console tab or press Reload.
+
+ROCK's trigger-equip and bipod clicks, and an object placement on the same hand, take priority over opening PALM. A bound hand inside a Virtual Holsters zone or unrelated held buttons can also block opening. Release the opening buttons fully before trying again.
+
+Install the `.zip` asset from [GitHub Releases](https://github.com/brunocatani/RobCo_PALM/releases/latest) through your mod manager. The plugin remains `Data/F4SE/Plugins/wheelmenu.dll`; GitHub's automatic source archives are for development.
 
 ## Adding a mod section
 
@@ -51,11 +56,12 @@ From this repository, run:
 
 ```powershell
 cmake --preset custom-fast
-cmake --build build-fast --config Release --parallel 2 -- /p:CL_MPCount=2 /nodeReuse:false
-ctest --test-dir build-fast -C Release --output-on-failure --parallel 2
+cmake --build build-fast --config Release
+cmake --build build-fast --config Release --target build_tests
+ctest --test-dir build-fast -C Release --output-on-failure
 ```
 
-The preset automatically deploys the DLL and PDB to `D:/FO4/mods/RobCo_PALM/F4SE/Plugins/`. `PALMPreview.exe` provides a desktop preview; `PALMCapture.exe` renders screenshots without opening a window. Desktop previews do not validate VR input or stereo presentation.
+The preset deploys the DLL and PDB to `F4SE/Plugins` under the mod folder set by `COPY_PLUGIN_BASE_PATH` in your `CMakeUserPresets.json`. `PALMPreview.exe` provides a desktop preview; `PALMCapture.exe` renders screenshots without opening a window. Desktop previews do not validate VR input or stereo presentation.
 
 ## Source code and documentation
 
