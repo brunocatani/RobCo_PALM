@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased
+## 2.0.0
 
 ### Requirements
 
-- The RPS UI Framework version released with ROCK 1.0 is required. ROCK 1.0 is optional and adds physical
+- RPS UI Framework 2.0.0 is required. ROCK 1.0.0 is optional and adds physical
   item handling; hand gestures also need FRIK 0.79.1 or newer with FRIK API
   2.3. A loaded ROCK older than 1.0 stops the game at the main menu with an
   error box naming the mismatch.
