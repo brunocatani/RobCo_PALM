@@ -33,5 +33,6 @@ RobCo PALM is the wheel menu and the configuration pages for the RPS mods. PALM'
 
 - `include/RobCoPALM/` is the only copy of PALM's public headers: the Menu and Developer interfaces at major 2, with one page per interface in `docs/api/`, updated in the same commit as the header. They include only the C++ standard library and each other.
 - Consumers bind at runtime through `PALMAPI_QueryInterfaceV1`, never link PALM and never copy its headers. `Client.h` is the helper.
+- A mod built against PALM 1.2 (`PALMMenuApi.h`, `GetPALMMenuApi`) is updated with `docs/api/Migration.md`; ROCK's `skills/rock-1.0-migration/SKILL.md` covers it with ROCK, PAPER and RPS UI Framework.
 - Every version refusal and retired-export call is logged with the calling DLL and stops the game at the main menu with an error box (`src/RequiredUpdates.cpp`). `GetPALMMenuApi` and `GetPALMDeveloperApi` only refuse; their names are never reused.
 - PALM binds RPS UI Framework from that project's `include/` (`RPSUI_INCLUDE_DIR`). A loaded RPS UI without its 2.0 discovery stops the game the same way.

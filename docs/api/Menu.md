@@ -30,7 +30,7 @@ if (palm::api::acquire(query, menu) == palm::api::Result::Ok) {
 
 Discovery serves an interface when the major matches exactly, the minor is at least the one requested and the table is at least the size requested. Otherwise it returns `UnknownInterface`, `UnsupportedMajor`, `UnsupportedMinor` or `TableTooSmall` and no table.
 
-Major 1 is refused. PALM logs every version refusal with the calling DLL, then stops the game at the main menu with an error box that names the mod to update. The pre-2.0 exports `GetPALMMenuApi` and `GetPALMDeveloperApi` stay exported, return no table and report the same stop. Their names are never reused.
+Major 1 is refused. PALM logs every version refusal with the calling DLL, then stops the game at the main menu with an error box that names the mod to update. The pre-2.0 exports `GetPALMMenuApi` and `GetPALMDeveloperApi` stay exported, return no table and report the same stop. Their names are never reused. A mod built against PALM 1.2 is updated with [Migration](Migration.md).
 
 ## Sections and items
 

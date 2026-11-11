@@ -44,7 +44,7 @@ Install the `.zip` asset from [GitHub Releases](https://github.com/brunocatani/R
 
 ## Adding a mod section
 
-The public headers are in [`include/RobCoPALM/`](include/RobCoPALM/), documented in [`docs/api/Menu.md`](docs/api/Menu.md). Resolve `PALMAPI_QueryInterfaceV1` from `wheelmenu.dll` and acquire the Menu table with `palm::api::acquire`. The [`physical magazine example`](tests/ConsumerExample.cpp) compiles with the tests.
+The public headers are in [`include/RobCoPALM/`](include/RobCoPALM/), documented in [`docs/api/Menu.md`](docs/api/Menu.md). Resolve `PALMAPI_QueryInterfaceV1` from `wheelmenu.dll` and acquire the Menu table with `palm::api::acquire`. The [`physical magazine example`](tests/ConsumerExample.cpp) compiles with the tests. A section built against PALM 1.2's `PALMMenuApi.h` is updated with [Migration](docs/api/Migration.md).
 
 A mod registers a unique section ID, display name, icon, and selection callback, then publishes a copied snapshot of up to eight items. PALM supports up to ten registered mod sections. New mod sections start hidden until enabled in PALM settings.
 
