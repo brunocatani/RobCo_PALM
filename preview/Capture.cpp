@@ -1,4 +1,4 @@
-#include "ConfiguratorRuntime.h"
+#include "PageHost.h"
 #include "WheelConfig.h"
 #include "PalmControls.h"
 #include "WheelView.h"
@@ -20,7 +20,8 @@
 using Microsoft::WRL::ComPtr;
 void check(HRESULT hr) { if (FAILED(hr)) throw std::runtime_error("Offscreen capture failed: " + std::to_string(hr)); }
 
-// Renders the real Config widgets without creating a window or using the desktop.
+// Renders the wheel and PALM's settings pages without creating a window or using the desktop.
+// The settings menu around those pages is RPS UI's; its own preview captures it.
 int main(int argc, char** argv) {
  if(argc<2)return 1;
  try {
@@ -37,10 +38,8 @@ int main(int argc, char** argv) {
   ImGui_ImplDX11_Init(device.Get(),context.Get());
   wheel::IconAtlas icons;if(!icons.create(device.Get(),context.Get()))throw std::runtime_error("Embedded icon atlases unavailable");
   auto& io=ImGui::GetIO();io.DisplaySize={static_cast<float>(width),static_cast<float>(height)};io.DeltaTime=1.0f/90;
-  wheel::publishWheelInventory(wheel::demoInventory());rock_configurator::initializePreview();rock_configurator::setPreviewOpen(true);
-  bool showWheel=false,showAtlas=false,showKeyboard=false;unsigned atlasSheet=0;
-  // The keyboard panel is drawn alone at its own shape, along the top of the image.
-  const float keyboardHeight=static_cast<float>(width)*480.f/2080.f;wheel::Model wheelModel;wheel::View wheelView;
+  wheel::publishWheelInventory(wheel::demoInventory());preview::PalmPage page{};
+  bool showWheel=false,showAtlas=false;unsigned atlasSheet=0;wheel::Model wheelModel;wheel::View wheelView;
   const auto frame=[&] {
    ImGui_ImplDX11_NewFrame();ImGui::NewFrame();
    if(showAtlas) {
@@ -49,9 +48,8 @@ int main(int argc, char** argv) {
     for(unsigned i=0;i<16;++i)wheel::drawIcon(draw,{(width-height)/2.f+(i%4+.5f)*cell,(i/4+.5f)*cell},cell*.45f,
      static_cast<wheel::Icon>(atlasSheet*16+i),IM_COL32(225,235,240,255),icons.ids());
    }else if(showWheel)(void)wheel::drawWheel(wheelModel,wheelView,{},{},icons.ids());
-   else if(showKeyboard)(void)rock_configurator::drawKeyboardPanel(0,0,static_cast<float>(width),keyboardHeight);
-   else (void)rock_configurator::drawImGui(0,0,static_cast<float>(width),static_cast<float>(height));
-   ImGui::Render();rock_configurator::drainPreviewActions();
+   else (void)preview::drawPalmPage(page,0,0,static_cast<float>(width),static_cast<float>(height));
+   ImGui::Render();
    auto* view=target.Get();context->OMSetRenderTargets(1,&view,nullptr);
    const float clear[4]{0,0,0,1};context->ClearRenderTargetView(view,clear);ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
   };
@@ -71,12 +69,8 @@ int main(int argc, char** argv) {
    context->Unmap(cpu.Get(),0);
   };
   const float rail=devui::visual::railWidth(static_cast<float>(width));
-  const auto tab=[&](unsigned index) {
-   click(rock_configurator::previewTabCenterX(index,static_cast<float>(width)),55);
-  };
+  const auto tab=[&](unsigned index){page=static_cast<preview::PalmPage>(index);settle();};
   settle();
-  const bool csahOnly = argc > 5 && std::string_view(argv[3]) == "--csah";
-  const bool settingsOnly = argc > 3 && std::string_view(argv[3]) == "--settings-only";
   const bool equipmentUnavailable = argc > 3 && std::string_view(argv[3]) == "--equipment-unavailable";
   if (equipmentUnavailable) {
    auto inventory=wheel::demoInventory();wheel::Preferences preferences;
@@ -91,13 +85,6 @@ int main(int argc, char** argv) {
    wheelModel.category=wheel::Category::Aid;save(L"equipment-unavailable-aid.png");
    showWheel=false;click(100,367);save(L"equipment-unavailable-config.png");
    tab(1);save(L"equipment-unavailable-settings.png");
-  } else if (csahOnly) {
-   rock_configurator::initializeRpsPreview({}, {false,false}, nullptr, argv[4], argv[5]);
-   rock_configurator::setPreviewOpen(true);settle();
-   tab(2);save(L"csah-settings.png");
-  } else if (settingsOnly) {
-   tab(2);save(L"rock-settings.png");
-   click(220,120);save(L"developer-settings.png");
   } else {
   click(rail+60,344);click(rail+60,392);click(rail+60,440);
   save(L"wheel-items.png");
@@ -162,28 +149,8 @@ int main(int argc, char** argv) {
    const auto name=L"icon-atlas-"+std::to_wstring(atlasSheet+1)+L".png";save(name.c_str());
   }
   showAtlas=false;
-  tab(2);save(L"rock-settings.png");
-  click(100,385);save(L"rock-settings-controls.png");
-  click(220,120);save(L"developer-settings.png");
-  click(385,120);save(L"paper-settings.png");
-  click(555,120);save(L"scissors-settings.png");
-  // Clicks a key by its row, the units and keys before it, its own units and the row's key count.
-  const auto key=[&](int row,float unitsBefore,int keysBefore,float units,int count) {
-   const float pad=keyboardHeight*.05f,gap=keyboardHeight/60.f,keyHeight=(keyboardHeight-pad*2-gap*4)/5;
-   const float unit=(static_cast<float>(width)-pad*2-gap*static_cast<float>(count-1))/14.5f;
-   click(pad+unitsBefore*unit+static_cast<float>(keysBefore)*gap+units*unit*.5f,pad+static_cast<float>(row)*(keyHeight+gap)+keyHeight*.5f);
-  };
-  tab(3);save(L"spawner.png");
-  click(rail+300,282.f);save(L"spawner-search-open.png");
-  showKeyboard=true;key(2,2.75f,2,1,13);key(1,5.5f,5,1,14);key(1,8.5f,8,1,14);save(L"spawner-keyboard.png");
-  showKeyboard=false;save(L"spawner-search.png");
-  click(rail+100,335);save(L"item-actions.png");
-  tab(4);save(L"console.png");
-  showKeyboard=true;key(1,1.5f,1,1,14);save(L"console-keyboard.png");
-  showKeyboard=false;save(L"console-typed.png");
-  showKeyboard=true;key(2,12.75f,12,1.75f,13);showKeyboard=false;save(L"console-submitted.png");
   }
   ImGui_ImplDX11_Shutdown();ImGui::DestroyContext();CoUninitialize();
-  std::cout<<"Rendered Config views to "<<output.string()<<'\n';return 0;
+  std::cout<<"Rendered PALM views to "<<output.string()<<'\n';return 0;
  }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
 }

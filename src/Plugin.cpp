@@ -5,8 +5,6 @@
 #include "DeveloperActions.h"
 #include "PalmControls.h"
 #include <ShlObj.h>
-#include "tools/ConfiguratorRuntime.h"
-#include "tools/ConsoleService.h"
 #include <RPS/Runtime/RequiredUpdate.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 
@@ -36,12 +34,11 @@ void onMessage(F4SE::MessagingInterface::Message* message) noexcept {
   // PreLoad also runs when no co-save exists and F4SE never invokes onLoad.
   if(message->type==F4SE::MessagingInterface::kPreLoadGame) {wheel::beginGameLoad();return;}
   if(message->type==F4SE::MessagingInterface::kNewGame) {
-   wheel::beginGameLoad();rock_configurator::onGameSessionReady();wheel::finishGameLoad(true);return;
+   wheel::beginGameLoad();wheel::finishGameLoad(true);return;
   }
   if(message->type==F4SE::MessagingInterface::kPostLoadGame) {
    // F4SEVR sends the result as the pointer value, not a pointer to a bool.
    const bool success=message->data!=nullptr;
-   if(success)rock_configurator::onGameSessionReady();
    wheel::finishGameLoad(success);return;
   }
   if(message->type!=F4SE::MessagingInterface::kGameDataReady)return;
@@ -50,7 +47,7 @@ void onMessage(F4SE::MessagingInterface::Message* message) noexcept {
   if(!RPS::Runtime::RequiredUpdate::watchMainMenu(L"RobCo PALM: update required"))
    spdlog::error("PALM: the UI is unavailable; a ROCK version mismatch cannot stop the game at the main menu");
   if(!wheel::startRuntime())spdlog::critical("PALM menu initialization failed; see the preceding subsystem error");
-  else {rock_configurator::onGameDataReady();spdlog::info("PALM and workshop ready for gameplay input");}
+  else spdlog::info("PALM ready for gameplay input");
  }catch(const std::exception& e){spdlog::critical("PALM startup: {}",e.what());}
  catch(...){OutputDebugStringA("RobCoPALM startup failed\n");}
 }
@@ -88,8 +85,6 @@ extern "C" __declspec(dllexport) bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadIn
   const auto* messaging=F4SE::GetMessagingInterface();
   const auto* serialization=F4SE::GetSerializationInterface();
   if(!serialization || !messaging || !messaging->RegisterListener(onMessage))return false;
-  // Before the engine starts, so the Console tab has everything printed since launch.
-  (void)rock_configurator::console::installCapture();
   serialization->SetUniqueID(wheel::kWheelSaveID);
   serialization->SetRevertCallback(onRevert);
   serialization->SetSaveCallback(onSave);

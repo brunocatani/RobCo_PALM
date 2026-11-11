@@ -17,8 +17,7 @@
 #include "GrenadeSelection.h"
 #include "RockInputPolicy.h"
 #include "RockFrame.h"
-#include "tools/ConfiguratorRuntime.h"
-#include "tools/render/FrameworkPanelRenderer.h"
+#include "SettingsMenu.h"
 #include <RE/Bethesda/SendPapyrusEvent.h>
 
 namespace wheel {
@@ -87,7 +86,7 @@ template<class Log> void queueInputLog(Log log) noexcept {
 void refreshWheelInventory() {
  const auto ticket=state().generation.load();
  if(const auto* tasks=F4SE::GetTaskInterface())tasks->AddTask([ticket] {
-  if(!state().sessionReady.load() || (!state().open.load() && !rock_configurator::isOpen()) || state().generation.load()!=ticket)return;
+  if(!state().sessionReady.load() || (!state().open.load() && !settingsMenuOpen()) || state().generation.load()!=ticket)return;
   try {
    auto inventory=readInventory();auto& shared=sharedModel();std::scoped_lock lock(shared.mutex);
    if(!state().sessionReady.load() || state().generation.load()!=ticket)return;
@@ -284,12 +283,7 @@ void submitChoice(const wheel::RockFrame& frame) {
  if(!choice || ticket!=s.generation.load())return;
  if(choice==kConfigChoice) {
   s.handGestures.clear(s.owner);
-  const auto& p=s.wheelPose;devui::render::PanelPose pose;
-  pose.center={p.center[0],p.center[1],p.center[2]};
-  pose.right={p.right[0],p.right[1],p.right[2]};pose.up={p.up[0],p.up[1],p.up[2]};
-  pose.front={p.front[0],p.front[1],p.front[2]};
-  pose.physicalWidth=p.physicalWidth;pose.physicalHeight=p.physicalHeight;
-  rock_configurator::openAt(pose);
+  (void)openSettingsMenu(s.wheelPose);
   spdlog::info("Selected Config; replacing wheel at its anchor");
  }else if(choice==kSectionChoice) {
   s.handGestures.clear(s.owner);
@@ -490,7 +484,7 @@ void RPSUI_CALL onFrame(const rpsui::api::input::Frame* frame,void*) noexcept {
      usable,sessionReady,ready,uiReady,presentationFailed,sequence);
    });
   }
-  s.inputReady=usable;rock_configurator::setAvailable(usable);
+  s.inputReady=usable;
   const bool reset=s.sessionResetPending.exchange(false);
   if(providerChanged) {
    s.handGestures.clear(s.owner);publishGestureState();cancelCommand();s.pendingEquip=0;s.equipCommand=0;
@@ -503,18 +497,8 @@ void RPSUI_CALL onFrame(const rpsui::api::input::Frame* frame,void*) noexcept {
    return;
   }
   serviceCommand();serviceEquipCommand();if(rockReady)serviceStore();
-  {
-   // Asking only while the keyboard panel is up is what releases the keyboard otherwise:
-   // the capture lapses by itself three frames after the last request.
-   rpsui::api::input::KeyboardRead keyboard;
-   std::array<rock_configurator::ConsoleKeyEvent,rpsui::api::input::kKeyboardEventCapacity> keys;
-   const bool held=rock_configurator::keyboardInputActive() && s.inputApi->captureKeyboard && s.inputApi->captureKeyboard(s.inputToken,&keyboard);
-   const std::uint32_t count=held?keyboard.count:0;
-   for(std::uint32_t i=0;i<count;++i)keys[i]={keyboard.events[i].kind==rpsui::api::input::KeyboardEventKind::Character,keyboard.events[i].code};
-   rock_configurator::serviceConsole(held,held && keyboard.focused!=0,std::span<const rock_configurator::ConsoleKeyEvent>(keys.data(),count));
-  }
-  if(rock_configurator::takeInventoryRefreshRequest())refreshWheelInventory();
-  const bool gameActionPending=s.gameActionPending.load(),configOpen=rock_configurator::isOpen(),configOpening=rock_configurator::isOpening();
+  if(takeSettingsMenuClosed())refreshWheelInventory();
+  const bool gameActionPending=s.gameActionPending.load(),configOpen=settingsMenuOpen(),configOpening=false;
   const bool eligible=!s.command && !s.storeCommand && !s.pendingStore.load() && !gameActionPending && !configOpen && !configOpening;
   const auto masks=controlMasks(s.controls,frame->leftHanded);
   std::array pressed{frame->hands[0].pressed,frame->hands[1].pressed};
@@ -654,7 +638,6 @@ void closeWheel(std::uint64_t expectedGeneration){
   if(expectedGeneration && s.generation.load()!=expectedGeneration)return;
   s.open=false;s.held=false;s.choice=0;s.clickRequested=false;++s.generation;(void)s.selection.release();
   (void)presentPanel(false);}
- rock_configurator::close();
 }
 void failWheelPresentation(std::uint64_t expectedGeneration) {
  auto& s=state();
@@ -668,7 +651,7 @@ void failWheelPresentation(std::uint64_t expectedGeneration) {
 }
 void beginGameLoad() {
  auto& s=state();s.sessionReady=false;s.inputReady=false;s.sessionResetPending=true;
- rock_configurator::setAvailable(false);closeWheel();
+ closeWheel();
  s.presentationFailed=false; // Old render tickets have now been invalidated.
  sectionRegistry().clearItems();
  restoreWheelPreferences({});
@@ -683,9 +666,10 @@ bool startRuntime() {
  if(!installPanel())return false;
  struct RegistrationRollback {
   bool complete{};
-  ~RegistrationRollback(){if(!complete){devui::render::Shutdown();unregisterPanel();}}
+  ~RegistrationRollback(){if(!complete){uninstallSettingsPages();unregisterPanel();}}
  } rollback;
- if(!devui::render::InstallFrameworkPanel())return false;
+ // Without the settings menu the wheel still works; Config then has nothing to open.
+ (void)installSettingsPages();
 
  auto& s=state();
  if(rpsui::api::acquire(rpsUiQuery(),s.inputApi)!=rpsui::api::Result::Ok) {

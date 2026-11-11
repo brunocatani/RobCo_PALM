@@ -3,7 +3,7 @@
 #include "IconAtlas.h"
 #include "WheelConfig.h"
 #include "PalmControls.h"
-#include "ConfiguratorRuntime.h"
+#include "PageHost.h"
 #include "render/UiVisualStyle.h"
 #include <Windows.h>
 #include <d3d11.h>
@@ -49,7 +49,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
  wheel::IconAtlas icons;if(!icons.create(device.Get(),context.Get()))return 1;
  auto catalog=wheel::demoInventory();wheel::publishWheelInventory(catalog);
  auto model=wheel::selectedWheelInventory(catalog);wheel::View view;
- rock_configurator::initializePreview();wheel::ControlGesture gesture;auto controls=wheel::snapshotControls();bool wheelOpen=false;
+ preview::PalmPage page{};bool pagesOpen=false;wheel::ControlGesture gesture;auto controls=wheel::snapshotControls();bool wheelOpen=false;
  ShowWindow(hwnd,show);UpdateWindow(hwnd);bool done=false;
  while(!done){
   MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);if(message.message==WM_QUIT)done=true;}
@@ -64,7 +64,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   // Keyboard B emulates the complete VR chord in the desktop preview.
   const bool held=ImGui::IsKeyDown(ImGuiKey_B);
   const auto currentControls=wheel::snapshotControls();if(currentControls!=controls){controls=currentControls;gesture={};wheelOpen=false;}
-  const auto edge=gesture.update(focused && !rock_configurator::isOpen(),controls,held,held,ImGui::IsMouseClicked(0),ImGui::GetTime());
+  const auto edge=gesture.update(focused && !pagesOpen,controls,held,held,ImGui::IsMouseClicked(0),ImGui::GetTime());
   if(!focused)wheelOpen=false;
   if(edge==wheel::ControlEdge::Open) {
    wheelOpen=true;view={};const auto gestures=model.gestures;
@@ -77,7 +77,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   std::uint64_t selectedItem=0;
   if(edge==wheel::ControlEdge::Select && wheelOpen) {
    if(controls.mode==wheel::OpenMode::Hold || hover.cancelHovered || hover.configHovered){wheelOpen=false;gesture.cancel(held);}
-   if(hover.configHovered)rock_configurator::setPreviewOpen(true);
+   if(hover.configHovered)pagesOpen=true;
    else if(hover.section)(void)wheel::sectionRegistry().dispatch(hover.section,hover.sectionItem);
    else if(hover.hoveredGesture) {
     const unsigned hand=wheel::gestureIsLeft(hover.hoveredGesture)?1:0;
@@ -86,8 +86,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
    }
    else selectedItem=hover.hoveredItem;
   }
-  if(rock_configurator::isOpen())(void)rock_configurator::drawImGui(12,12,size.x-24,size.y-24);
-  rock_configurator::drainPreviewActions();
+  if(pagesOpen)pagesOpen=preview::drawPalmPage(page,12,12,size.x-24,size.y-24);
   bool inventoryChanged=false;
   if(selectedItem)for(unsigned c=0;c<wheel::kCategoryCount;++c)for(auto& item:catalog.items[c])if(wheel::selectionToken(item)==selectedItem){
    if(wheel::isEquipment(static_cast<wheel::Category>(c))) {

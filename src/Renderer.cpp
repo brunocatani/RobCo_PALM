@@ -100,6 +100,7 @@ bool installPanel() {
  }
  return true;
 }
+std::uint64_t frameworkOwner() {auto& p=panelState();std::scoped_lock lock(p.mutex);return p.owner;}
 void unregisterPanel() {
  auto& p=panelState();std::scoped_lock lock(p.mutex);
  if(p.api && p.owner) {

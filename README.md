@@ -8,17 +8,15 @@ RobCo P.A.L.M. is a customisable wheel menu for Fallout 4 VR, with quick access 
 
 - Choose up to eight items per category and hide sections you do not use.
 - Equip weapons and armor, use consumables, or bring items into your hand with ROCK.
-- Use eight hand gestures with ROCK and FRIK (off by default; turn them on in Config → PALM settings → Wheel sections).
-- Change PALM controls and RPS mod settings in game.
+- Use eight hand gestures with ROCK and FRIK (off by default; turn them on in Config → Wheel settings → Wheel sections).
+- Change PALM controls in game; **Config** opens RPS UI's settings menu, with every RPS mod's settings, the Spawner and the Console.
 - Add wheel sections through supported mods.
-- Browse and spawn items by plugin and category.
-- Read the game console and run commands in game, with an on-screen keyboard or your real keyboard.
 
 ## Requirements
 
 Fallout 4 VR, F4SEVR, and RPS UI Framework.
 
-ROCK 1.0 adds physical item handling; hand gestures also need FRIK 0.79.1 or newer with FRIK API 2.3. PAPER 2.0 and SCISSORS 1.0 are optional integrations for their settings pages.
+ROCK 1.0 adds physical item handling; hand gestures also need FRIK 0.79.1 or newer with FRIK API 2.3.
 
 ## Using PALM
 
@@ -26,7 +24,7 @@ ROCK 1.0 adds physical item handling; hand gestures also need FRIK 0.79.1 or new
 
 **Mode 2:** hold **right trigger + grab** for **0.50 seconds** to open the wheel, point, and release to select. Aim at the center/Cancel area and release to cancel.
 
-Choose your items in **Config → Items**. Select either preset or **Mode 3 — Custom** in **Config → PALM settings → Controls**. Custom mode unlocks remapping and the choice between **Release to select** and **Click to select**; its binding is retained when you switch back to a preset.
+Choose your items in **Config → Wheel items**. Select either preset or **Mode 3 — Custom** in **Config → Wheel settings → Controls**. Custom mode unlocks remapping and the choice between **Release to select** and **Click to select**; its binding is retained when you switch back to a preset.
 
 In **Click to select**, release the opening buttons before selecting with the pointing hand's trigger or A/X. The wheel stays open until you click **Cancel** or enter Config. Opening bindings support press, tap, double tap, hold, long press, and release, with an optional modifier on either hand. Touch and axis inputs are excluded; thumbstick click is supported. Tap and release bindings use click-to-select.
 
@@ -34,9 +32,7 @@ PALM saves its controls and pointer calibration to `Documents\My Games\Fallout4V
 
 New configurations use `[Controls] InputMode = 1`. Presets do not use `Mode` or `OpenMenu` as their binding; those keys store Custom's settings. The first start after an update carries your `PALM.ini` settings into `PALM.toml` and deletes the INI; an INI from before input modes keeps its binding through the matching preset or Custom.
 
-**Config → Console** shows everything the game console prints and runs commands as if typed into it. Point and click the on-screen keyboard, or type on your real keyboard while the game window on your PC has focus; while this tab is open, key presses go to the command line instead of the game. Enter runs the line, Up and Down recall earlier commands, Page Up and Page Down scroll, and Escape clears the line. Commands containing `%` are refused, because the game reads them as a format string and can crash. Commands without a target act on the selected reference shown above the log, which you set with `prid <id>`.
-
-The buttons above the log are shortcuts from `Documents\My Games\Fallout4VR\Mods_Config\RobCo_PALM\ConsoleCommands.ini`. Each `[Label]` section is one button, and the lines under it run in order when you press it. PALM creates the file with a few examples the first time, and reads it again each time you open the Console tab or press Reload.
+**Config** opens RPS UI Framework's settings menu at the wheel: every RPS mod's settings, the Spawner and the Console, with PALM's Wheel items and Wheel settings as two more tabs. The same menu opens from the RPS UI Settings holotape in the Pip-Boy, without the wheel. The Console's shortcut buttons are now in `Documents\My Games\Fallout4VR\Mods_Config\RPS_UI_Framework\ConsoleCommands.ini`; shortcuts you wrote in PALM's folder are copied there the first time.
 
 ROCK's trigger-equip and bipod clicks, and an object placement on the same hand, take priority over opening PALM. A bound hand inside a Virtual Holsters zone or unrelated held buttons can also block opening. Release the opening buttons fully before trying again.
 
@@ -61,7 +57,7 @@ cmake --build build-fast --config Release --target build_tests
 ctest --test-dir build-fast -C Release --output-on-failure
 ```
 
-The preset deploys the DLL and PDB to `F4SE/Plugins` under the mod folder set by `COPY_PLUGIN_BASE_PATH` in your `CMakeUserPresets.json`. `PALMPreview.exe` provides a desktop preview; `PALMCapture.exe` renders screenshots without opening a window. Desktop previews do not validate VR input or stereo presentation.
+The preset deploys the DLL and PDB to `F4SE/Plugins` under the mod folder set by `COPY_PLUGIN_BASE_PATH` in your `CMakeUserPresets.json`. `PALMPreview.exe` previews the wheel and PALM's pages on the desktop; `PALMCapture.exe` renders screenshots without opening a window. RPS UI Framework's `RPSUISettingsPreview.exe` previews the settings menu. Desktop previews do not validate VR input or stereo presentation.
 
 ## Source code and documentation
 
@@ -86,9 +82,3 @@ Third-party components retain their respective licenses; their notices are in
 ## Current ROCK integration
 
 Optional ROCK integration negotiates feature interfaces through `ROCKAPI_QueryInterfaceV1`. Configuration binds its own Read/Write permissions and uses ROCK's compiled catalog and writer; there is no separate configuration discovery export. The section API remains PALM-owned and independent of ROCK and RPS UI tables.
-
-SCISSORS has separate consumer and developer settings pages. NPC collision,
-blade penetration and native/supplemental NPC visualization controls come from
-SCISSORS' own Configuration 2.0 API and are written by SCISSORS into its own settings files.
-No NPC setting is forwarded through ROCK, and the NPC visualization master is
-independent of ROCK's hand and weapon visualization master.

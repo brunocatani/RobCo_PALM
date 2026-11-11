@@ -1,14 +1,12 @@
 #include "render/NativeRenderer.h"
-#include "render/FrameworkPanelRenderer.h"
-#include "ConfiguratorRuntime.h"
 #include "Fonts.h"
 #include "PalmTheme.h"
 #include <imgui.h>
 #include <Windows.h>
 #include <array>
 
-// Desktop presentation only. The same workshop model and widgets are compiled
-// with WHEEL_DESKTOP_PREVIEW: saves stay in memory and spawning uses sample data.
+// The desktop preview's faces for PALM's settings pages; in game they are the RPS UI
+// settings menu's theme faces (src/SettingsMenu.cpp).
 namespace devui::render {
 namespace { std::array<ImFont*, static_cast<std::size_t>(FontRole::Count)> configFonts{}; }
 ImFont* GetFont(FontRole role) noexcept {
@@ -20,14 +18,5 @@ void PrepareFonts() noexcept {
  catch(...){OutputDebugStringA("PALM terminal font preload failed; using the ImGui font\n");}
  for(std::size_t i=0;i<configFonts.size();++i)configFonts[i]=wheel::addPreparedFont(kFontSizes[i]);
 }
-bool SetPanelOpen(bool, const PanelPose*) noexcept { return true; }
 float FontSize(FontRole role) noexcept { return kFontSizes[static_cast<std::size_t>(role)] * palm::theme::textScale(); }
-void SyncKeyboardPanel(bool) noexcept {}
-void Shutdown() noexcept {}
-bool InstallFrameworkPanel() noexcept { return false; }
-bool ResetFrameworkPanelLayout() noexcept {
- rock_configurator::onFrameworkPanelFrame(kDefaultPanelPhysicalWidth,
-  rock_configurator::panel_resize::Handle::None,rock_configurator::panel_resize::Handle::None);
- return true;
-}
 }

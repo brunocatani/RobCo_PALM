@@ -14,7 +14,13 @@
 
 ### Changed
 
-- Hand gestures are off by default. Turn them on in Config → PALM settings →
+- **Config opens RPS UI's settings menu.** Every RPS mod's settings, the
+  Spawner and the Console moved into RPS UI Framework, so they also open from
+  its holotape without the wheel. PALM's Items and PALM settings are the Wheel
+  items and Wheel settings tabs of that menu. Console shortcuts are now in
+  `Mods_Config\RPS_UI_Framework\ConsoleCommands.ini`; yours are copied there
+  the first time. Needs the RPS UI Framework from the same release.
+- Hand gestures are off by default. Turn them on in Config → Wheel settings →
   Wheel sections. A save that already shows them keeps them.
 
 ### Fixed

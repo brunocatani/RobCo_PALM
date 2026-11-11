@@ -1,33 +1,19 @@
 # RobCo PALM
 
-RobCo PALM is the wheel menu and the configuration pages for the RPS mods. Build target and F4SE registration `RobCoPALM`, DLL `wheelmenu.dll`, log `RobCoPALM.log`, settings `PALM.toml` in `Documents/My Games/Fallout4VR/Mods_Config/RobCo_PALM/`.
+RobCo PALM is the wheel menu for the RPS mods. Its Config opens RPS UI's settings menu, where PALM adds its own pages. Build target and F4SE registration `RobCoPALM`, DLL `wheelmenu.dll`, log `RobCoPALM.log`, settings `PALM.toml` in `Documents/My Games/Fallout4VR/Mods_Config/RobCo_PALM/`.
 
 - Build with `cmake --preset custom-fast`, then `cmake --build build-fast --config Release --target RobCoPALM`. Tests: `cmake --build build-fast --config Release --target build_tests`, then `ctest --test-dir build-fast -C Release --output-on-failure`. Deploys `wheelmenu.dll` and its PDB only to `F4SE/Plugins` under the mod folder set by `COPY_PLUGIN_BASE_PATH` in `CMakeUserPresets.json`.
 
 ## Drawing
 
-- RPS UI Framework owns every in-game panel's Dear ImGui context, renderer and frame. The wheel (`src/Renderer.cpp`) and the Config and keyboard panels (`src/tools/render/FrameworkPanelRenderer.cpp`) add their fonts, style and icon textures in the panel's setup callback and issue ImGui calls in its draw callback. PALM's Dear ImGui copy is built with RPS UI's shared configuration (`RPS_UI_Framework/ImGuiBuild.h`) and no renderer backend; only the desktop preview, the capture tool and the headless tests add a backend.
-- PALM draws with the player's RPS UI theme: `palm::theme` (`src/PalmTheme.h`) reads the theme each callback binds, the Config panels take the theme's faces for their font roles, and sizes scale with the theme's body size. The desktop preview draws with RPS UI's built-in theme (`support/RPS_UI_Framework/ThemeDefaults.h`) and loads its own faces (`src/Fonts.cpp`).
+- RPS UI Framework owns every in-game panel's Dear ImGui context, renderer and frame. The wheel (`src/Renderer.cpp`) adds its fonts, style and icon textures in the panel's setup callback and issues ImGui calls in its draw callback. PALM's pages in the settings menu, Wheel items and Wheel settings (`src/SettingsMenu.cpp`), draw through RPS UI's SettingsMenu page API with the fonts the page frame passes. PALM's Dear ImGui copy is built with RPS UI's shared configuration (`RPS_UI_Framework/ImGuiBuild.h`) and no renderer backend; only the desktop preview, the capture tool and the headless tests add a backend.
+- PALM draws with the player's RPS UI theme: `palm::theme` (`src/PalmTheme.h`) reads the theme each callback binds, PALM's pages take the theme's faces from the page frame, and sizes scale with the theme's body size. The desktop preview draws with RPS UI's built-in theme (`support/RPS_UI_Framework/ThemeDefaults.h`) and loads its own faces (`src/Fonts.cpp`).
 
-## Provider pages
+## Settings menu
 
-- Runtime availability comes from the loaded modules (`src/tools/RpsMod.h`). PALM never changes a provider's published contract.
-- ROCK's consumer and developer pages share one configuration registration: read the catalog from ROCK's negotiated Configuration API and route writes to ROCK. PAPER's page edits `PAPER.toml` line by line through the file editor (`src/tools/IniSettingsStore.cpp`), which reads TOML files as RPS Framework's settings store writes them (`## === ` category headings, `##` help, single-`#` player notes, quoted strings) and INI files; PAPER's watcher applies the edit.
+- The settings pages of every RPS mod, the Spawner and the Console belong to RPS UI Framework's settings menu (its `src/settings_menu/`). PALM's Config opens that menu at the wheel's pose through the SettingsMenu table and refreshes the wheel's inventory when the menu's `closedCount` changes.
+- PALM's own settings are `PALM.toml` through RPS Framework's settings store (`RPS::Settings`, `openPalmSettings` in `src/PalmControls.cpp`); its first open migrates `PALM.ini` once and deletes it.
 - Item and gesture integration use ROCK when it is loaded; without it, PALM keeps its standalone RPS UI behaviour. A loaded ROCK that does not serve the ROCK API PALM was built for stops the game at the main menu with an error box (`src/RockServices.cpp`, RPS Framework's `RPS/Runtime/RequiredUpdate.h` from its staged package, `RPSFramework_DIR`).
-- SCISSORS pages (consumer and developer) bind only `SCISSORS.dll`'s `SCISSORS_GetConfiguration` 2.0 table, from SCISSORS' own `include/` (`SCISSORS_INCLUDE_DIR`). Never forward NPC settings through ROCK or write SCISSORS' settings files directly. `PhysicalMelee` lives on the SCISSORS Dev page and goes through SCISSORS Configuration, never ROCK configuration.
-- The RPS UI page edits `RPS_UI.toml` through the same file editor; its Theme dropdown lists the files in the `Themes` folder beside it.
-- PALM's own settings are `PALM.toml` through RPS Framework's settings store (`RPS::Settings`, `openPalmSettings` in `src/PalmControls.cpp`); its first open migrates `PALM.ini` once and deletes it. `ConsoleCommands.ini` is a player-written list of console shortcuts, not settings, and keeps its plain format.
-- Preview fixture flags never alter production discovery or write runtime settings files; preview never discovers or writes a real provider, and injected fixtures stay read-only.
-
-## Console tab
-
-- `src/tools/ConsoleService.cpp` hooks the call to `ConsoleLog::AddString` at plugin load, after checking the live bytes, and runs commands through `Console::ExecuteCommand`, so the native Console menu is never needed. Commands containing `%` are refused: the engine echoes a command through its print function as the format string.
-- The on-screen keyboard is its own RPS UI panel (`robco.palm.workshop.keyboard`, `src/tools/OnScreenKeyboard.cpp`) under the Config panel. It is up on the Console tab, and on the Spawner while one of its two searches (sources, items) is open; it takes the Config panel's width and follows its resizes. Both keyboards feed a `ConsoleLine`, not an ImGui text field, because clicking a key would take focus from that field. The real keyboard comes from RPS UI's `captureKeyboard`, requested only while the keyboard panel is up; the capture lapses by itself when PALM stops asking.
-- Shortcut buttons come from `Mods_Config/RobCo_PALM/ConsoleCommands.ini` (`src/tools/ConsoleShortcuts.h` parses it; `console::loadShortcuts` reads it and writes the default list when absent). The game thread reads it only on entering the Console tab and on Reload, outside the runtime mutex; never per frame. The preview build uses the default list and touches no file.
-
-## Spawner
-
-- With `Flying_BRICKS.esp` loaded, the All ammo source lists only the playable rounds that plugin defines or overrides (`src/tools/SpawnBrowser.cpp`), so vanilla's non-playable companion copies it also overrides stay out; otherwise every named ammo form.
 
 ## Public API
 
