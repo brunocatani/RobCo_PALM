@@ -26,15 +26,23 @@ struct ReadableLabel {
     }
 };
 inline ImU32 color(ImVec4 value) { return ImGui::ColorConvertFloat4ToU32(value); }
+// A hand-drawn control's box, the way every RPS UI panel shows a chosen choice
+// (rpsui::imgui_host::pushChosen): an accent tint, a thick accent outline and, for its
+// label, accent ink (inkFor). Hovered gets a lighter tint.
+inline void chosenBox(ImDrawList* draw,ImVec2 minimum,ImVec2 maximum,bool chosen,bool hovered) {
+    const auto& theme=palm::theme::current();
+    if(chosen || hovered)draw->AddRectFilled(minimum,maximum,color(accent(chosen?0.20f:0.12f)),theme.rounding);
+    draw->AddRect(minimum,maximum,color(chosen?accent():palm::theme::border()),theme.rounding,
+        chosen?theme.borderWidth*2.f:theme.borderWidth);
+}
+inline ImVec4 inkFor(bool chosen,bool hovered) { return chosen || hovered?accent():muted(); }
 inline bool button(const char* label,ImVec2 size={},bool selected=false) {
-    // Keep native button input/IDs; only render the label with inverted ink.
+    // Keep native button input/IDs; the label is drawn below, fitted to the button.
+    if(selected)rpsui::imgui_host::pushChosen(palm::theme::current());
     ImGui::PushStyleColor(ImGuiCol_Text,ImVec4(0,0,0,0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,accent());
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,accent());
-    if(selected)ImGui::PushStyleColor(ImGuiCol_Button,accent());
     const bool clicked=ImGui::Button(label,size);
-    if(selected)ImGui::PopStyleColor();
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor();
+    if(selected)rpsui::imgui_host::popChosen();
     const auto minimum=ImGui::GetItemRectMin(),maximum=ImGui::GetItemRectMax();
     const char* end=std::strstr(label,"##");
     auto* font=ImGui::GetFont();float fontSize=ImGui::GetFontSize();
@@ -44,15 +52,10 @@ inline bool button(const char* label,ImVec2 size={},bool selected=false) {
     const auto align=ImGui::GetStyle().ButtonTextAlign;
     auto* draw=ImGui::GetWindowDrawList();draw->PushClipRect(minimum,maximum,true);
     draw->AddText(font,fontSize,{minimum.x+(maximum.x-minimum.x-extent.x)*align.x,minimum.y+(maximum.y-minimum.y-extent.y)*align.y},
-        ImGui::GetColorU32(selected || ImGui::IsItemHovered()?surface():text()),label,end);
+        ImGui::GetColorU32(selected || ImGui::IsItemHovered()?accent():text()),label,end);
     draw->PopClipRect();return clicked;
 }
-inline bool checkbox(const char* label,bool* value) {
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered,accent());
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,accent());
-    const bool changed=ImGui::Checkbox(label,value);
-    ImGui::PopStyleColor(2);return changed;
-}
+inline bool checkbox(const char* label,bool* value) { return ImGui::Checkbox(label,value); }
 class Font {
 public:
     Font(render::FontRole role, float size) { ImGui::PushFont(render::GetFont(role) ? render::GetFont(role) : ImGui::GetFont(), size); }
@@ -87,8 +90,8 @@ inline bool navigation(const char* label, bool selected, const char* badge = nul
     const bool clicked = ImGui::InvisibleButton(label, {width, height});
     const bool hovered = ImGui::IsItemHovered();
     auto* draw = ImGui::GetWindowDrawList();
-    if (selected || hovered) draw->AddRectFilled(p, {p.x + width, p.y + height}, color(accent()));
-    draw->AddRect(p,{p.x+width,p.y+height},color(palm::theme::border()));
+    chosenBox(draw, p, {p.x + width, p.y + height}, selected, hovered);
+
     const float badgeWidth = badge ? ImGui::GetFont()->CalcTextSizeA(16, FLT_MAX, 0, badge).x : 0;
     const float right = p.x + width - 12 - (badge ? badgeWidth + 8 : 0);
     auto* font = render::GetFont(render::FontRole::Medium) ? render::GetFont(render::FontRole::Medium) : ImGui::GetFont();
@@ -98,9 +101,9 @@ inline bool navigation(const char* label, bool selected, const char* badge = nul
     const auto extent = font->CalcTextSizeA(size, FLT_MAX, wrap, readable.text.data());
     draw->PushClipRect({p.x + 16, p.y}, {right, p.y + height}, true);
     draw->AddText(font, size, {p.x + 16, p.y + (std::max)(5.0f, (height - extent.y) * 0.5f)},
-        color(selected || hovered ? surface() : muted()), readable.text.data(), nullptr, wrap);
+        color(inkFor(selected, hovered)), readable.text.data(), nullptr, wrap);
     draw->PopClipRect();
-    if (badge) draw->AddText(ImGui::GetFont(), 16, {right + 8, p.y + 21}, color(selected || hovered ? surface() : muted()), badge);
+    if (badge) draw->AddText(ImGui::GetFont(), 16, {right + 8, p.y + 21}, color(inkFor(selected, hovered)), badge);
     if (hovered) ImGui::SetTooltip("%s", label);
     return clicked;
 }

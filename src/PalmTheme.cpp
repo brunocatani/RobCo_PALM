@@ -11,7 +11,7 @@ const rpsui::api::framework::Theme*& bound() noexcept {
 }
 void bind(const rpsui::api::framework::Theme* value) noexcept {bound()=value;}
 const rpsui::api::framework::Theme& current() noexcept {
-    static const auto builtIn=rpsui::theme_defaults::robco();
+    static const auto builtIn=rpsui::theme_defaults::defaultTheme();
     return bound() ? *bound() : builtIn;
 }
 }

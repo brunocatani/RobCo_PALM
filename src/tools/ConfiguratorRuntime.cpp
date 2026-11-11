@@ -836,14 +836,14 @@ namespace rock_configurator
             const bool hovered = ImGui::IsItemHovered();
             const ImVec2 maximum{minimum.x + size.x, minimum.y + size.y};
             auto* draw = ImGui::GetWindowDrawList();
-            if (hovered || active) draw->AddRectFilled(minimum, maximum, packed(accentColor()));
-            draw->AddRect(minimum,maximum,packed(palm::theme::border()));
+            devui::visual::chosenBox(draw, minimum, maximum, active, hovered);
+
             auto* font = fontFor(devui::render::FontRole::Medium);
             const float textWidth = font->CalcTextSizeA(26, FLT_MAX, 0, label).x;
             const float fontSize = textWidth > size.x - 24 ? 26 * (size.x - 24) / textWidth : 26;
             draw->AddText(font, fontSize,
                 {minimum.x + 12, minimum.y + 16},
-                packed(active || hovered ? devui::visual::surface() : mutedColor()), label);
+                packed(devui::visual::inkFor(active, hovered)), label);
             ImGui::PopID();
             return clicked;
         }

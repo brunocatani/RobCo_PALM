@@ -13,6 +13,10 @@
 
 ### Added
 
+- **Colors.** The wheel and Config draw in Fallout 4's own HUD green with
+  rounded corners; a chosen choice is a tint with a bright outline instead of a
+  solid block. Config → RPS mods → RPS UI → Theme switches every panel to
+  Pip-Boy (green), New Vegas (amber) or Vault-Tec (blue and yellow).
 - **Console tab** (Config → Console): read everything the game console prints
   and run commands, with the on-screen keyboard or your real keyboard while the
   game window has focus. Enter runs the line, Up and Down recall earlier

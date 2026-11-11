@@ -23,7 +23,7 @@ void slotLabel(ImDrawList* draw,ImVec2 slotCenter,float scale,ImU32 ink,const ch
  draw->PopClipRect();
 }
 Icon categoryIcon(Category category){return static_cast<Icon>(static_cast<unsigned>(Icon::Aid)+static_cast<unsigned>(category));}
-void sector(ImDrawList* draw, ImVec2 center, float inner, float outer, float a, float b, ImU32 tint,ImU32 outline=0) {
+void sector(ImDrawList* draw, ImVec2 center, float inner, float outer, float a, float b, ImU32 tint,ImU32 outline=0,float width=1.f) {
  const int pieces=std::max(20,static_cast<int>((b-a)*24));
  // Antialias only the perimeter; AA on every tile creates visible radial seams.
  const auto flags=draw->Flags;draw->Flags&=~ImDrawListFlags_AntiAliasedFill;
@@ -35,7 +35,7 @@ void sector(ImDrawList* draw, ImVec2 center, float inner, float outer, float a, 
  draw->Flags=flags;
  if(outline) {
   draw->PathArcTo(center,outer,a,b,pieces);draw->PathArcTo(center,inner,b,a,pieces);
-  draw->PathStroke(outline,1.f,ImDrawFlags_Closed);
+  draw->PathStroke(outline,width,ImDrawFlags_Closed);
  }
 }
 }
@@ -52,10 +52,12 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
  auto* draw=ImGui::GetWindowDrawList();
  view.animation=std::min(1.f,view.animation+io.DeltaTime*7);
  const int alpha=static_cast<int>(255*view.animation);
- // Theme roles: a chosen sector is an accent fill with OnAccent marks on it;
+ // Theme roles, as every RPS UI panel shows a chosen choice (rpsui::imgui_host::pushChosen):
+ // the sector under the pointer is an accent tint with a thick accent edge and accent marks;
  // an idle one is the panel body, outlined.
  const auto green=phosphor(alpha),muted=ImGui::ColorConvertFloat4ToU32(palm::theme::muted(alpha/255.f));
- const auto dark=ImGui::ColorConvertFloat4ToU32(palm::theme::onAccent(alpha/255.f));
+ const auto glow=phosphor(alpha*28/100);
+ const float edge=std::max(1.f,palm::theme::current().borderWidth*2.f*scale);
  const auto surface=ImGui::ColorConvertFloat4ToU32(palm::theme::ink((alpha*3/4)/255.f));
  const auto boundary=ImGui::ColorConvertFloat4ToU32(palm::theme::border(alpha/255.f));
  const ImVec2 center=point(512,510);
@@ -101,10 +103,10 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
    const auto* item=slot<external->count?&external->items[slot]:nullptr;
    const bool available=item && !(item->flags&static_cast<unsigned>(palm::api::menu::ItemFlag::Disabled));
    const bool over=available && hit==static_cast<int>(slot);
-   sector(draw,center,inner,outer,start,end,over?green:surface,over?green:item?boundary:phosphor(alpha/8));
+   sector(draw,center,inner,outer,start,end,over?glow:surface,over?green:item?boundary:phosphor(alpha/8),over?edge:1.f);
    if(!item)continue;
    const ImVec2 p{center.x+std::cos(mid)*258*scale,center.y+std::sin(mid)*258*scale};
-   const auto ink=over?dark:available?green:muted;
+   const auto ink=available?green:muted;
    drawIcon(draw,{p.x,p.y-39*scale},46*scale,item->icon,ink,icons);
    if(item->flags&static_cast<unsigned>(palm::api::menu::ItemFlag::Equipped))centered(draw,{p.x,p.y+4*scale},16*scale,ink,"EQUIPPED");
    else if(item->flags&static_cast<unsigned>(palm::api::menu::ItemFlag::ShowQuantity)) {
@@ -116,23 +118,23 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
   if(showingGestures) {
    const auto& definition=kGestures[slot];const bool over=hit==static_cast<int>(slot);
    const bool selected=gestures.active[hand]==gestureChoice(static_cast<unsigned>(slot),gestures.left);
-   sector(draw,center,inner,outer,start,end,over?green:surface,over || selected?green:boundary);
+   sector(draw,center,inner,outer,start,end,over?glow:surface,over || selected?green:boundary,over?edge:1.f);
    if(selected)sector(draw,center,outer-4*scale,outer,start,end,green);
    const ImVec2 p{center.x+std::cos(mid)*258*scale,center.y+std::sin(mid)*258*scale};
-   drawIcon(draw,{p.x,p.y-21*scale},40*scale,static_cast<Icon>(slot),over?dark:green,icons,!gestures.left);
-   centered(draw,{p.x,p.y+27*scale},16*scale,over?dark:green,definition.name);
-   if(selected)centered(draw,{p.x,p.y+49*scale},12*scale,over?dark:green,"ACTIVE");
+   drawIcon(draw,{p.x,p.y-21*scale},40*scale,static_cast<Icon>(slot),green,icons,!gestures.left);
+   centered(draw,{p.x,p.y+27*scale},16*scale,green,definition.name);
+   if(selected)centered(draw,{p.x,p.y+49*scale},12*scale,green,"ACTIVE");
    continue;
   }
   const bool available=occupied(itemIndex);
   const bool adding=addSlotFree && hit==static_cast<int>(slot);
   const bool active=(available && items[itemIndex].count>0 && hit==static_cast<int>(slot)) || adding;
-  sector(draw,center,inner,outer,start,end,active?green:surface,active?green:available?boundary:phosphor(alpha/8));
+  sector(draw,center,inner,outer,start,end,active?glow:surface,active?green:available?boundary:phosphor(alpha/8),active?edge:1.f);
   const ImVec2 slotCenter{center.x+std::cos(mid)*258*scale,center.y+std::sin(mid)*258*scale};
-  if(adding){centered(draw,{slotCenter.x,slotCenter.y-12*scale},44*scale,dark,"+");centered(draw,{slotCenter.x,slotCenter.y+22*scale},16*scale,dark,"ADD HELD");}
+  if(adding){centered(draw,{slotCenter.x,slotCenter.y-12*scale},44*scale,green,"+");centered(draw,{slotCenter.x,slotCenter.y+22*scale},16*scale,green,"ADD HELD");}
   if(!available)continue;
   const auto& item=items[itemIndex];
-  const auto ink=active?dark:green;
+  const auto ink=green;
   drawIcon(draw,{slotCenter.x,slotCenter.y-39*scale},46*scale,item.icon==Icon::Automatic?categoryIcon(model.category):item.icon,ink,icons);
   if(!isEquipment(model.category) || item.equipped) {
    char count[32];if(item.equipped && isEquipment(model.category))std::snprintf(count,sizeof(count),"EQUIPPED");
@@ -148,10 +150,10 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
   const bool gestureEntry=c==kLeftGesturesNavigation || c==kRightGesturesNavigation;
   const float mid=layout.angle(slot);
   const bool over=navigation==static_cast<int>(c);
-  const auto ink=over?dark:green;
+  const auto ink=green;
   const bool selected=external?section && section->handle==external->handle:showingGestures?c==(gestures.left?kLeftGesturesNavigation:kRightGesturesNavigation):showingItems && itemCategory==static_cast<int>(category);
   sector(draw,center,70*scale,(inner-8*scale),mid-layout.step/2+kNavigationGap,mid+layout.step/2-kNavigationGap,
-   over?green:surface,selected || over?green:boundary);
+   over?glow:surface,selected || over?green:boundary,over?edge:1.f);
   if(selected)
    sector(draw,center,inner-11*scale,inner-8*scale,mid-layout.step/2+.06f,mid+layout.step/2-.06f,green);
   const ImVec2 label{center.x+std::cos(mid)*119*scale,center.y+std::sin(mid)*119*scale};
@@ -178,10 +180,10 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
  };
  const bool cancelHovered=navigation==static_cast<int>(kCancelNavigation);
  action.cancelHovered=cancelHovered;
- draw->AddCircleFilled(center,54*scale,cancelHovered?green:surface,48);
- draw->AddCircle(center,54*scale,cancelHovered?green:boundary,48,scale);
- centered(draw,{center.x,center.y-10*scale},16*scale,cancelHovered?dark:green,"P.A.L.M");
- centered(draw,{center.x,center.y+16*scale},(cancelHovered?18:12)*scale,cancelHovered?dark:muted,"CANCEL");
+ draw->AddCircleFilled(center,54*scale,cancelHovered?glow:surface,48);
+ draw->AddCircle(center,54*scale,cancelHovered?green:boundary,48,cancelHovered?edge:scale);
+ centered(draw,{center.x,center.y-10*scale},16*scale,green,"P.A.L.M");
+ centered(draw,{center.x,center.y+16*scale},(cancelHovered?18:12)*scale,cancelHovered?green:muted,"CANCEL");
  action.hoveredItem=hovered && hovered->count>0?selectionToken(*hovered):0;
  action.configHovered=navigation==static_cast<int>(kConfigNavigation);
  if(external) {

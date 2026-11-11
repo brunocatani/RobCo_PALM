@@ -71,16 +71,14 @@ namespace rock_configurator
             const bool hovered = ImGui::IsItemHovered();
             const ImVec2 maximum{ minimum.x + size.x, minimum.y + size.y };
             auto* draw = ImGui::GetWindowDrawList();
-            if (selected || hovered) {
-                draw->AddRectFilled(minimum, maximum, packed(devui::visual::accent()));
-            }
-            draw->AddRect(minimum, maximum, packed(palm::theme::border()));
+            devui::visual::chosenBox(draw, minimum, maximum, selected, hovered);
+
             auto* font = ImGui::GetFont();
             const float fontSize = ImGui::GetFontSize();
             const auto extent = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, label);
             draw->AddText(font, fontSize,
                 { minimum.x + (size.x - extent.x) * 0.5f, minimum.y + (size.y - extent.y) * 0.5f },
-                packed(selected || hovered ? devui::visual::surface() : devui::visual::text()), label);
+                packed(selected || hovered ? devui::visual::accent() : devui::visual::text()), label);
             return clicked;
         }
     }
