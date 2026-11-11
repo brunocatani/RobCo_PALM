@@ -9,7 +9,7 @@
   2.3. A loaded ROCK older than 1.0 stops the game at the main menu with an
   error box naming the mismatch.
 - The settings pages for PAPER and SCISSORS need the PAPER and SCISSORS
-  versions released with ROCK 1.0.
+  versions built for ROCK 1.0.
 
 ### Added
 
