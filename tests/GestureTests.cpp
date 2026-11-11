@@ -20,7 +20,7 @@ struct Fixture {
  std::array<Frik::HandPoseKind,2> poses{};
  std::array<rock::api::animation::HandVisualAuthorityRequest,2> published;
  std::array<unsigned,2> writes{},clears{};
- std::array<std::array<bool,64>,2> buttons{};
+ std::array<std::array<bool,64>,2> buttons{},captured{};
  bool rawAvailable{true},queryOk{true},skeletonReady{true},menu{},rejectPublication{};
 } f;
 unsigned index(rock::api::Hand hand) noexcept{return hand==rock::api::Hand::Left?1:0;}
@@ -31,7 +31,10 @@ void checkRuntime() {
  grab.getHandInteractionState=+[](std::uint64_t,rock::api::Hand hand,rock::api::grab::HandInteractionState* out) noexcept{
   *out=f.hands[index(hand)];return f.queryOk?rock::api::Status::Ok:rock::api::Status::NotReady;};
  input.getRawWandButtonState=+[](std::uint64_t,rock::api::Hand hand,std::uint32_t button,rock::api::input::RawWandButtonState* out) noexcept{
-  out->available=f.rawAvailable;out->held=f.buttons[index(hand)][button];return rock::api::Status::Ok;};
+  out->available=f.rawAvailable;out->held=f.buttons[index(hand)][button];
+  // A button RPS UI captured reads as ROCK reports it: unavailable until released.
+  if(f.captured[index(hand)][button]){out->available=0;out->held=0;out->availabilityReason=rock::api::input::InputAvailabilityReason::ReleaseToRearm;}
+  return rock::api::Status::Ok;};
  animation.setHandVisualAuthority=+[](std::uint64_t,const rock::api::animation::HandVisualAuthorityRequest* request) noexcept{
   const auto hand=index(request->hand);++f.writes[hand];f.published[hand]=*request;
   if(f.rejectPublication)return rock::api::Status::TargetUnavailable;
@@ -53,7 +56,7 @@ void checkRuntime() {
   state.worldGeneration=2;state.skeletonGeneration=3;state.providerGeneration=4;
  }
  Gestures gestures;gestures.initialize();
- const auto tick=[&]{gestures.update(42,f.frame,true);};
+ const auto tick=[&]{gestures.update(42,f.frame,true,{});};
  const auto activate=[&](bool left,unsigned gesture=1){tick();(void)gestures.select(42,gestureChoice(gesture,left),f.frame);
   require(gestures.view().active[left?1:0]!=0,"free hand did not activate");};
  activate(true);activate(false);
@@ -70,17 +73,22 @@ void checkRuntime() {
  }
  gestures.clear(42);
  f.buttons[0][2]=true;f.buttons[0][33]=true;
- gestures.update(42,f.frame,true,true);
+ constexpr std::array<std::uint64_t,2> chord{(1ull<<2)|(1ull<<33),0};
+ gestures.update(42,f.frame,true,chord);
  require(gestures.view().availability[0]==GestureAvailability::Free,"owned wheel chord blocked right-hand pose selection");
  (void)gestures.select(42,gestureChoice(1,false),f.frame);
  require(gestures.view().active[0]!=0,"wheel chord could not select a right-hand pose");
  f.buttons[0][33]=false;
- gestures.update(42,f.frame,true,true);
+ gestures.update(42,f.frame,true,chord);
  require(gestures.view().active[0]!=0,"remaining wheel grab cancelled the selected pose");
  f.buttons[0][2]=false;tick();
  f.buttons[0][1]=true;tick();
  require(!gestures.view().active[0],"B gameplay input did not cancel a right-hand pose");
  f.buttons[0][1]=false;gestures.clear(42);
+ // The hand pointing at the wheel has its click buttons captured by RPS UI: it can take and keep a pose.
+ f.captured[1][7]=true;f.captured[1][32]=true;f.captured[1][33]=true;
+ activate(true);tick();require(gestures.view().active[1] && gestures.view().availability[1]==GestureAvailability::Free,"captured pointer buttons blocked or cancelled the pose");
+ f.captured[1]={};gestures.clear(42);
  f.poses[1]=Frik::HandPoseKind::ThumbsUp;activate(true);gestures.clear(42);
  for(auto pose:{Frik::HandPoseKind::HoldingWeapon,Frik::HandPoseKind::HoldingGun,Frik::HandPoseKind::HoldingMelee,
   Frik::HandPoseKind::OffhandGrip,Frik::HandPoseKind::Custom}) {
@@ -108,7 +116,7 @@ void checkRuntime() {
  activate(true);++f.hands[1].skeletonGeneration;tick();require(!gestures.view().active[1],"stale hand state did not clear");--f.hands[1].skeletonGeneration;
  activate(true);f.poses[1]=Frik::HandPoseKind::Pointing;tick();require(!gestures.view().active[1],"interaction pose did not take priority");
  activate(true);f.skeletonReady=false;tick();require(!gestures.view().active[1],"lost skeleton did not clear");f.skeletonReady=true;
- activate(true);gestures.update(42,f.frame,false);require(!gestures.view().active[1],"session reset did not clear");
+ activate(true);gestures.update(42,f.frame,false,{});require(!gestures.view().active[1],"session reset did not clear");
  activate(true);(void)gestures.select(42,gestureChoice(1,true),f.frame);require(!gestures.view().active[1],"same gesture did not toggle off");
  tick();f.rejectPublication=true;(void)gestures.select(42,gestureChoice(1,true),f.frame);
  require(!gestures.view().active[1],"rejected publication remained active");
@@ -117,7 +125,7 @@ void checkRuntime() {
 void checkSelection() {
  ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;io.DisplaySize={1024,1024};io.DeltaTime=1.f/90;
  ImGui_ImplNullRender_Init(); // Headless: accepts the font atlas's texture requests.
- Model model;View view;model.gestures.availability.fill(GestureAvailability::Free);
+ Model model;View view;model.gesturesEnabled=true;model.gestures.availability.fill(GestureAvailability::Free);
  const auto draw=[&](float x,float y){io.AddMousePosEvent(x,y);ImGui::NewFrame();auto action=drawWheel(model,view);ImGui::Render();return action;};
  for(bool left:{false,true}) {
   (void)draw(512+(left?-119.f:119.f),510);

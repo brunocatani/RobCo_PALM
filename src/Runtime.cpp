@@ -521,7 +521,12 @@ void RPSUI_CALL onFrame(const rpsui::api::input::Frame* frame,void*) noexcept {
   if(!openingBlocked && ((eligible && s.gesture.armed) || ownedBefore || s.gesture.ownsInput())) {
    if(!claimInput(*frame,ownedBefore || s.gesture.ownsInput())){closeWheel();s.gesture={};return;}
   }else clearSuppression();
-  if(rockReady)s.handGestures.update(s.owner,s.rockFrame,eligible,ownedBefore || s.gesture.ownsInput());
+  if(rockReady) {
+   const bool wheelOwned=ownedBefore || s.gesture.ownsInput();
+   // Gestures index hands right, left; the binding masks left, right.
+   s.handGestures.update(s.owner,s.rockFrame,eligible,
+    {wheelOwned?masks.buttons[1]:0,wheelOwned?masks.buttons[0]:0});
+  }
   publishGestureState();
   submitChoice(s.rockFrame);
   if(edge==ControlEdge::Open)openHeldWheel(*frame);

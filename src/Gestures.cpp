@@ -10,6 +10,18 @@ namespace {
 using Frik=frik::api::FRIKApiV2;
 rock::api::Hand physicalHand(unsigned index){return index?rock::api::Hand::Left:rock::api::Hand::Right;}
 Frik::Hand skeletonHand(unsigned index){return index?Frik::Hand::Left:Frik::Hand::Right;}
+// Buttons that mean the hand is doing something: grip, trigger, A, B/menu, stick click.
+constexpr std::array<unsigned,5> kPoseButtons{2u,33u,7u,1u,32u};
+}
+void Gestures::logInputs(unsigned hand,const char* event,const wheel::RockFrame& frame) const {
+ const auto& in=_inputs[hand];const auto& i=in.interaction;
+ spdlog::info("PALM gesture {}: hand={} availability={} query={} reportedHand={} phase={} flags={:X} held={} "
+  "sample[frame,world,skeleton,provider]=[{},{},{},{}] expected=[{},{},{},{}] reservedHand={} "
+  "buttons[grip,trigger,A,B,stick] unavailable={:05b} held={:05b} framePose={} uiBusy={} offhandGrip={}",
+  event,hand?"left":"right",gestureAvailabilityText(_view.availability[hand]),in.queryStatus,static_cast<unsigned>(i.hand),
+  static_cast<unsigned>(i.phase),i.flags,i.heldBodyCount,i.frameIndex,i.worldGeneration,i.skeletonGeneration,i.providerGeneration,
+  frame.sample.frameIndex,frame.sample.worldGeneration,frame.sample.skeletonGeneration,frame.sample.providerGeneration,
+  static_cast<unsigned>(frame.reservedHand),in.unavailableButtons,in.heldButtons,in.pose,in.uiBusy,in.offhandGrip);
 }
 void Gestures::initialize() {
  const auto error=Frik::initialize();
@@ -39,33 +51,44 @@ bool Gestures::publish(std::uint64_t owner,unsigned hand,const wheel::RockFrame&
  spdlog::warn("PALM gesture publication rejected: hand={}, result={}",hand?"left":"right",static_cast<unsigned>(result));
  clearHand(owner,hand,"publication rejected");return false;
 }
-void Gestures::update(std::uint64_t owner,const wheel::RockFrame& frame,bool usable,bool wheelInputOwned) {
+void Gestures::update(std::uint64_t owner,const wheel::RockFrame& frame,bool usable,const std::array<std::uint64_t,2>& wheelButtons) {
  if(!usable || !_available || !frame.frikSkeletonReady || !Frik::inst->isSkeletonReady()) {clear(owner);return;}
  const bool uiBusy=Frik::inst->isConfigOpen() || Frik::inst->isWristPipboyOpen();
  for(unsigned hand=0;hand<2;++hand) {
-  rock::api::grab::HandInteractionState interaction;
-  const bool queryOk=rockServices().grab->getHandInteractionState(owner,physicalHand(hand),&interaction)==rock::api::Status::Ok &&
-   interaction.hand==physicalHand(hand);
-  bool inputAvailable=true,actionHeld=false;
-  // The wheel's captured right trigger/grab chord is UI input through both
-  // releases. It must not mark a free pose hand busy or cancel a new pose.
-  for(const unsigned button:{2u,33u,7u,1u,32u}) {
-   if(hand==0 && wheelInputOwned && (button==2 || button==33))continue;
+  auto& in=_inputs[hand];in={};
+  auto& interaction=in.interaction;
+  in.queryStatus=static_cast<int>(rockServices().grab->getHandInteractionState(owner,physicalHand(hand),&interaction));
+  const bool queryOk=in.queryStatus==static_cast<int>(rock::api::Status::Ok) && interaction.hand==physicalHand(hand);
+  // UI input never makes a hand busy: the wheel's opening binding through both
+  // releases, and the buttons RPS UI captures while the hand points at a
+  // panel (ROCK reports those release-to-rearm). Otherwise the hand that
+  // points at a gesture could never take it, and choosing would cancel it.
+  for(unsigned b=0;b<kPoseButtons.size();++b) {
+   const unsigned button=kPoseButtons[b];
+   if(wheelButtons[hand]&(std::uint64_t{1}<<button))continue;
    rock::api::input::RawWandButtonState raw;
-   inputAvailable&=rockServices().input->getRawWandButtonState(owner,physicalHand(hand),button,&raw)==rock::api::Status::Ok && raw.available;
-   actionHeld|=raw.held!=0;
+   if(rockServices().input->getRawWandButtonState(owner,physicalHand(hand),button,&raw)!=rock::api::Status::Ok)
+    in.unavailableButtons|=1u<<b;
+   else if(!raw.available && raw.availabilityReason!=rock::api::input::InputAvailabilityReason::ReleaseToRearm)
+    in.unavailableButtons|=1u<<b;
+   if(raw.held)in.heldButtons|=1u<<b;
   }
+  const bool inputAvailable=!in.unavailableButtons,actionHeld=in.heldButtons!=0;
   const auto pose=Frik::inst->getCurrentHandPose(skeletonHand(hand));
+  in.pose=static_cast<unsigned>(pose);in.uiBusy=uiBusy;
+  in.offhandGrip=physicalHand(hand)==primaryOffhand(frame.roles) && Frik::inst->isOffHandGrippingWeapon();
   // Controller-driven pointing/thumbs-up can occur on a free hand. Existing
   // custom claims and weapon grips belong to another interaction.
   const bool occupiedPose=pose==Frik::HandPoseKind::Custom || pose==Frik::HandPoseKind::HoldingWeapon ||
    pose==Frik::HandPoseKind::HoldingGun || pose==Frik::HandPoseKind::HoldingMelee ||
    pose==Frik::HandPoseKind::OffhandGrip || pose==Frik::HandPoseKind::Attaboy;
-  const bool poseBusy=uiBusy || (physicalHand(hand)==primaryOffhand(frame.roles) && Frik::inst->isOffHandGrippingWeapon()) ||
-   (_view.active[hand]?pose!=Frik::HandPoseKind::Custom:occupiedPose);
+  const bool poseBusy=uiBusy || in.offhandGrip || (_view.active[hand]?pose!=Frik::HandPoseKind::Custom:occupiedPose);
   _view.availability[hand]=gestureHandAvailability(frame,interaction,queryOk,inputAvailable,actionHeld,true,poseBusy);
   if(_view.active[hand]) {
-   if(_view.availability[hand]!=GestureAvailability::Free)clearHand(owner,hand,gestureAvailabilityText(_view.availability[hand]));
+   if(_view.availability[hand]!=GestureAvailability::Free) {
+    logInputs(hand,"interrupted",frame);
+    clearHand(owner,hand,gestureAvailabilityText(_view.availability[hand]));
+   }
    else if(!publish(owner,hand,frame))_view.availability[hand]=GestureAvailability::Unavailable;
   }
  }
@@ -74,10 +97,12 @@ const char* Gestures::select(std::uint64_t owner,unsigned choice,const wheel::Ro
  if(!isGestureChoice(choice))return "Unknown gesture";
  const unsigned hand=gestureIsLeft(choice)?1:0;
  if(_view.active[hand]==choice){clearHand(owner,hand,"selected again");return "Gesture cleared";}
- if(_view.availability[hand]!=GestureAvailability::Free)
+ if(_view.availability[hand]!=GestureAvailability::Free) {
+  logInputs(hand,"refused",frame);
   return _view.availability[hand]==GestureAvailability::Busy?
    (hand?"Left hand is busy - free it before choosing a gesture":"Right hand is busy - free it before choosing a gesture"):
    gestureAvailabilityText(_view.availability[hand]);
+ }
  const auto& gesture=kGestures[gestureIndex(choice)];
  Frik::HandPoseData pose;
  std::array<Frik::FingerPoseData*,5> fingers{&pose.thumb,&pose.index,&pose.middle,&pose.ring,&pose.pinky};
@@ -86,7 +111,10 @@ const char* Gestures::select(std::uint64_t owner,unsigned choice,const wheel::Ro
  // Read-only skeleton math resolves our authored flex/splay for either hand
  // and power armor. Every live pose write and clear goes through ROCK.
  if(!Frik::inst->getHandPoseLocalTransformsForPose(skeletonHand(hand),pose,&locals) ||
-    locals.enabledMask!=((1u << rock::api::hands::kFingerLocalTransformCount) - 1u))return "Gesture finger transforms unavailable";
+    locals.enabledMask!=((1u << rock::api::hands::kFingerLocalTransformCount) - 1u)) {
+  spdlog::warn("PALM gesture finger transforms unavailable: hand={}, pose={}, mask={:X}",hand?"left":"right",gesture.name,locals.enabledMask);
+  return "Gesture finger transforms unavailable";
+ }
  auto& request=_requests[hand];request={};request.hand=physicalHand(hand);
  request.flags=static_cast<unsigned>(rock::api::animation::HandVisualAuthorityFlag::FingerLocalTransforms);
  request.priority=1; // Yield to ordinary interaction poses, including FRIK's internal poses.
