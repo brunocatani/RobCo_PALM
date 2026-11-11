@@ -154,6 +154,26 @@ int main(){try {
   decoration.flags=0;--decoration.sample.frameIndex;
   check(!placementAllowsOpening(decoration,frame,rightStick),"stale decoration state allowed PALM capture");
   gesture={};
+  // A loose object held off every surface keeps its hand's grip down through the stick-click opening.
+  using HeldFlag=rock::api::grab::HeldPlacementFlag;
+  constexpr auto loose=static_cast<std::uint32_t>(HeldFlag::LooseObject),contact=static_cast<std::uint32_t>(HeldFlag::FixedSurfaceContact);
+  constexpr std::uint64_t grip=1ull<<2,axis2=1ull<<34,stick=1ull<<32,trigger=1ull<<33;
+  const auto clickMasks=controlMasks(controls,false);
+  rock::api::grab::HeldPlacementState held;held.sample=frame.sample;
+  held.left={0x1234,loose};
+  auto holding=heldObjectOpeningButtons(held,frame);
+  check(holding[0]==grip && !holding[1],"held loose object did not free its own hand's grip only");
+  check(openingInputAllowed(clickMasks,{grip|axis2,stick},{true,true},{},holding),"holding a loose object blocked the opening");
+  check(!openingInputAllowed(clickMasks,{grip|trigger,stick},{true,true},{},holding),"holding freed a button other than the grip");
+  check(!openingInputAllowed(clickMasks,{0,stick|grip},{true,true},{},holding),"one hand's held object freed the other hand's grip");
+  held.left.flags|=contact;
+  check(heldObjectOpeningButtons(held,frame)==std::array<std::uint64_t,2>{},"object on a surface did not keep blocking");
+  held.left={0x1234,loose};held.right={0x1234,loose|contact};
+  check(!heldObjectOpeningButtons(held,frame)[0],"two-hand object touching through the other hand stayed free");
+  held.right={};held.left={0x1234,0};
+  check(!heldObjectOpeningButtons(held,frame)[0],"non-loose hold freed the grip");
+  held.left={0x1234,loose};--held.sample.frameIndex;
+  check(!heldObjectOpeningButtons(held,frame)[0],"stale held state freed the grip");
  }
  check(isPlainStickClick(controls),"default is not a plain physical stick click");
  const auto defaultMasks=controlMasks(controls,true);

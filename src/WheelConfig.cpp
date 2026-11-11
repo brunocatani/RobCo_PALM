@@ -61,9 +61,9 @@ bool addWheelFavorite(Category category,const Item& item,unsigned slot,const cha
  auto& s=state();std::scoped_lock lock(s.mutex);
  const auto c=static_cast<unsigned>(category);
  auto& favorites=s.prefs.slots[c];
- if(std::any_of(favorites.begin(),favorites.end(),[&](const Favorite& f){return f.key==item.key;})){message="That weapon is already on the wheel";return false;}
+ if(std::any_of(favorites.begin(),favorites.end(),[&](const Favorite& f){return f.key==item.key;})){message="That item is already on the wheel";return false;}
  if(!s.prefs.slotFree(c,slot)){message="That slot is already taken";return false;}
- if(!s.prefs.place(c,{item.key,item.name},slot)){message="That weapon cannot be added";return false;}
+ if(!s.prefs.place(c,{item.key,item.name},slot)){message="That item cannot be added";return false;}
  s.changed=true;message="Added to the wheel";return true;
 }
 Model selectedWheelInventory(const Model& inventory){

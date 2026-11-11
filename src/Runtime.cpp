@@ -24,9 +24,10 @@
 namespace wheel {
 namespace {
 
-// kAddWeaponChoice+slot (slots 0..7) stays below the gesture choices at 16.
-constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kSectionChoice=3,kAddWeaponChoice=4,kItemChoice=std::uint64_t{1}<<63;
-constexpr bool isAddWeaponChoice(std::uint64_t choice){return choice>=kAddWeaponChoice && choice<kAddWeaponChoice+kSlots;}
+// Gesture choices are 16..31. An add-held choice carries its page and ring slot.
+constexpr std::uint64_t kCancelChoice=1,kConfigChoice=2,kSectionChoice=3,kAddHeldChoice=std::uint64_t{1}<<62,kItemChoice=std::uint64_t{1}<<63;
+constexpr std::uint64_t addHeldChoice(Category category,unsigned slot){return kAddHeldChoice|(static_cast<std::uint64_t>(category)<<8)|slot;}
+constexpr bool isAddHeldChoice(std::uint64_t choice){return (choice&kAddHeldChoice) && !(choice&kItemChoice);}
 struct RuntimeState {
  std::atomic_bool open{false},held{false},inputReady{false};
  std::atomic_bool gameActionPending{false};
@@ -40,6 +41,12 @@ struct RuntimeState {
  // callback on ROCK's owner thread; equipCommand is owned by that callback.
  std::atomic_uint64_t pendingEquip{0};
  std::uint64_t equipCommand{};
+ // (reference << 32) | base of a held item just saved to the wheel, written by
+ // its task; the input callback has ROCK let go of it (storeCommand) and then
+ // queues the pickup. storeReference and storeBase are owned by that callback.
+ std::atomic_uint64_t pendingStore{0};
+ std::uint64_t storeCommand{};
+ std::uint32_t storeReference{},storeBase{};
  // Serializes panel open/close on the game task and provider callback threads,
  // and short selection publication from the renderer. Never acquires the model
  // or render mutex while held; framework callbacks run outside its own lock.
@@ -124,7 +131,57 @@ bool claimInput(const rpsui::api::input::Frame& frame,bool owned) {
 void cancelCommand() {
  auto& s=state();
  if(s.command && rockServices().client.owner())(void)rockServices().grab->cancelInteractionCommand(s.owner,s.command);
- s.command=0;
+ if(s.storeCommand && rockServices().client.owner())(void)rockServices().grab->cancelInteractionCommand(s.owner,s.storeCommand);
+ s.command=0;s.storeCommand=0;s.pendingStore=0;
+}
+void queueStoredPickup(std::uint32_t reference,std::uint32_t base) {
+ const auto ticket=state().generation.load();
+ const auto* tasks=F4SE::GetTaskInterface();
+ if(!tasks){actionStatus("Added to the wheel; it could not be stored");return;}
+ tasks->AddTask([reference,base,ticket] {
+  if(!state().sessionReady.load() || state().generation.load()!=ticket)return;
+  try{actionStatus(storeReleasedItem(reference,base));refreshWheelInventory();}
+  catch(...){spdlog::error("PALM store held item task failed");}
+ });
+}
+// The item stays in the hand that holds it until ROCK lets go of it; an object
+// in both hands is released one hand at a time. One no hand holds is picked up.
+void releaseForStore(std::uint32_t reference,std::uint32_t base) {
+ auto& s=state();
+ rock::api::grab::HeldPlacementState held;
+ if(rockServices().grab->getHeldPlacementState(s.owner,&held)!=rock::api::Status::Ok) {
+  actionStatus("Added to the wheel; it could not be stored");spdlog::warn("PALM store {:08X}: held state unavailable",reference);return;
+ }
+ const auto hand=held.right.formId==reference?rock::api::Hand::Right:held.left.formId==reference?rock::api::Hand::Left:rock::api::Hand::None;
+ if(hand==rock::api::Hand::None){queueStoredPickup(reference,base);return;}
+ using Flag=rock::api::grab::ForceReleaseFlag;
+ rock::api::grab::ForceReleaseRequest request;
+ request.hand=hand;request.targetFormId=reference;
+ request.flags=static_cast<std::uint32_t>(Flag::ImmediateCollisionRestore)|static_cast<std::uint32_t>(Flag::RequireMatchingTarget);
+ request.worldGeneration=s.rockFrame.sample.worldGeneration;request.skeletonGeneration=s.rockFrame.sample.skeletonGeneration;
+ request.providerGeneration=s.rockFrame.sample.providerGeneration;
+ const auto status=rockServices().grab->requestForceRelease(s.owner,&request,&s.storeCommand);
+ if((status!=rock::api::Status::RequestQueued && status!=rock::api::Status::Ok) || !s.storeCommand) {
+  s.storeCommand=0;actionStatus("Added to the wheel; it could not be stored");
+  spdlog::warn("PALM store {:08X}: release refused, status {}",reference,static_cast<unsigned>(status));return;
+ }
+ s.storeReference=reference;s.storeBase=base;
+}
+void serviceStore() {
+ auto& s=state();
+ if(const auto pending=s.pendingStore.exchange(0);pending && !s.storeCommand)
+  releaseForStore(static_cast<std::uint32_t>(pending>>32),static_cast<std::uint32_t>(pending));
+ if(!s.storeCommand)return;
+ rock::api::grab::InteractionCommandResult result;
+ const auto query=rockServices().grab->getInteractionCommandResult(s.owner,s.storeCommand,&result);
+ if(query==rock::api::Status::Ok && result.state==rock::api::grab::InteractionCommandState::Queued)return;
+ const bool released=query==rock::api::Status::Ok && result.state==rock::api::grab::InteractionCommandState::Succeeded;
+ spdlog::info("PALM store {:08X}: release {} (query {}, failure {})",s.storeReference,released?"done":"failed",
+  static_cast<unsigned>(query),static_cast<unsigned>(result.failure));
+ if(query!=rock::api::Status::Ok)(void)rockServices().grab->cancelInteractionCommand(s.owner,s.storeCommand);
+ s.storeCommand=0;
+ if(released)releaseForStore(s.storeReference,s.storeBase);
+ else actionStatus("Added to the wheel; it could not be stored");
 }
 void serviceCommand() {
  auto& s=state();if(!s.command)return;
@@ -193,6 +250,34 @@ void requestInventoryHandoff(std::uint32_t id,const wheel::RockFrame& frame) {
  }
  spdlog::info("Selected item {:08X}: queue result {}",request.baseFormId,static_cast<unsigned>(result));
 }
+// The loose aid or food item in the pointing hand, otherwise in the other hand,
+// goes to the wheel slot; then the input callback stores it (serviceStore).
+void addHeldItem(const wheel::RockFrame& frame,Category category,unsigned slot,std::uint64_t ticket) {
+ auto& s=state();
+ rock::api::grab::HeldPlacementState held;
+ if(!s.rockReady.load() || rockServices().grab->getHeldPlacementState(s.owner,&held)!=rock::api::Status::Ok ||
+    !sameRockSample(held.sample,frame)){actionStatus("Held item unavailable; try again");return;}
+ using Flag=rock::api::grab::HeldPlacementFlag;
+ const auto loose=[](const rock::api::grab::HeldPlacementHand& hand) {
+  return hand.formId && (hand.flags&static_cast<std::uint32_t>(Flag::LooseObject)) && !(hand.flags&static_cast<std::uint32_t>(Flag::Weapon));
+ };
+ const bool leftFirst=s.choiceHand.load()==PointerHand::Left;
+ const auto& first=leftFirst?held.left:held.right;const auto& second=leftFirst?held.right:held.left;
+ const auto reference=loose(first)?first.formId:loose(second)?second.formId:0;
+ if(!reference){actionStatus(category==Category::Food?"Hold the food you want to add":"Hold the aid item you want to add");return;}
+ const auto* tasks=F4SE::GetTaskInterface();
+ if(!tasks){actionStatus("Inventory task queue unavailable");return;}
+ s.gameActionPending=true;
+ try{tasks->AddTask([ticket,reference,category,slot] {
+  auto& runtime=state();struct Finish{RuntimeState& s;~Finish(){s.gameActionPending=false;}} finish{runtime};
+  if(!runtime.sessionReady.load() || !runtime.inputReady.load() || runtime.generation.load()!=ticket)return;
+  try {
+   std::uint32_t base{};actionStatus(addHeldItemToWheel(reference,category,slot,base));
+   if(base)runtime.pendingStore=(static_cast<std::uint64_t>(reference)<<32)|base;
+   refreshWheelInventory();
+  }catch(...){spdlog::error("PALM add held item task failed");}
+ });}catch(...){s.gameActionPending=false;throw;}
+}
 void submitChoice(const wheel::RockFrame& frame) {
  auto& s=state();const auto choice=s.choice.exchange(0);
  const auto ticket=s.choiceGeneration.load();
@@ -222,8 +307,11 @@ void submitChoice(const wheel::RockFrame& frame) {
     if(result!=palm::api::Result::Ok){actionStatus("Mod selection is no longer available");spdlog::warn("PALM mod action rejected: section={}, item={}, result={}",section,item,static_cast<unsigned>(result));}
    }catch(...){spdlog::error("PALM mod action dispatch failed");}
   });}catch(...){s.gameActionPending=false;throw;}
- }else if(isAddWeaponChoice(choice)) {
-  const auto slot=static_cast<unsigned>(choice-kAddWeaponChoice);
+ }else if(isAddHeldChoice(choice) && static_cast<Category>((choice>>8)&0xff)!=Category::Weapons) {
+  s.handGestures.clear(s.owner);
+  addHeldItem(frame,static_cast<Category>((choice>>8)&0xff),static_cast<unsigned>(choice&0xff),ticket);
+ }else if(isAddHeldChoice(choice)) {
+  const auto slot=static_cast<unsigned>(choice&0xff);
   s.handGestures.clear(s.owner);
   // The weapon whose grip the pointing hand holds; with that hand empty, the
   // weapon the other hand holds. Without ROCK only the native weapon exists.
@@ -350,7 +438,7 @@ void openHeldWheel(const rpsui::api::input::Frame& frame) {
 void selectWheel(bool closeAfterSelect,const std::optional<Action>& clicked) {
  auto& s=state();std::scoped_lock lock(s.presentationMutex);
  const auto hover=closeAfterSelect?s.selection.drawn:clicked;
- if(!closeAfterSelect && (!hover || (!hover->cancelHovered && !hover->configHovered && !hover->hoveredGesture && !hover->section && !hover->hoveredItem && !hover->addHeldWeapon)))return;
+ if(!closeAfterSelect && (!hover || (!hover->cancelHovered && !hover->configHovered && !hover->hoveredGesture && !hover->section && !hover->hoveredItem && !hover->addHeld)))return;
  const bool close=closeAfterSelect || (hover && (hover->configHovered || hover->cancelHovered || developerActions().ownsSection(hover->section)));
  auto ticket=s.generation.load();
  if(close) {
@@ -366,7 +454,7 @@ void selectWheel(bool closeAfterSelect,const std::optional<Action>& clicked) {
  s.choiceHand=hover?hover->hand:PointerHand::None;
  s.choice=hover?(hover->configHovered?kConfigChoice:hover->hoveredGesture?hover->hoveredGesture:
   hover->section?kSectionChoice:hover->hoveredItem?(kItemChoice|hover->hoveredItem):
-  hover->addHeldWeapon?kAddWeaponChoice+hover->addHeldWeapon-1:kCancelChoice):kCancelChoice;
+  hover->addHeld?addHeldChoice(hover->addHeldCategory,hover->addHeld-1):kCancelChoice):kCancelChoice;
  // Release may arrive before the first draw, including a skipped depth frame.
  // Cancelling this opening is not evidence that presentation is unavailable.
  if(!hover)spdlog::info("PALM opening cancelled before a rendered selection; waiting for both buttons to release");
@@ -414,7 +502,7 @@ void RPSUI_CALL onFrame(const rpsui::api::input::Frame* frame,void*) noexcept {
    s.world=s.rockFrame.sample.worldGeneration;s.skeleton=s.rockFrame.sample.skeletonGeneration;s.provider=s.rockFrame.sample.providerGeneration;
    return;
   }
-  serviceCommand();serviceEquipCommand();
+  serviceCommand();serviceEquipCommand();if(rockReady)serviceStore();
   {
    // Asking only while the keyboard panel is up is what releases the keyboard otherwise:
    // the capture lapses by itself three frames after the last request.
@@ -427,7 +515,7 @@ void RPSUI_CALL onFrame(const rpsui::api::input::Frame* frame,void*) noexcept {
   }
   if(rock_configurator::takeInventoryRefreshRequest())refreshWheelInventory();
   const bool gameActionPending=s.gameActionPending.load(),configOpen=rock_configurator::isOpen(),configOpening=rock_configurator::isOpening();
-  const bool eligible=!s.command && !gameActionPending && !configOpen && !configOpening;
+  const bool eligible=!s.command && !s.storeCommand && !s.pendingStore.load() && !gameActionPending && !configOpen && !configOpening;
   const auto masks=controlMasks(s.controls,frame->leftHanded);
   std::array pressed{frame->hands[0].pressed,frame->hands[1].pressed};
   // The right stick click opens the wheel only while it is PALM's under ROCK's
@@ -476,7 +564,13 @@ void RPSUI_CALL onFrame(const rpsui::api::input::Frame* frame,void*) noexcept {
    placementAllows=rockServices().input->getPlacementClickState(s.owner,&placement)==rock::api::Status::Ok &&
     placementAllowsOpening(placement,s.rockFrame,stickUsed);
   }
-  const bool openingAllowed=bipodAllows && placementAllows && triggerEquipAllows && openingInputAllowed(masks,pressed,handValid,inHolster);
+  // A hand holding a loose object clear of surfaces keeps its grip down through the opening.
+  std::array<std::uint64_t,2> holding{};
+  if(rockReady) {
+   rock::api::grab::HeldPlacementState held;
+   if(rockServices().grab->getHeldPlacementState(s.owner,&held)==rock::api::Status::Ok)holding=heldObjectOpeningButtons(held,s.rockFrame);
+  }
+  const bool openingAllowed=bipodAllows && placementAllows && triggerEquipAllows && openingInputAllowed(masks,pressed,handValid,inHolster,holding);
   const bool openingBlocked=rockyOwnsInput || (!s.gesture.open && !openingAllowed);
   const bool ownedBefore=s.gesture.ownsInput();
   std::optional<Action> clicked;

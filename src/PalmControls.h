@@ -52,10 +52,12 @@ inline bool isPlainStickClick(const Controls& controls) {
  return controls.mode==OpenMode::Press && controls.binding.type==f4cf::vrcf::ActivationType::Release &&
   controls.binding.button==vr::k_EButton_SteamVR_Touchpad && !controls.binding.modifier && controls.binding.duration==0;
 }
+// holding: per hand, buttons that hold an object and may stay down (see
+// heldObjectOpeningButtons); they never count toward the binding itself.
 inline bool openingInputAllowed(const ControlMasks& masks,const std::array<std::uint64_t,2>& pressed,
- const std::array<bool,2>& valid,const std::array<bool,2>& inHolster) {
+ const std::array<bool,2>& valid,const std::array<bool,2>& inHolster,const std::array<std::uint64_t,2>& holding={}) {
  for(unsigned hand=0;hand<2;++hand) {
-  auto allowed=masks.buttons[hand];
+  auto allowed=masks.buttons[hand]|holding[hand];
   // Some controllers report Axis2 alongside grip (observed 0x600000004 for
   // right grip + trigger). Accept that companion only with a bound, pressed grip;
   // the binding itself still requires the real grip button.

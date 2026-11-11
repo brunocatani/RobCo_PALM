@@ -13,6 +13,27 @@ inline bool placementAllowsOpening(const rock::api::input::PlacementClickState& 
   (stickUsed[1] && (state.flags&static_cast<std::uint32_t>(Flag::RightInputReserved)));
  return sameRockSample(state.sample,frame) && !reserved;
 }
+// Per physical hand (left, right, ControlMasks' order): the grip bit a hand may
+// keep down while the wheel opens, because it holds a loose object that touches
+// nothing fixed. The wheel can then add and store that object. An object on a
+// surface keeps blocking: that hand's stick click places it (ROCK Pimp my House),
+// and an object held in both hands counts as touching when either hand reports it.
+inline std::array<std::uint64_t,2> heldObjectOpeningButtons(const rock::api::grab::HeldPlacementState& state,
+ const wheel::RockFrame& frame) {
+ using Flag=rock::api::grab::HeldPlacementFlag;
+ std::array<std::uint64_t,2> result{};
+ if(!sameRockSample(state.sample,frame))return result;
+ const auto has=[](const rock::api::grab::HeldPlacementHand& hand,Flag flag){return (hand.flags&static_cast<std::uint32_t>(flag))!=0;};
+ for(unsigned index=0;index<2;++index) {
+  const auto& hand=index?state.right:state.left;
+  const auto& other=index?state.left:state.right;
+  const bool shared=other.formId==hand.formId;
+  const bool touching=has(hand,Flag::FixedSurfaceContact) || (shared && has(other,Flag::FixedSurfaceContact));
+  constexpr auto grip=std::uint64_t{1}<<2; // OpenVR k_EButton_Grip
+  if(hand.formId && has(hand,Flag::LooseObject) && !touching)result[index]=grip;
+ }
+ return result;
+}
 // ROCK owns the enabled setting, the contact/latch decision and the hand whose
 // stick the bipod takes for the primary weapon (slot 0). A failed or stale
 // query cannot grant an opening click against an active provider.

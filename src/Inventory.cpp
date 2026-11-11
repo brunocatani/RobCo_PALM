@@ -42,6 +42,48 @@ std::optional<Category> classify(RE::TESBoundObject* object) {
  if(object->Is(RE::ENUM_FORM_ID::kARMO))return Category::Armor;
  return {};
 }
+// A loose reference that is still in the world and not owned by a container.
+RE::TESObjectREFR* looseReference(std::uint32_t referenceId) {
+ auto* ref=RE::TESForm::GetFormByID<RE::TESObjectREFR>(referenceId);
+ return ref && !ref->IsDeleted() && !ref->IsDisabled() && ref->GetObjectReference()?ref:nullptr;
+}
+// ExtraCount's count, the layout ROCK's shoulder stash reads (ShoulderStashTransfer.cpp).
+std::int32_t referenceCount(RE::TESObjectREFR* ref) {
+ auto* extra=ref->extraList?ref->extraList->GetByType(RE::EXTRA_DATA_TYPE::kCount):nullptr;
+ if(!extra)return 1;
+ std::uint16_t count{};std::memcpy(&count,reinterpret_cast<const std::uint8_t*>(extra)+0x18,sizeof(count));
+ return (std::max<std::int32_t>)(1,count);
+}
+}
+const char* addHeldItemToWheel(std::uint32_t referenceId,Category category,unsigned slot,std::uint32_t& outBase) noexcept {
+ outBase=0;
+ try {
+  auto* ref=looseReference(referenceId);
+  if(!ref)return "The held item is gone";
+  auto* base=ref->GetObjectReference();
+  const auto kind=classify(base);
+  if(kind!=category)return category==Category::Food?"Hold a food item to add it here":"Hold an aid item to add it here";
+  const auto name=RE::TESFullName::GetFullName(*base,false);
+  const auto* file=base->GetFile(0);
+  const auto key=file?stableItemKey(file->filename,base->GetFormID()):std::string{};
+  if(name.empty() || key.empty())return "That item cannot be identified for the wheel";
+  const char* message{};
+  const bool added=addWheelFavorite(category,{base->GetFormID(),std::string(name),1,false,key},slot,message);
+  spdlog::info("PALM add held item {:08X} (reference {:08X}) '{}' to {} slot {}: {}",base->GetFormID(),referenceId,name,categoryName(category),slot,message);
+  if(added)outBase=base->GetFormID();
+  return message;
+ }catch(...){spdlog::error("PALM add held item failed");return "Adding the item failed";}
+}
+const char* storeReleasedItem(std::uint32_t referenceId,std::uint32_t baseId) noexcept {
+ try {
+  auto* player=RE::PlayerCharacter::GetSingleton();
+  auto* ref=looseReference(referenceId);
+  if(!player || !ref || ref->GetObjectReference()->GetFormID()!=baseId)return "Added to the wheel; the item was gone before it could be stored";
+  // The native pickup, as ROCK's own consume and stash paths take a released reference.
+  const bool taken=ref->ActivateRef(player,nullptr,referenceCount(ref),false,false,false);
+  spdlog::info("PALM store held item {:08X} (reference {:08X}): {}",baseId,referenceId,taken);
+  return taken?"Added to the wheel and stored":"Added to the wheel; it could not be stored";
+ }catch(...){spdlog::error("PALM store held item failed");return "Added to the wheel; storing it failed";}
 }
 namespace detail {
 Item equipmentItem(const RE::BGSInventoryItem& entry,const RE::BGSInventoryItem::Stack& stack,std::uint32_t index) {

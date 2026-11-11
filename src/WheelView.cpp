@@ -90,10 +90,10 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
  const Item* hovered=showingItems && occupied(index)? &items[index]:nullptr;
  const auto* externalHover=external && hit>=0 && static_cast<unsigned>(hit)<external->count?&external->items[hit]:nullptr;
  const unsigned hand=gestures.left?1:0;
- // An empty weapon slot adds the weapon held in the pointing hand.
- const bool addHover=showingItems && model.category==Category::Weapons && model.equipmentNamesAvailable &&
-  hit>=0 && !occupied(index);
- const bool addSlotFree=addHover && (model.freeWeaponSlots>>hit&1u);
+ // An empty slot adds what the pointing hand holds: the weapon it grips, or a loose item.
+ const bool addHover=showingItems && takesHeldItem(model.category) &&
+  (model.category!=Category::Weapons || model.equipmentNamesAvailable) && hit>=0 && !occupied(index);
+ const bool addSlotFree=addHover && (model.freeSlots[category]>>hit&1u);
 
  for(std::size_t slot=0;(showingItems || showingGestures || external) && slot<kSlots;++slot) {
   const float mid=-kPi/2+static_cast<float>(slot)*kPi/4;
@@ -208,9 +208,11 @@ Action drawWheel(Model& model, View& view, ImVec2 position, ImVec2 size,const Ic
   centered(draw,point(512,920),16*scale,muted,!hovered->count?"NOT CURRENTLY CARRIED":hint(isEquipment(model.category)?(hovered->equipped?"UNEQUIP":"EQUIP"):"TAKE ONE"));
  }else if(!showingItems)centered(draw,point(512,886),20*scale,muted,"Enable wheel sections in Config");
  else if(addHover) {
-  action.addHeldWeapon=addSlotFree?static_cast<unsigned>(hit)+1:0;
-  centered(draw,point(512,886),23*scale,green,addSlotFree?"ADD HELD WEAPON":"SLOT KEPT FOR A WEAPON NOT CARRIED");
-  centered(draw,point(512,920),16*scale,muted,addSlotFree?hint("ADD THE WEAPON IN THIS HAND"):
+  const bool weapon=model.category==Category::Weapons;
+  action.addHeld=addSlotFree?static_cast<unsigned>(hit)+1:0;action.addHeldCategory=model.category;
+  centered(draw,point(512,886),23*scale,green,addSlotFree?(weapon?"ADD HELD WEAPON":"ADD HELD ITEM"):
+   weapon?"SLOT KEPT FOR A WEAPON NOT CARRIED":"SLOT KEPT FOR AN ITEM NOT CARRIED");
+  centered(draw,point(512,920),16*scale,muted,addSlotFree?hint(weapon?"ADD THE WEAPON IN THIS HAND":"ADD AND STORE THE ITEM IN YOUR HAND"):
    "CHANGE IT IN CONFIG");
  }else if(std::none_of(items.begin(),items.end(),[](const Item& item){return item.id!=0;}))centered(draw,point(512,886),20*scale,muted,
   isEquipment(model.category) && !model.equipmentNamesAvailable?"Equipment unavailable; saved choices are kept":"Choose your items in Config");

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- **Add a held aid or food item to the wheel.** Point at an empty slot on the
+  Aid or Food page while a hand holds a loose item of that kind (for example
+  one taken from the Pip-Boy) and select it: the item takes that slot and goes
+  back into your inventory, like an added weapon is put away. Needs ROCK.
+- The wheel opens while a hand holds a loose object, as long as the object
+  touches no surface; on a surface that hand's stick click places it (ROCK Pimp
+  my House), so it keeps blocking.
+
 ### Changed
 
 - Hand gestures are off by default. Turn them on in Config → PALM settings →
