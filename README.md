@@ -7,7 +7,8 @@ RobCo P.A.L.M. is a customisable wheel menu for Fallout 4 VR, with quick access 
 ## Features
 
 - Choose up to eight items per category and hide sections you do not use.
-- Equip weapons and armor, use consumables, or bring items into your hand with ROCK.
+- Equip weapons and armor, use consumables, or bring items into your hand with ROCK. With ROCK, a weapon chosen on the wheel goes into the hand you point with.
+- Hold a weapon, or a loose aid or food item, and select an empty slot on its page to add it to the wheel; it is put away. Needs ROCK for aid and food.
 - Use eight hand gestures with ROCK and FRIK (off by default; turn them on in Config → Wheel settings → Wheel sections).
 - Change PALM controls in game; **Config** opens RPS UI's settings menu, with every RPS mod's settings, the Spawner and the Console.
 - Add wheel sections through supported mods.
@@ -62,7 +63,7 @@ The preset deploys the DLL and PDB to `F4SE/Plugins` under the mod folder set by
 ## Source code and documentation
 
 - [GitHub repository and source code](https://github.com/brunocatani/RobCo_PALM)
-- [DevArtificial documentation](https://devartificial.pro/docs/rps-stack/wheel-menu)
+- [DevArtificial documentation](https://devartificial.pro/docs/rps-stack/palm)
 - [RPS UI Framework](https://github.com/brunocatani/RPS_UI_Framework)
 
 ## Credits
