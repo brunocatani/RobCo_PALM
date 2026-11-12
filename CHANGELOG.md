@@ -1,38 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Added
-
-- **Add a held aid or food item to the wheel.** Point at an empty slot on the
-  Aid or Food page while a hand holds a loose item of that kind (for example
-  one taken from the Pip-Boy) and select it: the item takes that slot and goes
-  back into your inventory, like an added weapon is put away. Needs ROCK.
-- The wheel opens while a hand holds a loose object, as long as the object
-  touches no surface; on a surface that hand's stick click places it (ROCK Pimp
-  my House), so it keeps blocking.
-
-### Changed
-
-- **Config opens RPS UI's settings menu.** Every RPS mod's settings, the
-  Spawner and the Console moved into RPS UI Framework, so they also open from
-  its holotape without the wheel. PALM's Items and PALM settings are the Wheel
-  items and Wheel settings tabs of that menu. Console shortcuts are now in
-  `Mods_Config\RPS_UI_Framework\ConsoleCommands.ini`; yours are copied there
-  the first time. Needs the RPS UI Framework from the same release.
-- Hand gestures are off by default. Turn them on in Config → Wheel settings →
-  Wheel sections. A save that already shows them keeps them.
-
-### Fixed
-
-- A gesture can be put on the hand you point at the wheel with. The buttons
-  that hand uses to click made it read as "Hand poses unavailable", so the
-  right-hand gestures never worked with the right pointer. Gestures chosen
-  with the wheel opened by a binding other than grip and trigger no longer get
-  refused either.
-- A refused or interrupted gesture writes the reason for each hand to
-  `RobCoPALM.log`.
-
 ## 2.0.0
 
 ### Requirements
@@ -71,6 +38,13 @@
 - PALM draws with your RPS UI theme, and the Config panel can be moved by
   holding grip on it; Reset puts it back.
 - Opening PALM with a stick click follows ROCK's Palm binding.
+- **Add a held aid or food item to the wheel.** Point at an empty slot on the
+  Aid or Food page while a hand holds a loose item of that kind (for example
+  one taken from the Pip-Boy) and select it: the item takes that slot and goes
+  back into your inventory, like an added weapon is put away. Needs ROCK.
+- The wheel opens while a hand holds a loose object, as long as the object
+  touches no surface; on a surface that hand's stick click places it (ROCK Pimp
+  my House), so it keeps blocking.
 
 ### Changed
 
@@ -81,6 +55,14 @@
   the original SCISSORS mod is gone.
 - Each stick click acts for its own hand: a bipod or an object placement on one
   hand no longer blocks PALM on the other.
+- **Config opens RPS UI's settings menu.** Every RPS mod's settings, the
+  Spawner and the Console moved into RPS UI Framework, so they also open from
+  its holotape without the wheel. PALM's Items and PALM settings are the Wheel
+  items and Wheel settings tabs of that menu. Console shortcuts are now in
+  `Mods_Config\RPS_UI_Framework\ConsoleCommands.ini`; yours are copied there
+  the first time. Needs the RPS UI Framework from the same release.
+- Hand gestures are off by default. Turn them on in Config → Wheel settings →
+  Wheel sections. A save that already shows them keeps them.
 
 ### Fixed
 
@@ -93,6 +75,13 @@
 - PALM keeps running when another mod hooks the game's equipment functions
   (Heisenberg and others), and a failing equipment call no longer takes the
   rest of the wheel with it.
+- A gesture can be put on the hand you point at the wheel with. The buttons
+  that hand uses to click made it read as "Hand poses unavailable", so the
+  right-hand gestures never worked with the right pointer. Gestures chosen
+  with the wheel opened by a binding other than grip and trigger no longer get
+  refused either.
+- A refused or interrupted gesture writes the reason for each hand to
+  `RobCoPALM.log`.
 
 ### For mod authors
 
